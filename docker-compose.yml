@@ -122,7 +122,7 @@ services:
         echo "[osrm-fetcher-santiago] descargando Galicia PBF..."
         curl -L --fail -o galicia.osm.pbf.part "$$PBF_URL"
         echo "[osrm-fetcher-santiago] recortando bbox $$BBOX..."
-        osmium extract --overwrite -b "$$BBOX" -o map.osm.pbf.part --output-format pbf galicia.osm.pbf.part
+        osmium extract --overwrite -b "$$BBOX" -F pbf -o map.osm.pbf.part -f pbf galicia.osm.pbf.part
         rm -f galicia.osm.pbf.part
         mv map.osm.pbf.part map.osm.pbf
         echo "[osrm-fetcher-santiago] OK"
@@ -330,6 +330,14 @@ services:
         set -eu
         export PGPASSWORD="$$POSTGRES_PASSWORD"
         PSQL="psql -h supabase-db -U postgres -d postgres -v ON_ERROR_STOP=1"
+        # En el primer arranque la imagen hace initdb y reinicia Postgres: el
+        # healthcheck puede pasar antes de que acepte TCP. Esperar de verdad.
+        i=0
+        until pg_isready -q -h supabase-db -U postgres && $$PSQL -tAc "SELECT 1" >/dev/null 2>&1; do
+          i=$$((i + 1))
+          [ "$$i" -ge 90 ] && { echo "[migrator] supabase-db no acepta conexiones"; exit 1; }
+          sleep 2
+        done
         # Tabla de tracking: cada migración se aplica una sola vez. Idempotente
         # frente a CREATE TYPE / CREATE FUNCTION que no soportan IF NOT EXISTS.
         $$PSQL -c "CREATE TABLE IF NOT EXISTS public._migrations (name text PRIMARY KEY, applied_at timestamptz DEFAULT now());"
@@ -502,6 +510,9 @@ services:
       SUPABASE_PUBLIC_URL: http://localhost:54321
       SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
       SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      # Next.js escucha en $HOSTNAME; sin esto el healthcheck de la imagen
+      # (fetch a 127.0.0.1:3000) falla y el contenedor queda "unhealthy".
+      HOSTNAME: 0.0.0.0
 
   # ──────────────────────────── Ollama (embeddings only) ───
   # Solo corre el embedder local (`nomic-embed-text`) que alimenta pgvector
@@ -650,6 +661,7 @@ services:
       LLM_FLASH_MODEL: ${LLM_FLASH_MODEL:-google/gemma-4-31b-it}
       LLM_FLAGSHIP_MODEL: ${LLM_FLAGSHIP_MODEL:-Qwen/Qwen3-235B-A22B}
       LLM_API_KEY: ${LLM_API_KEY:-not-needed}
+      LLM_TIMEOUT_SEC: ${LLM_TIMEOUT_SEC:-60}
       OLLAMA_BASE_URL: http://ollama:11434/v1
       OLLAMA_EMBED_MODEL: ${OLLAMA_EMBED_MODEL:-nomic-embed-text}
     volumes:
@@ -677,6 +689,7 @@ services:
       # región activa internamente y devuelve la polilínea ya calculada.
       DEV_PROXY_API_TARGET: http://simulation:8080
       DEV_PROXY_SB_TARGET: http://supabase-kong:8000
+      VITE_USE_POLLING: "1"
     volumes:
       # Hot-reload: el código se monta live, pero node_modules queda dentro del contenedor
       - ./frontend/src:/app/src

@@ -56,7 +56,7 @@ if [ ! -f "${DATA}/${PBF_FILE}" ]; then
   curl -L --fail --progress-bar -o "${DATA}/${PBF_FILE}.part" "${PBF_URL}"
   if [ -n "${CLIP_BBOX:-}" ]; then
     echo "==> [${REGION}] Recortando bbox ${CLIP_BBOX} con osmium"
-    docker run --rm -v "${DATA}:/data" debian:bookworm-slim sh -c       "apt-get update -qq >/dev/null && apt-get install -y -qq osmium-tool >/dev/null &&        osmium extract --overwrite -b '${CLIP_BBOX}' -o /data/${PBF_FILE} --output-format pbf /data/${PBF_FILE}.part"
+    docker run --rm -v "${DATA}:/data" debian:bookworm-slim sh -c       "apt-get update -qq >/dev/null && apt-get install -y -qq osmium-tool >/dev/null &&        osmium extract --overwrite -b '${CLIP_BBOX}' -F pbf -o /data/${PBF_FILE} -f pbf /data/${PBF_FILE}.part"
     rm -f "${DATA}/${PBF_FILE}.part"
   else
     mv "${DATA}/${PBF_FILE}.part" "${DATA}/${PBF_FILE}"
