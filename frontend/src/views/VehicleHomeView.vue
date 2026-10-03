@@ -4,7 +4,7 @@ import { useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { getSupabase } from "@/lib/supabase";
 import { cssVar, useTheme } from "@/composables/useTheme";
-import { createMap, maplibregl, setGeoJson, toLngLat, type LatLon } from "@/lib/mapEngine";
+import { createMap, FIRST_LABEL_LAYER, maplibregl, setGeoJson, toLngLat, type LatLon } from "@/lib/mapEngine";
 import { DEFAULT_SPAWN_LAT, DEFAULT_SPAWN_LON } from "@/lib/mapDefaults";
 import { tacticalNodeHtml } from "@/lib/tacticalMarkers";
 import { prefixForType } from "@/lib/vehicleId";
@@ -471,14 +471,14 @@ async function initMap(centerLat: number, centerLon: number) {
       source: "vehicle-route",
       layout: { "line-cap": "round", "line-join": "round" },
       paint: { "line-color": ROUTE_CASING, "line-width": 11 },
-    });
+    }, FIRST_LABEL_LAYER);
     m.addLayer({
       id: "vehicle-route-line",
       type: "line",
       source: "vehicle-route",
       layout: { "line-cap": "round", "line-join": "round" },
       paint: { "line-color": ROUTE_COLOR, "line-width": 6 },
-    });
+    }, FIRST_LABEL_LAYER);
     mapInstance = m;
     updateMap(true);
   } finally {

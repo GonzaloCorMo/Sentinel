@@ -33,7 +33,8 @@
 
 ## Mapas (`lib/mapEngine.ts`)
 
-- MapLibre GL nativo con teselas vectoriales de OpenFreeMap (sin API key) y **un único estilo para ambos temas** (paleta tipo Google: edificios desde z14, calles con borde, POIs menores ocultos).
+- MapLibre GL nativo con teselas vectoriales de OpenFreeMap (sin API key) y **un único estilo para ambos temas**, escrito a mano en `lib/mapStyle.ts` sobre el esquema OpenMapTiles. Imita a Google Maps de día: vías blancas con borde gris, autopistas en amarillo, anchos por zoom, edificios desde z15 y POIs solo desde z16. Al tocarlo, valida con `validateStyleMin` de `@maplibre/maplibre-gl-style-spec`: un error de estilo deja el mapa en blanco sin más aviso que la consola.
+- Las capas propias (rutas, cortes, áreas) se insertan con `map.addLayer(spec, FIRST_LABEL_LAYER)` para quedar bajo los nombres de calles, como en Google.
 - Crea mapas con `await createMap(el, { center: [lat, lon], zoom })`: espera a que el estilo cargue y aplica `ResizeObserver`. El contenedor necesita alto y ancho explícitos (`h-full w-full`, no `absolute inset-0`: MapLibre fuerza `position: relative`).
 - Marcadores: `maplibregl.Marker({ element })`, actualizados en su sitio (no se recrean en cada tick). Líneas y áreas: fuentes GeoJSON con `setGeoJson()`. Tooltips: `createHoverTooltip()`.
 - El mapa base es claro también en tema oscuro, así que marcadores y popups usan colores fijos (`.sentinel-map`, `MAP_COLORS`), no tokens del tema.

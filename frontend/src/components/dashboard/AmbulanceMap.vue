@@ -10,6 +10,7 @@ import { displayId, prefixForType } from "@/lib/vehicleId";
 import { TONE_RANK, clusterNodeHtml, tacticalNodeHtml, type NodeGlyph, type NodeTone } from "@/lib/tacticalMarkers";
 import {
   circleRing,
+  FIRST_LABEL_LAYER,
   createHoverTooltip,
   createMap,
   maplibregl,
@@ -314,31 +315,31 @@ function hasActiveUiFilters(): boolean {
 // ── Capas vectoriales ────────────────────────────────────────────────────
 function addOverlayLayers(m: maplibregl.Map) {
   for (const id of ["events", "jams", "routes", "companion-routes", "weather"]) setGeoJson(m, id, []);
-  m.addLayer({ id: "events-fill", type: "fill", source: "events", paint: { "fill-color": ["get", "color"], "fill-opacity": 0.14 } });
-  m.addLayer({ id: "events-line", type: "line", source: "events", paint: { "line-color": ["get", "color"], "line-width": 1.5 } });
-  m.addLayer({ id: "jams-fill", type: "fill", source: "jams", paint: { "fill-color": MAP_COLORS.crit, "fill-opacity": 0.16 } });
-  m.addLayer({ id: "jams-line", type: "line", source: "jams", paint: { "line-color": MAP_COLORS.crit, "line-width": 1.5, "line-dasharray": [2, 1.5] } });
+  m.addLayer({ id: "events-fill", type: "fill", source: "events", paint: { "fill-color": ["get", "color"], "fill-opacity": 0.14 } }, FIRST_LABEL_LAYER);
+  m.addLayer({ id: "events-line", type: "line", source: "events", paint: { "line-color": ["get", "color"], "line-width": 1.5 } }, FIRST_LABEL_LAYER);
+  m.addLayer({ id: "jams-fill", type: "fill", source: "jams", paint: { "fill-color": MAP_COLORS.crit, "fill-opacity": 0.16 } }, FIRST_LABEL_LAYER);
+  m.addLayer({ id: "jams-line", type: "line", source: "jams", paint: { "line-color": MAP_COLORS.crit, "line-width": 1.5, "line-dasharray": [2, 1.5] } }, FIRST_LABEL_LAYER);
   m.addLayer({
     id: "routes-casing",
     type: "line",
     source: "routes",
     layout: { "line-cap": "round", "line-join": "round" },
     paint: { "line-color": MAP_COLORS.casing, "line-width": ["+", ["get", "width"], 3], "line-opacity": ["get", "opacity"] },
-  });
+  }, FIRST_LABEL_LAYER);
   m.addLayer({
     id: "routes-line",
     type: "line",
     source: "routes",
     layout: { "line-cap": "round", "line-join": "round" },
     paint: { "line-color": ["get", "color"], "line-width": ["get", "width"], "line-opacity": ["get", "opacity"] },
-  });
+  }, FIRST_LABEL_LAYER);
   m.addLayer({
     id: "companion-routes-line",
     type: "line",
     source: "companion-routes",
     layout: { "line-cap": "round", "line-join": "round" },
     paint: { "line-color": ["get", "color"], "line-width": 3, "line-opacity": 0.8, "line-dasharray": [1.5, 1.5] },
-  });
+  }, FIRST_LABEL_LAYER);
   m.addLayer({
     id: "weather-circle",
     type: "circle",
@@ -350,7 +351,7 @@ function addOverlayLayers(m: maplibregl.Map) {
       "circle-stroke-color": ["get", "color"],
       "circle-stroke-width": 2,
     },
-  });
+  }, FIRST_LABEL_LAYER);
 
   // Tooltips y clics sobre las capas vectoriales.
   for (const layer of ["events-fill", "jams-fill", "weather-circle"]) {
