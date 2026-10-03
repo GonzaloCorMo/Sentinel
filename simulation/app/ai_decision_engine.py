@@ -26,7 +26,6 @@ al vuelo vía `engine.register_entity_type`.
 from __future__ import annotations
 
 import asyncio
-import json as _json
 import logging
 import os
 import time
@@ -432,7 +431,7 @@ class AIDecisionEngine:
                 created = em.get("createdAt")
                 if created:
                     try:
-                        from datetime import datetime, timezone
+                        from datetime import datetime
                         if isinstance(created, str):
                             ct = datetime.fromisoformat(created.replace("Z", "+00:00")).timestamp()
                         else:
