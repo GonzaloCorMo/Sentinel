@@ -1,4 +1,4 @@
-"""Persistencia de lecturas meteorológicas (aruba.weather) en Supabase.
+"""Persistencia de lecturas meteorológicas (fuente de eventos) en Supabase.
 
 El backend usa ``SUPABASE_SERVICE_ROLE_KEY`` (bypass RLS). Todas las
 operaciones son async-safe: el cliente ``supabase-py`` es sincrónico, así

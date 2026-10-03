@@ -6,7 +6,7 @@ flota / POIs / emergencias automaticas. La región activa es estado global del
 proceso: cambiarla resetea la simulación (`engine.reset_simulation`) porque las
 coordenadas de POIs/ambulancias previas no son válidas en el nuevo grafo.
 
-Cada OSRM corre en su propio contenedor docker (osrm-aruba, osrm-santiago, ...);
+Cada OSRM corre en su propio contenedor docker (osrm-santiago, osrm-bogota, ...);
 solo el de la región activa recibe queries — los demás quedan idle.
 """
 from __future__ import annotations
@@ -77,21 +77,6 @@ def _osrm_url(region: str, default_host: str, default_port: int) -> str:
 # Probe = dos puntos cercanos en calle real para validar el grafo OSRM.
 
 REGIONS: dict[str, RegionConfig] = {
-    "aruba": RegionConfig(
-        id="aruba",
-        name="Aruba (Oranjestad)",
-        country="Aruba",
-        timezone="America/Aruba",
-        center_lat=12.5398,
-        center_lon=-70.0344,
-        zoom=14,
-        spawn_lat=12.5407,
-        spawn_lon=-70.0347,
-        pbf_url="https://download.openstreetmap.fr/extracts/central-america/aruba.osm.pbf",
-        osrm_url=_osrm_url("aruba", "osrm-aruba", 5000),
-        probe_lon_a=-70.0344, probe_lat_a=12.5398,
-        probe_lon_b=-70.0316, probe_lat_b=12.5226,
-    ),
     "santiago": RegionConfig(
         id="santiago",
         name="Santiago de Compostela",
@@ -145,16 +130,16 @@ REGIONS: dict[str, RegionConfig] = {
     ),
 }
 
-DEFAULT_REGION_ID = (os.environ.get("DEFAULT_REGION") or "aruba").strip().lower()
+DEFAULT_REGION_ID = (os.environ.get("DEFAULT_REGION") or "santiago").strip().lower()
 if DEFAULT_REGION_ID not in REGIONS:
-    DEFAULT_REGION_ID = "aruba"
+    DEFAULT_REGION_ID = "santiago"
 
 _lock = threading.Lock()
 _active_region_id: str = DEFAULT_REGION_ID
 
 
 def list_regions() -> list[RegionConfig]:
-    """Lista de regiones disponibles (orden estable: aruba, santiago, bogota, mexico)."""
+    """Lista de regiones disponibles (orden estable: santiago, bogota, mexico)."""
     return list(REGIONS.values())
 
 

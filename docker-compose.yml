@@ -5,8 +5,9 @@
 # Parada:    docker compose down
 # Reset DB:  docker compose down -v  (borra volúmenes, aplica migraciones de cero)
 #
-# Chat LLM se delega al servicio vLLM externo (ver LLM_FLASH_BASE_URL /
-# LLM_FLAGSHIP_BASE_URL en .env). Solo embeddings corren en local vía Ollama
+# IA 100 % local: Ollama sirve el chat (OLLAMA_CHAT_MODEL, por defecto
+# qwen2.5:3b) y los embeddings. Para usar otro endpoint OpenAI-compatible,
+# sobrescribe LLM_FLASH_BASE_URL / LLM_FLAGSHIP_BASE_URL en .env.
 # (modelo nomic-embed-text).
 #
 # Variables en .env (ver .env.example). Puertos expuestos en el host:
@@ -19,7 +20,6 @@
 #   5000  OSRM Santiago de Compostela
 #   5001  OSRM Bogotá
 #   5002  OSRM Ciudad de México
-#   5003  OSRM Aruba
 #   1883  Mosquitto (MQTT)
 
 name: sentinel-digital-twin
@@ -43,66 +43,6 @@ services:
   # Datos en ./docker/osrm-data/<region>/:
   #   map.osm.pbf  (descargado por fetcher)
   #   region.osrm*  (compilado por builder, leído por routed)
-
-  osrm-fetcher-aruba:
-    image: alpine:3.19
-    restart: "no"
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        set -eu
-        cd /data
-        if [ -f region.osrm ] || [ -f map.osm.pbf ]; then
-          echo "[osrm-fetcher-aruba] datos ya existen, saltando descarga"
-          exit 0
-        fi
-        apk add --no-cache curl >/dev/null
-        echo "[osrm-fetcher-aruba] descargando Aruba PBF..."
-        curl -L --fail -o map.osm.pbf.part "$$PBF_URL"
-        mv map.osm.pbf.part map.osm.pbf
-        echo "[osrm-fetcher-aruba] OK"
-    environment:
-      PBF_URL: ${OSRM_PBF_URL_ARUBA:-https://download.openstreetmap.fr/extracts/central-america/aruba.osm.pbf}
-    volumes:
-      - ./docker/osrm-data/aruba:/data
-
-  osrm-builder-aruba:
-    image: osrm/osrm-backend:latest
-    restart: "no"
-    depends_on:
-      osrm-fetcher-aruba:
-        condition: service_completed_successfully
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        set -eu
-        cd /data
-        if [ -f region.osrm ]; then
-          echo "[osrm-builder-aruba] grafo ya existe, saltando"
-          exit 0
-        fi
-        echo "[osrm-builder-aruba] osrm-extract..."
-        osrm-extract -p /opt/car.lua map.osm.pbf
-        echo "[osrm-builder-aruba] osrm-partition..."
-        osrm-partition map.osrm
-        echo "[osrm-builder-aruba] osrm-customize..."
-        osrm-customize map.osrm
-        for f in map.osrm*; do mv "$$f" "region.$${f#map.}"; done
-        echo "[osrm-builder-aruba] grafo listo"
-    volumes:
-      - ./docker/osrm-data/aruba:/data
-
-  osrm-aruba:
-    image: osrm/osrm-backend:latest
-    restart: unless-stopped
-    depends_on:
-      osrm-builder-aruba:
-        condition: service_completed_successfully
-    ports:
-      - "5003:5000"
-    volumes:
-      - ./docker/osrm-data/aruba:/data:ro
-    command: osrm-routed --algorithm mld /data/region.osrm
 
   # Santiago de Compostela: no hay extracto de ciudad, se descarga Galicia
   # (Geofabrik) y se recorta con osmium al área metropolitana (grafo pequeño).
@@ -538,6 +478,7 @@ services:
     environment:
       OLLAMA_NUM_PARALLEL: "2"
       OLLAMA_KEEP_ALIVE: "10m"
+      OLLAMA_CONTEXT_LENGTH: "8192"
       OLLAMA_FLASH_ATTENTION: "1"
     deploy:
       resources:
@@ -571,6 +512,7 @@ services:
     environment:
       OLLAMA_NUM_PARALLEL: "2"
       OLLAMA_KEEP_ALIVE: "10m"
+      OLLAMA_CONTEXT_LENGTH: "8192"
       OLLAMA_FLASH_ATTENTION: "1"
       # MI300X = gfx942 (CDNA3); HSA_OVERRIDE no suele ser necesario, pero el
       # tag :rocm de Ollama trae los kernels precompilados.
@@ -588,9 +530,10 @@ services:
     environment:
       OLLAMA_NUM_PARALLEL: "1"
       OLLAMA_KEEP_ALIVE: "10m"
+      OLLAMA_CONTEXT_LENGTH: "8192"
 
   ollama-init:
-    # Descarga el modelo de embeddings la primera vez (~270 MB) y sale.
+    # Descarga los modelos la primera vez (embeddings ~270 MB + chat ~1,9 GB) y sale.
     # Misma imagen base que el runtime activo solo importa para el binario CLI;
     # el pull se hace contra la API HTTP del servicio activo (alias `ollama`).
     profiles: ["gpu-nvidia", "gpu-amd", "cpu"]
@@ -606,13 +549,14 @@ services:
           i=$$((i+1)); [ $$i -gt 60 ] && { echo "ollama no respondió"; exit 1; }
           sleep 1
         done
-        m="${OLLAMA_EMBED_MODEL:-nomic-embed-text}"
-        if ollama list | grep -q "$$m"; then
-          echo "[ollama-init] $$m ya instalado"
-        else
-          echo "[ollama-init] pull $$m..."
-          ollama pull "$$m"
-        fi
+        for m in "${OLLAMA_EMBED_MODEL:-nomic-embed-text}" "${OLLAMA_CHAT_MODEL:-qwen2.5:3b}"; do
+          if ollama list | grep -q "^$$m"; then
+            echo "[ollama-init] $$m ya instalado"
+          else
+            echo "[ollama-init] pull $$m..."
+            ollama pull "$$m"
+          fi
+        done
         echo "[ollama-init] OK"
     volumes:
       - ollama-data:/root/.ollama
@@ -644,11 +588,10 @@ services:
       TELEMETRY_INGEST_URL: http://simulation:8080/api/telemetry/ingest
       # OSRM por región (selector de mapa). El backend usa la URL de la región
       # activa; las demás quedan idle pero conectadas.
-      OSRM_URL_ARUBA: http://osrm-aruba:5000
       OSRM_URL_SANTIAGO: http://osrm-santiago:5000
       OSRM_URL_BOGOTA: http://osrm-bogota:5000
       OSRM_URL_MEXICO: http://osrm-mexico:5000
-      DEFAULT_REGION: ${DEFAULT_REGION:-aruba}
+      DEFAULT_REGION: ${DEFAULT_REGION:-santiago}
       # Fuente de eventos externos: mock local o ingesta REST (/api/events/ingest)
       EVENT_SOURCE: ${EVENT_SOURCE:-mock}
       MOCK_EVENT_INTERVAL_SEC: ${MOCK_EVENT_INTERVAL_SEC:-25}
@@ -656,10 +599,10 @@ services:
       MOCK_WEATHER_STATIONS: ${MOCK_WEATHER_STATIONS:-4}
       # LLM
       # LLM — chat al endpoint vLLM externo, embeddings al Ollama local.
-      LLM_FLASH_BASE_URL: ${LLM_FLASH_BASE_URL:-http://10.10.48.10:8000/v1}
-      LLM_FLAGSHIP_BASE_URL: ${LLM_FLAGSHIP_BASE_URL:-http://10.10.48.10:8001/v1}
-      LLM_FLASH_MODEL: ${LLM_FLASH_MODEL:-google/gemma-4-31b-it}
-      LLM_FLAGSHIP_MODEL: ${LLM_FLAGSHIP_MODEL:-Qwen/Qwen3-235B-A22B}
+      LLM_FLASH_BASE_URL: ${LLM_FLASH_BASE_URL:-http://ollama:11434/v1}
+      LLM_FLAGSHIP_BASE_URL: ${LLM_FLAGSHIP_BASE_URL:-http://ollama:11434/v1}
+      LLM_FLASH_MODEL: ${LLM_FLASH_MODEL:-qwen2.5:3b}
+      LLM_FLAGSHIP_MODEL: ${LLM_FLAGSHIP_MODEL:-qwen2.5:3b}
       LLM_API_KEY: ${LLM_API_KEY:-not-needed}
       LLM_TIMEOUT_SEC: ${LLM_TIMEOUT_SEC:-60}
       OLLAMA_BASE_URL: http://ollama:11434/v1

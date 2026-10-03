@@ -191,16 +191,6 @@ class SimulationEngine:
             "readySince": None,
             "lastError": None,
         }
-        self.aruba_inventory: dict[str, Any] = {
-            "enabled": False,
-            "status": "idle",
-            "lastSyncAt": None,
-            "fetchedPois": 0,
-            "fetchedRoads": 0,
-            "updatedPois": 0,
-            "updatedRoads": 0,
-            "itemsUpdated": 0,
-        }
         self.event_source_status: dict[str, Any] = {
             "enabled": False,
             "status": "idle",
@@ -595,7 +585,6 @@ class SimulationEngine:
             "trainingMode": self.training_mode,
             "trainingRatePerMin": self.training_emergencies_per_min,
             "sessionId": self._events.session_id,
-            "arubaInventory": dict(self.aruba_inventory),
             "externalEvents": [e.copy() for e in self.external_events[-200:] if not e.get("resolved_at")],
             "weatherStations": {k: v.copy() for k, v in self.weather_by_station.items()},
             "eventSourceStatus": dict(self.event_source_status),
@@ -2143,118 +2132,6 @@ class SimulationEngine:
             self._comms_log.clear()
             self.paused = True
         await self.seed_default_fleet_if_empty()
-
-    async def apply_aruba_inventory_sync(
-        self,
-        *,
-        normalized_pois: list[dict[str, Any]],
-        normalized_roads: list[dict[str, Any]],
-        normalized_jams: list[dict[str, Any]] | None = None,
-    ) -> tuple[int, int]:
-        """Upsert inventory rows from Aruba API into runtime state."""
-        updated_pois = 0
-        updated_roads = 0
-        async with self._lock:
-            existing_poi_idx: dict[str, dict[str, Any]] = {
-                str(p.get("externalId")): p
-                for p in self.pois
-                if p.get("source") == "aruba_api" and p.get("externalId")
-            }
-            for row in normalized_pois:
-                ext_id = str(row.get("externalId") or "")
-                if not ext_id:
-                    continue
-                current = existing_poi_idx.get(ext_id)
-                if current is None:
-                    current = {
-                        "id": str(uuid4()),
-                        "source": "aruba_api",
-                        "externalId": ext_id,
-                    }
-                    self.pois.append(current)
-                current["kind"] = row.get("kind") or "place"
-                current["name"] = row.get("name") or "POI Aruba"
-                current["latitude"] = float(row.get("latitude"))
-                current["longitude"] = float(row.get("longitude"))
-                current["rawType"] = row.get("rawType")
-                current["address"] = row.get("address")
-                current["capacity"] = row.get("capacity")
-                current["updatedAt"] = _iso()
-                existing_poi_idx[ext_id] = current
-                updated_pois += 1
-
-            existing_poi_ids = {str(p.get("externalId") or "") for p in normalized_pois}
-            self.external_roads = [
-                {
-                    "externalId": str(r.get("externalId")),
-                    "name": r.get("name") or "Road segment",
-                    "roadType": r.get("roadType") or "unknown",
-                    "startLat": float(r.get("startLat")),
-                    "startLon": float(r.get("startLon")),
-                    "endLat": float(r.get("endLat")),
-                    "endLon": float(r.get("endLon")),
-                    "speedLimitKmh": float(r["speedLimitKmh"]) if r.get("speedLimitKmh") is not None else None,
-                    "lanes": int(r["lanes"]) if r.get("lanes") is not None else None,
-                    "lengthM": float(r.get("lengthM") or 0.0),
-                    "geometry": r.get("geometry") if isinstance(r.get("geometry"), list) else None,
-                    "source": "aruba_api",
-                    "updatedAt": _iso(),
-                }
-                for r in normalized_roads
-                if str(r.get("externalId") or "")
-            ]
-            updated_roads = len(self.external_roads)
-            self.external_jams = [
-                {
-                    "id": str(j.get("id")),
-                    "polygon": j.get("polygon") or [],
-                    "source": "aruba_api",
-                }
-                for j in (normalized_jams or [])
-                if str(j.get("id") or "") and isinstance(j.get("polygon"), list) and len(j.get("polygon") or []) >= 3
-            ]
-
-            # prune removed external pois
-            self.pois = [
-                p
-                for p in self.pois
-                if not (
-                    p.get("source") == "aruba_api"
-                    and p.get("externalId")
-                    and str(p.get("externalId")) not in existing_poi_ids
-                    and p.get("kind") != "hospital"
-                    and p.get("kind") != "gas_station"
-                )
-            ]
-            self.aruba_inventory.update(
-                {
-                    "status": "synced",
-                    "lastSyncAt": _iso(),
-                    "fetchedPois": len(normalized_pois),
-                    "fetchedRoads": len(normalized_roads),
-                    "updatedPois": updated_pois,
-                    "updatedRoads": updated_roads,
-                    "itemsUpdated": updated_pois + updated_roads + len(self.external_jams),
-                }
-            )
-        return updated_pois, updated_roads
-
-    def set_aruba_sync_status(self, status: dict[str, Any]) -> None:
-        merged = dict(self.aruba_inventory)
-        merged.update(
-            {
-                "status": status.get("status") or merged.get("status") or "idle",
-                "lastSyncAt": status.get("finishedAt") or status.get("lastSyncAt") or _iso(),
-                "fetchedPois": int(status.get("fetchedPois") or 0),
-                "fetchedRoads": int(status.get("fetchedRoads") or 0),
-                "updatedPois": int(status.get("updatedPois") or 0),
-                "updatedRoads": int(status.get("updatedRoads") or 0),
-                "itemsUpdated": int(status.get("updatedPois") or 0) + int(status.get("updatedRoads") or 0),
-                "enabled": bool(status.get("enabled", True)),
-                "ok": bool(status.get("ok", True)),
-            }
-        )
-        self.aruba_inventory = merged
 
     _EXTERNAL_EVENT_JAM_TYPES = {"lane_closure", "accident", "construction", "hazmat_spill"}
     _EXTERNAL_EVENT_DISPATCH_TYPES = {

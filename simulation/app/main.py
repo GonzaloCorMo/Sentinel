@@ -44,7 +44,6 @@ from .event_source import run_event_source
 from .schemas.external_events import ExternalEvent as ExternalEventIn
 from .schemas.external_events import WeatherReading as WeatherReadingIn
 from .weather_db import upsert_weather_reading
-from .inventory_sync import load_aruba_config, sync_aruba_inventory
 from .regions import get_active_region, get_active_region_id, list_regions, set_active_region
 from .schemas.telemetry import telemetry_schema_json
 from .supabase_client import is_supabase_available
@@ -130,50 +129,6 @@ async def _osrm_probe_loop() -> None:
             raise
 
 
-async def _aruba_inventory_loop() -> None:
-    """Periodic sync loop for Aruba inventory (POIs + roads)."""
-    import logging
-
-    loop_log = logging.getLogger("uvicorn.error")
-    while True:
-        cfg = load_aruba_config()
-        if not cfg.enabled:
-            engine.set_aruba_sync_status(
-                {
-                    "ok": False,
-                    "enabled": False,
-                    "status": "disabled_missing_base_url",
-                    "fetchedPois": 0,
-                    "fetchedRoads": 0,
-                    "updatedPois": 0,
-                    "updatedRoads": 0,
-                    "lastSyncAt": _iso(),
-                }
-            )
-            await asyncio.sleep(15.0)
-            continue
-        try:
-            summary = await sync_aruba_inventory(engine, cfg=cfg)
-            engine.set_aruba_sync_status(summary)
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:
-            loop_log.warning("Aruba inventory sync failed: %s", exc)
-            engine.set_aruba_sync_status(
-                {
-                    "ok": False,
-                    "enabled": True,
-                    "status": f"error:{type(exc).__name__}",
-                    "fetchedPois": 0,
-                    "fetchedRoads": 0,
-                    "updatedPois": 0,
-                    "updatedRoads": 0,
-                    "lastSyncAt": _iso(),
-                }
-            )
-        await asyncio.sleep(max(5.0, float(cfg.interval_sec)))
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Ciclo de vida FastAPI: siembra fleet/tipos/knowledge y lanza tareas de fondo.
@@ -204,14 +159,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         log.warning("Knowledge seed skipped (LLM not ready)")
     loop_task = asyncio.create_task(engine.run_loop())
     osrm_task = asyncio.create_task(_osrm_probe_loop())
-    aruba_task = asyncio.create_task(_aruba_inventory_loop())
     event_source_task = asyncio.create_task(run_event_source(engine))
     ai_task = asyncio.create_task(ai_engine.observe_loop())
     yield
     ai_engine.stop()
     ai_task.cancel()
     event_source_task.cancel()
-    aruba_task.cancel()
     osrm_task.cancel()
     engine.stop()
     loop_task.cancel()
@@ -221,10 +174,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         pass
     try:
         await event_source_task
-    except asyncio.CancelledError:
-        pass
-    try:
-        await aruba_task
     except asyncio.CancelledError:
         pass
     try:
@@ -318,178 +267,16 @@ class HealthResponse(BaseModel):
     status: str = Field(description="Status of the service")
 
 
-class Vehicle(BaseModel):
-    id: str
-    type: str
-    status: str
-    latitude: float
-    longitude: float
-    fuel_level: float
-    callsign: str | None = None
-    speed_kmh: float | None = None
-    last_updated: str | None = None
-    metadata: dict[str, Any] | None = None
-
-
-class VehiclesResponse(BaseModel):
-    vehicles: list[Vehicle]
-
-
-class VehicleStatusSummary(BaseModel):
-    total: int
-    by_type: dict[str, int]
-    by_status: dict[str, int]
-
-
-class WeatherStation(BaseModel):
-    id: str
-    name: str
-    latitude: float
-    longitude: float
-
-
-class WeatherStationsResponse(BaseModel):
-    stations: list[WeatherStation]
-
-
-class WeatherReading(BaseModel):
-    temperature: float
-    humidity: float
-    wind_speed: float
-    timestamp: str
-
-
 class AskResponse(BaseModel):
     answer: str
     confidence: float | None = None
     data: dict[str, Any] | None = None
 
 
-def _entity_type_meta(et_id: str | None) -> dict[str, Any]:
-    """Resuelve metadata económica/operativa del entityType (powertrain, costes, dotación)."""
-    if not et_id:
-        return {}
-    et = next((t for t in engine.get_entity_types() if t.get("id") == et_id), None)
-    if not et:
-        return {}
-    return {
-        "powertrain": et.get("powertrain"),
-        "crewMin": et.get("crewMin"),
-        "crewMax": et.get("crewMax"),
-        "costPerMin": et.get("costPerMin"),
-        "activationCost": et.get("activationCost"),
-    }
-
-
-def _operating_cost_for_amb(amb: dict[str, Any]) -> dict[str, Any]:
-    """Activación + tiempo activo × tarifa, según entityType."""
-    meta = _entity_type_meta(amb.get("entityTypeId"))
-    rate = float(meta.get("costPerMin") or 0.0)
-    activation = float(meta.get("activationCost") or 0.0) if amb.get("activated") else 0.0
-    minutes = float(amb.get("activeSeconds") or 0.0) / 60.0
-    runtime = minutes * rate
-    return {
-        "activation": round(activation, 2),
-        "runtime": round(runtime, 2),
-        "total": round(activation + runtime, 2),
-        "activeMinutes": round(minutes, 2),
-        "ratePerMin": rate,
-    }
-
-
-def _vehicle_row(unit: dict[str, Any], *, is_companion: bool = False) -> dict[str, Any]:
-    """Vehículo serializado segun contrato Aruba (schemas/Vehicle, snake_case).
-
-    Campos requeridos por contrato: id, type, status, latitude, longitude,
-    fuel_level. Para vehículos eléctricos `fuel_level` representa la batería
-    primaria (semántica "energía disponible" %, 0-100).
-
-    `metadata` opcional se usa como contenedor de telemetría rica
-    (powertrain, costes, mecánica, médico, misión, etc.) sin romper el
-    contrato base.
-    """
-    et_id = unit.get("entityTypeId") or unit.get("kind") or ("ambulance" if not is_companion else "companion")
-    meta = _entity_type_meta(et_id)
-    tele = unit.get("telemetry") or {}
-    mech = tele.get("mechanical") or {}
-    med = tele.get("medical")
-    pos = tele.get("positioning") or {}
-    powertrain = meta.get("powertrain") or "combustion"
-    energy_kind = "fuel" if powertrain == "combustion" else "battery"
-    energy_value = mech.get("fuelLevelPct") if energy_kind == "fuel" else mech.get("batteryPct")
-    if energy_value is None:
-        energy_value = unit.get("fuelLevel") if energy_kind == "fuel" else unit.get("batteryLevel")
-    if energy_value is None:
-        energy_value = 0.0
-    speed_val = pos.get("speedKmh") if pos.get("speedKmh") is not None else unit.get("speedKmh")
-    metadata: dict[str, Any] = {
-        "displayLabel": unit.get("displayLabel") or unit.get("callsign") or unit.get("name"),
-        "fsmState": unit.get("fsmState"),
-        "missionPhase": unit.get("missionPhase"),
-        "missionStatus": unit.get("missionStatus"),
-        "assignedEmergencyId": unit.get("assignedEmergencyId"),
-        "hasPatient": bool(unit.get("hasPatient", False)),
-        "patientSeverity": unit.get("patientSeverity"),
-        "isCompanion": is_companion,
-        "powertrain": powertrain,
-        "crew_min": meta.get("crewMin"),
-        "crew_max": meta.get("crewMax"),
-        "energy": {
-            "kind": energy_kind,
-            "level_pct": round(float(energy_value), 1),
-            "aux_battery_pct": round(float(mech.get("batteryPct")), 1) if mech.get("batteryPct") is not None else None,
-        },
-        "mechanical": {
-            "engine_temp_c": mech.get("engineTempC"),
-            "tire_pressure_kpa": mech.get("tirePressureKpa"),
-            "oil_temp_c": mech.get("oilTempC"),
-            "engine_rpm": mech.get("engineRpm"),
-            "odometer_km": mech.get("odometerKm") or unit.get("odometerKm"),
-            "sirens_on": mech.get("sirensOn"),
-            "power_state": mech.get("powerState"),
-            "range_km": mech.get("rangeKm"),
-            "engine_health_pct": mech.get("engineHealthPct"),
-        },
-        "medical": med,
-        "powered_off": bool(unit.get("poweredOff", False)),
-        "heading_deg": pos.get("headingDeg") or unit.get("headingDeg"),
-        "road_speed_limit_kmh": unit.get("roadSpeedLimitKmh") or pos.get("roadSpeedLimitKmh"),
-    }
-    if not is_companion:
-        cost = _operating_cost_for_amb(unit)
-        metadata["cost"] = {
-            "activation": cost["activation"],
-            "runtime": cost["runtime"],
-            "total": cost["total"],
-            "active_minutes": cost["activeMinutes"],
-            "rate_per_min": cost["ratePerMin"],
-        }
-    return {
-        # ── contrato base (required) ──
-        "id": str(unit.get("id") or ""),
-        "type": str(et_id),
-        "status": str(unit.get("missionPhase") or unit.get("status") or unit.get("fsmState") or "idle"),
-        "latitude": float(unit.get("latitude") or 0.0),
-        "longitude": float(unit.get("longitude") or 0.0),
-        "fuel_level": round(float(energy_value), 1),
-        # ── opcionales ──
-        "callsign": unit.get("displayLabel") or unit.get("callsign"),
-        "speed_kmh": float(speed_val) if speed_val is not None else None,
-        "last_updated": unit.get("updatedAt"),
-        "metadata": metadata,
-    }
-
-
-def _vehicle_public_rows() -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = [_vehicle_row(a, is_companion=False) for a in engine.ambulances]
-    rows.extend(_vehicle_row(c, is_companion=True) for c in engine.companions)
-    return rows
-
-
 async def _weather_station_rows() -> list[dict[str, Any]]:
     """Construye la lista de estaciones conocidas fusionando tres fuentes:
 
-    1. POIs del inventario de la isla (tienen nombre y coordenadas).
+    1. POIs `weather_station` del mapa (tienen nombre y coordenadas).
     2. Cache in-memory del engine (lecturas recientes, caliente).
     3. Base de datos (weather_stations_latest) — permite reconstruir la lista
        tras un reinicio cuando el engine aún no ha recibido mensajes nuevos.
@@ -675,27 +462,9 @@ async def health() -> HealthResponse:
 
 
 @app.get("/openapi.yaml", tags=["base"], response_class=Response)
-async def get_contract_openapi_yaml() -> Response:
+async def openapi_yaml() -> Response:
     yaml_spec = yaml.safe_dump(app.openapi(), sort_keys=False, allow_unicode=False)
     return Response(content=yaml_spec, media_type="text/plain; charset=utf-8")
-
-
-@app.get("/vehicles/status", tags=["base"], response_model=VehicleStatusSummary)
-async def vehicle_status() -> VehicleStatusSummary:
-    """Schema VehicleStatusSummary: {total, by_type, by_status}."""
-    vehicles = _vehicle_public_rows()
-    by_type: dict[str, int] = {}
-    by_status: dict[str, int] = {}
-    for v in vehicles:
-        ty = str(v.get("type", "unknown"))
-        by_type[ty] = by_type.get(ty, 0) + 1
-        st = str(v.get("status", "idle"))
-        by_status[st] = by_status.get(st, 0) + 1
-    return VehicleStatusSummary(
-        total=len(vehicles),
-        by_type=by_type,
-        by_status=by_status,
-    )
 
 
 def _amb_matches_filter(amb: dict[str, Any], args: dict[str, Any]) -> bool:
@@ -848,64 +617,6 @@ async def ask_fleet(q: str = Query(..., min_length=3)) -> AskResponse:
     )
 
 
-@app.get("/vehicles", tags=["vehicles"], response_model=VehiclesResponse)
-async def list_vehicles(type: str | None = Query(default=None)) -> VehiclesResponse:
-    """Schema VehiclesResponse: {vehicles: Vehicle[]}."""
-    vehicles = _vehicle_public_rows()
-    if type is not None:
-        target = type.strip().lower()
-        vehicles = [v for v in vehicles if str(v.get("type", "")).lower() == target]
-    return VehiclesResponse(vehicles=[Vehicle.model_validate(v) for v in vehicles])
-
-
-@app.get("/vehicles/{vehicle_id}", tags=["vehicles"], response_model=Vehicle)
-async def get_vehicle(vehicle_id: str) -> Vehicle:
-    """Schema Vehicle (single)."""
-    vehicles = _vehicle_public_rows()
-    row = next((v for v in vehicles if str(v.get("id")) == vehicle_id), None)
-    if row is None:
-        raise HTTPException(status_code=404, detail="vehicle not found")
-    return Vehicle.model_validate(row)
-
-
-@app.get("/weather-stations", tags=["weather"], response_model=WeatherStationsResponse)
-async def list_weather_stations() -> WeatherStationsResponse:
-    """Schema WeatherStationsResponse: {stations: WeatherStation[]}."""
-    return WeatherStationsResponse(stations=[WeatherStation.model_validate(s) for s in await _weather_station_rows()])
-
-
-@app.get("/weather-stations/{station_id}/reading", tags=["weather"], response_model=WeatherReading)
-async def get_reading(station_id: str) -> WeatherReading:
-    """Última lectura de una estación, servida desde la base de datos
-    (fuente primaria) con fallback al cache in-memory del engine."""
-    station = next((s for s in await _weather_station_rows() if str(s.get("id")) == station_id), None)
-    if station is None:
-        raise HTTPException(status_code=404, detail="station not found")
-
-    # Fuente primaria: base de datos (sobrevive reinicios, historial completo)
-    reading: dict[str, Any] | None = None
-    try:
-        from .weather_db import get_latest_reading
-
-        reading = await get_latest_reading(station_id)
-    except Exception:
-        pass
-
-    # Fallback: cache in-memory (lectura reciente aún no persistida, o DB off)
-    if reading is None:
-        reading = engine.weather_by_station.get(station_id)
-
-    if reading is None:
-        raise HTTPException(status_code=503, detail="no reading available yet for this station")
-
-    return WeatherReading(
-        temperature=round(float(reading["temperature_c"]), 1),
-        humidity=round(float(reading["humidity_pct"]), 1),
-        wind_speed=round(float(reading["wind_speed_kmh"]), 2),
-        timestamp=str(reading["timestamp"]),
-    )
-
-
 @app.post("/api/events/ingest", tags=["events"], status_code=202)
 async def ingest_event(event: ExternalEventIn) -> dict[str, Any]:
     """Ingesta REST de un evento externo (sustituye al antiguo consumer de mensajería)."""
@@ -1032,9 +743,9 @@ async def weather_override(req: WeatherOverrideRequest) -> dict[str, Any]:
     }
 
 
-@app.get("/api/island/summary", tags=["island"])
-async def island_summary() -> dict[str, Any]:
-    """Aggregated island-wide situational awareness for the global monitor.
+@app.get("/api/region/summary", tags=["region"])
+async def region_summary() -> dict[str, Any]:
+    """Resumen operativo de la región activa para el monitor regional.
 
     Combines weather aggregates, active external events grouped by type/severity,
     fleet KPIs, dispatch ETA averages, weather impact, and a per-zone

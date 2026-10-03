@@ -92,7 +92,7 @@ KNOWLEDGE_CHUNKS: list[dict[str, str]] = [
             "realistas por calles. Las ambulancias siguen polylines reales y el motor detecta "
             "atascos (zonas poligonales jam) que bloquean tramos de ruta, activando rerouting "
             "automatico. Si OSRM no esta disponible, se usa fallback de linea recta. "
-            "La simulacion soporta multiples regiones seleccionables (Aruba, Santiago de Compostela, Bogota, CDMX) "
+            "La simulacion soporta multiples regiones seleccionables (Santiago de Compostela, Bogota, CDMX) "
             "y arranca centrada en la region por defecto (DEFAULT_REGION)."
         ),
     },

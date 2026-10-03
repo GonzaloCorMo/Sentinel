@@ -1,12 +1,12 @@
-"""Abstracción del proveedor LLM: vLLM externo (chat) + Ollama local (embeddings).
+"""Abstracción del proveedor LLM (por defecto, todo en Ollama local).
 
-Chat → endpoints OpenAI-compat servidos por un vLLM externo en red interna:
+Chat → cualquier endpoint OpenAI-compatible; por defecto Ollama en Docker:
 
-- Flash (default): ``LLM_FLASH_MODEL`` en ``LLM_FLASH_BASE_URL`` (Gemma).
-- Flagship (opt-in por llamada): ``LLM_FLAGSHIP_MODEL`` en ``LLM_FLAGSHIP_BASE_URL`` (Qwen).
+- Flash (default): ``LLM_FLASH_MODEL`` en ``LLM_FLASH_BASE_URL`` (qwen2.5:3b).
+- Flagship (opt-in por llamada): ``LLM_FLAGSHIP_MODEL`` en ``LLM_FLAGSHIP_BASE_URL``.
 
-Embeddings → siguen en Ollama local (``OLLAMA_BASE_URL``, ``OLLAMA_EMBED_MODEL``;
-por defecto ``nomic-embed-text``). Los endpoints vLLM listados son chat-only.
+Embeddings → Ollama (``OLLAMA_BASE_URL``, ``OLLAMA_EMBED_MODEL``; por defecto
+``nomic-embed-text``).
 
 Ambos comparten la API OpenAI-compatible, así que el cliente ``AsyncOpenAI``
 sirve para los tres y el resto del código es agnóstico del provider.
@@ -67,12 +67,12 @@ def _init() -> None:
     timeout = httpx.Timeout(read_timeout, connect=5.0)
     client_opts = {"timeout": timeout, "max_retries": 1}
 
-    flash_url = _env("LLM_FLASH_BASE_URL", "http://10.10.48.10:8000/v1")
-    _flash_model = _env("LLM_FLASH_MODEL", "google/gemma-4-31b-it")
+    flash_url = _env("LLM_FLASH_BASE_URL", "http://ollama:11434/v1")
+    _flash_model = _env("LLM_FLASH_MODEL", "qwen2.5:3b")
     _flash_client = AsyncOpenAI(base_url=flash_url, api_key=api_key, **client_opts)
 
-    flagship_url = _env("LLM_FLAGSHIP_BASE_URL", "http://10.10.48.10:8001/v1")
-    _flagship_model = _env("LLM_FLAGSHIP_MODEL", "Qwen/Qwen3-235B-A22B")
+    flagship_url = _env("LLM_FLAGSHIP_BASE_URL", "http://ollama:11434/v1")
+    _flagship_model = _env("LLM_FLAGSHIP_MODEL", "qwen2.5:3b")
     _flagship_client = AsyncOpenAI(base_url=flagship_url, api_key=api_key, **client_opts)
 
     embed_url = _env("OLLAMA_BASE_URL", "http://ollama:11434/v1")
@@ -140,7 +140,7 @@ def _prepare(model: str, kwargs: dict[str, Any]) -> None:
 def get_provider_name() -> str:
     """Identificador del provider activo."""
     _init()
-    return "vllm"
+    return "ollama" if "11434" in _env("LLM_FLASH_BASE_URL", "http://ollama:11434/v1") else "openai-compatible"
 
 
 def is_llm_available() -> bool:
