@@ -2397,7 +2397,7 @@ class SimulationEngine:
             self._external_dispatched_ids = set(list(self._external_dispatched_ids)[-self._EXTERNAL_EVENT_DISPATCH_DEDUPE_CAP:])
 
         title_raw = str(event.get("title") or "External event").strip() or "External event"
-        title = f"{title_raw} (Pulse)"
+        title = title_raw
         description = str(event.get("description") or "").strip() or None
         severity = event.get("severity") or "medium"
         now_iso = _iso()

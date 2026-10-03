@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import os
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True)
@@ -33,6 +33,9 @@ class RegionConfig:
     probe_lat_a: float
     probe_lon_b: float
     probe_lat_b: float
+    # Hospitales reales (nombre, lat, lon) que el generador de escenarios coloca
+    # antes de recurrir a posiciones aleatorias. Fuente: OpenStreetMap.
+    hospitals: tuple[tuple[str, float, float], ...] = field(default_factory=tuple)
 
     @property
     def spawn(self) -> tuple[float, float]:
@@ -104,6 +107,11 @@ REGIONS: dict[str, RegionConfig] = {
         osrm_url=_osrm_url("santiago", "osrm-santiago", 5000),
         probe_lon_a=-8.5640, probe_lat_a=42.8710,
         probe_lon_b=-8.5445, probe_lat_b=42.8800,
+        hospitals=(
+            ("Complexo Hospitalario Universitario de Santiago (CHUS)", 42.87002, -8.56561),
+            ("Hospital HM La Esperanza", 42.87859, -8.55154),
+            ("Hospital HM Rosaleda", 42.87186, -8.54633),
+        ),
     ),
     "bogota": RegionConfig(
         id="bogota",

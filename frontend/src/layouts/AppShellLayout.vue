@@ -145,7 +145,7 @@ const nav = computed(() => [
 <template>
   <div class="min-h-screen bg-slate-950 text-slate-100">
     <header class="sticky top-0 z-[600] border-b border-slate-800 bg-slate-950">
-      <div class="mx-auto flex h-11 max-w-[1800px] items-stretch">
+      <div class="mx-auto flex h-11 max-w-[1800px] items-stretch whitespace-nowrap">
         <!-- Marca + estado de enlaces -->
         <div class="flex items-center gap-2.5 border-r border-slate-800 pl-4 pr-4">
           <svg viewBox="0 0 64 64" class="h-5 w-5 text-slate-100" aria-hidden="true">
@@ -168,7 +168,7 @@ const nav = computed(() => [
         </div>
 
         <!-- Navegación -->
-        <nav class="flex items-stretch overflow-x-auto">
+        <nav class="flex min-w-0 items-stretch overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <RouterLink
             v-for="n in nav"
             :key="n.to"
@@ -188,7 +188,7 @@ const nav = computed(() => [
         </nav>
 
         <!-- KPIs -->
-        <div class="ml-auto hidden items-stretch xl:flex">
+        <div class="ml-auto hidden items-stretch min-[1700px]:flex">
           <div class="flex items-center gap-2 border-l border-slate-800 px-3">
             <span class="text-[10px] uppercase tracking-wider text-slate-500">{{ t('header.vehicles') }}</span>
             <span class="font-mono text-xs text-slate-100">{{ vehicleCount }}</span>
@@ -209,7 +209,7 @@ const nav = computed(() => [
         </div>
 
         <!-- Controles -->
-        <div class="ml-auto flex items-center gap-1.5 border-l border-slate-800 px-3 xl:ml-0">
+        <div class="ml-auto flex items-center gap-1.5 border-l border-slate-800 px-3 min-[1700px]:ml-0">
           <span
             class="flex items-center gap-1.5 rounded border px-2 py-1 font-mono text-[10px] uppercase tracking-wider"
             :class="aiMode === 'autonomous' ? 'border-slate-600 text-slate-100' : 'border-amber-500/40 text-amber-300'"

@@ -74,12 +74,9 @@ export const useSimulationStore = defineStore("simulation", () => {
     previousLinkState = link;
     const or = next.osrmRouting;
     if (or) {
+      // El estado inicial ya se ve en la cabecera: solo se avisa de transiciones.
       if (previousOsrmReady === null) {
-        if (or.ready) {
-          toast.success("OSRM operativo", {
-            description: `Rutas por calle en ${or.baseUrl}`,
-          });
-        }
+        /* primer snapshot */
       } else if (or.ready && !previousOsrmReady) {
         toast.success("OSRM listo", {
           description: `Rutas por calle en ${or.baseUrl}`,

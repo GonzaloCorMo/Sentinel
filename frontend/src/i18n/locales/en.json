@@ -1,6 +1,6 @@
 {
   "island": {
-    "title": "Island Monitor — Aruba",
+    "title": "Regional monitor",
     "generated": "Generated",
     "weather": "Weather",
     "stations": "Stations",
@@ -91,7 +91,7 @@
     "comms": "Comms",
     "reports": "Reports",
     "config": "Settings",
-    "island": "Island"
+    "island": "Region"
   },
   "filters": {
     "title": "Active filters",
@@ -669,7 +669,8 @@
     "staging_default": "Hospital staging",
     "severity_stable": "Stable",
     "severity_moderate": "Moderate",
-    "severity_critical": "Critical"
+    "severity_critical": "Critical",
+    "aux_battery": "Aux. batt."
   },
   "auth_callback": {
     "verifying": "Verifying…",

@@ -4,6 +4,7 @@ import { useI18n } from "vue-i18n";
 
 interface IslandSummary {
   generatedAt: string;
+  region?: { id: string; name: string };
   weather: {
     stations: number;
     avgTempC: number | null;
@@ -108,7 +109,7 @@ const sortedZones = computed(() => {
   <div class="flex flex-col gap-3 px-4 py-4">
     <header class="flex items-center justify-between">
       <h1 class="text-lg font-semibold tracking-tight text-slate-100">
-        {{ t("island.title", "Island Monitor — Aruba") }}
+        {{ t("island.title") }}<span v-if="summary?.region" class="text-slate-500"> — {{ summary.region.name }}</span>
       </h1>
       <span v-if="summary" class="font-mono text-xs text-slate-500">
         {{ t("island.generated", "Generated") }}: {{ new Date(summary.generatedAt).toLocaleTimeString() }}

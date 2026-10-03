@@ -1,6 +1,6 @@
 {
   "island": {
-    "title": "Monitor de Illa — Aruba",
+    "title": "Monitor rexional",
     "generated": "Xerado",
     "weather": "Meteoroloxía",
     "stations": "Estacións",
@@ -91,7 +91,7 @@
     "comms": "Comunicacións",
     "reports": "Informes",
     "config": "Configuración",
-    "island": "Illa"
+    "island": "Rexión"
   },
   "filters": {
     "title": "Filtros activos",
@@ -669,7 +669,8 @@
     "staging_default": "Staging hospital",
     "severity_stable": "Estábel",
     "severity_moderate": "Moderado",
-    "severity_critical": "Crítico"
+    "severity_critical": "Crítico",
+    "aux_battery": "Bat. aux."
   },
   "auth_callback": {
     "verifying": "Verificando…",

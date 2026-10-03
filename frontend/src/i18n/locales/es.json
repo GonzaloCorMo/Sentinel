@@ -1,6 +1,6 @@
 {
   "island": {
-    "title": "Monitor de Isla — Aruba",
+    "title": "Monitor regional",
     "generated": "Generado",
     "weather": "Meteorología",
     "stations": "Estaciones",
@@ -21,7 +21,7 @@
     "pulseRate": "Ritmo de eventos externos",
     "weatherImpact": "Impacto meteo en ETA",
     "affectedMissions": "Misiones afectadas",
-    "map": "Mapa de la isla",
+    "map": "Mapa de la región",
     "zones": "Desglose por zona"
   },
   "common": {
@@ -91,7 +91,7 @@
     "comms": "Comunicaciones",
     "reports": "Informes",
     "config": "Configuración",
-    "island": "Isla"
+    "island": "Región"
   },
   "filters": {
     "title": "Filtros activos",
@@ -669,7 +669,8 @@
     "staging_default": "Staging hospital",
     "severity_stable": "Estable",
     "severity_moderate": "Moderado",
-    "severity_critical": "Crítico"
+    "severity_critical": "Crítico",
+    "aux_battery": "Bat. aux."
   },
   "auth_callback": {
     "verifying": "Verificando…",

@@ -818,7 +818,11 @@ onMounted(() => {
     activeRegion,
     (r) => {
       if (!map || !r) return;
-      map.flyTo(r.center, r.zoom, { duration: 0.8 });
+      // flyTo entre regiones lejanas (p. ej. Aruba → Santiago) deja la capa de
+      // teselas con el origen de píxeles corrupto: saltos largos sin animación.
+      const far = map.getCenter().distanceTo(r.center) > 50_000;
+      if (far) map.setView(r.center, r.zoom, { animate: false });
+      else map.flyTo(r.center, r.zoom, { duration: 0.8 });
     },
   );
 

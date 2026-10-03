@@ -26,6 +26,7 @@ import logging
 import os
 from typing import Any, AsyncIterator, Literal
 
+import httpx
 from openai import AsyncOpenAI
 
 _logger = logging.getLogger(__name__)
@@ -57,18 +58,26 @@ def _init() -> None:
         return
 
     api_key = _env("LLM_API_KEY", "not-needed")
+    # Sin timeout explícito el SDK espera 600 s × 3 intentos: con el endpoint
+    # caído el chat quedaría colgado ~30 min. Conexión corta, respuesta acotada.
+    try:
+        read_timeout = float(_env("LLM_TIMEOUT_SEC", "60"))
+    except ValueError:
+        read_timeout = 60.0
+    timeout = httpx.Timeout(read_timeout, connect=5.0)
+    client_opts = {"timeout": timeout, "max_retries": 1}
 
     flash_url = _env("LLM_FLASH_BASE_URL", "http://10.10.48.10:8000/v1")
     _flash_model = _env("LLM_FLASH_MODEL", "google/gemma-4-31b-it")
-    _flash_client = AsyncOpenAI(base_url=flash_url, api_key=api_key)
+    _flash_client = AsyncOpenAI(base_url=flash_url, api_key=api_key, **client_opts)
 
     flagship_url = _env("LLM_FLAGSHIP_BASE_URL", "http://10.10.48.10:8001/v1")
     _flagship_model = _env("LLM_FLAGSHIP_MODEL", "Qwen/Qwen3-235B-A22B")
-    _flagship_client = AsyncOpenAI(base_url=flagship_url, api_key=api_key)
+    _flagship_client = AsyncOpenAI(base_url=flagship_url, api_key=api_key, **client_opts)
 
     embed_url = _env("OLLAMA_BASE_URL", "http://ollama:11434/v1")
     _embed_model = _env("OLLAMA_EMBED_MODEL", "nomic-embed-text")
-    _embed_client = AsyncOpenAI(base_url=embed_url, api_key="ollama")
+    _embed_client = AsyncOpenAI(base_url=embed_url, api_key="ollama", **client_opts)
 
     _logger.info(
         "LLM provider: chat flash=%s @ %s | flagship=%s @ %s | embeddings=%s @ %s",

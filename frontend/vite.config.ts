@@ -25,6 +25,9 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    // En Docker Desktop (Windows/macOS) los bind mounts no emiten eventos de
+    // inotify: sin polling el HMR no ve los cambios de ./src.
+    watch: process.env.VITE_USE_POLLING ? { usePolling: true, interval: 300 } : undefined,
     proxy: {
       "/api": {
         target: process.env.DEV_PROXY_API_TARGET || "http://127.0.0.1:8080",

@@ -16,6 +16,11 @@ const store = useSimulationStore();
 const { state } = storeToRefs(store);
 
 const SPEED_SCALE_KMH = 120;
+/** Batería auxiliar de 12 V: escala de la barra y umbrales de aviso. */
+const AUX_BATTERY_MIN_V = 11;
+const AUX_BATTERY_MAX_V = 14.8;
+const AUX_BATTERY_WARN_V = 12.2;
+const AUX_BATTERY_CRIT_V = 11.8;
 
 const severityLabel: Record<string, string> = {
   stable: "Estable",
@@ -38,8 +43,20 @@ const bars = computed(() => {
   const primary = info.value ?? 0;
   rows.push({ key: "energy", label: t(info.labelKey), value: primary, unit: "%", pct: primary, level: level(primary) });
   if (pt === "combustion") {
-    const batt = props.amb.telemetry?.mechanical?.batteryPct ?? 0;
-    rows.push({ key: "battery", label: t("operations.battery"), value: batt, unit: "%", pct: batt, level: level(batt) });
+    // En combustión no hay batería de tracción (batteryPct = 0): se muestra la
+    // tensión de la batería auxiliar de 12 V, que es la que puede fallar.
+    const volts = props.amb.telemetry?.mechanical?.secondaryBatteryVoltageV;
+    if (volts != null) {
+      const vLevel = volts < AUX_BATTERY_CRIT_V ? "crit" : volts < AUX_BATTERY_WARN_V ? "warn" : "ok";
+      rows.push({
+        key: "battery",
+        label: t("operations.aux_battery"),
+        value: volts,
+        unit: "V",
+        pct: ((volts - AUX_BATTERY_MIN_V) / (AUX_BATTERY_MAX_V - AUX_BATTERY_MIN_V)) * 100,
+        level: vLevel,
+      });
+    }
   }
   rows.push({
     key: "speed",
@@ -99,7 +116,7 @@ const lowSpo2 = computed(() => (props.amb.telemetry?.medical?.spo2Pct ?? 100) < 
           class="text-right font-mono text-xs"
           :class="b.level === 'crit' ? 'text-red-300' : b.level === 'warn' ? 'text-amber-300' : 'text-slate-100'"
         >
-          {{ b.value.toFixed(b.unit === "%" ? 0 : 1) }}<span class="ml-0.5 text-[10px] text-slate-500">{{ b.unit }}</span>
+          {{ b.value.toFixed(b.unit === "%" ? 0 : b.unit === "V" ? 2 : 1) }}<span class="ml-0.5 text-[10px] text-slate-500">{{ b.unit }}</span>
         </dd>
       </div>
     </dl>

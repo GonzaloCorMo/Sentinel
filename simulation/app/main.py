@@ -45,7 +45,7 @@ from .schemas.external_events import ExternalEvent as ExternalEventIn
 from .schemas.external_events import WeatherReading as WeatherReadingIn
 from .weather_db import upsert_weather_reading
 from .inventory_sync import load_aruba_config, sync_aruba_inventory
-from .regions import get_active_region_id, list_regions, set_active_region
+from .regions import get_active_region, get_active_region_id, list_regions, set_active_region
 from .schemas.telemetry import telemetry_schema_json
 from .supabase_client import is_supabase_available
 
@@ -596,6 +596,13 @@ async def regions_set_active(body: RegionSwitchBody) -> dict[str, Any]:
     except KeyError:
         raise HTTPException(status_code=404, detail=f"Región desconocida: {body.regionId}")
     await engine.reset_simulation()
+    # Sondeo inmediato del OSRM de la nueva región: la sonda periódica duerme
+    # 15 s cuando todo va bien y el estado mostraría la región anterior.
+    from .routing import osrm_base_url, probe_osrm_routing
+
+    base = osrm_base_url()
+    ok, err = await probe_osrm_routing(engine._http, base)
+    engine.set_osrm_routing_status(ready=ok, base_url=base, checked_at=_iso(), last_error=None if ok else (err or "error"))
     return {
         "ok": True,
         "active": region.id,
@@ -1031,7 +1038,7 @@ async def island_summary() -> dict[str, Any]:
 
     Combines weather aggregates, active external events grouped by type/severity,
     fleet KPIs, dispatch ETA averages, weather impact, and a per-zone
-    breakdown bucketing assets into the four Aruba quadrants by centroid.
+    breakdown bucketing assets into four quadrants around the active region centre.
     """
     weather = engine.weather_by_station
     stations_meta = await _weather_station_rows()
@@ -1108,9 +1115,9 @@ async def island_summary() -> dict[str, Any]:
         "affectedMissions": sum(1 for f in weather_factors if f < 0.85),
     }
 
-    # Per-zone bucketing — split Aruba bbox (12.4..12.7 lat, -70.1..-69.8 lon)
-    # into 4 quadrants relative to centroid for a quick high-level view.
-    cen_lat, cen_lon = 12.55, -69.95
+    # Per-zone bucketing: cuatro cuadrantes alrededor del centro de la región activa.
+    region = get_active_region()
+    cen_lat, cen_lon = region.center
     zones: dict[str, dict[str, int]] = {
         "north_west": {"ambulances": 0, "events": 0, "emergencies": 0},
         "north_east": {"ambulances": 0, "events": 0, "emergencies": 0},
@@ -1139,6 +1146,7 @@ async def island_summary() -> dict[str, Any]:
 
     return {
         "generatedAt": datetime.now(timezone.utc).isoformat(),
+        "region": {"id": region.id, "name": region.name},
         "weather": weather_aggregates,
         "events": {
             "active": len(unresolved),
@@ -1578,11 +1586,16 @@ async def generate_scenario(body: GenerateScenarioBody) -> dict[str, Any]:
 
     placed = {"hospitals": 0, "gasStations": 0, "ambulances": 0, "incidents": 0, "extras": {}}
 
-    # Estructuras
+    # Estructuras: primero los hospitales reales de la región (si los hay).
+    known_hospitals = list(get_active_region().hospitals) if body.areaLatCenter is None else []
     for i in range(body.hospitals):
-        lat, lon = _rand_pos(0.025)
+        if i < len(known_hospitals):
+            name, lat, lon = known_hospitals[i]
+        else:
+            name = f"Hospital {i + 1}"
+            lat, lon = _rand_pos(0.025)
         try:
-            await engine.add_poi("hospital", f"Hospital {i + 1}", lat, lon)
+            await engine.add_poi("hospital", name, lat, lon)
             placed["hospitals"] += 1
         except Exception:
             pass
