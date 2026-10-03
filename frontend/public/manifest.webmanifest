@@ -1,0 +1,15 @@
+{
+  "name": "HPE Sentinel — Reportar Emergencia",
+  "short_name": "Sentinel 112",
+  "description": "Reporta una emergencia al sistema HPE Sentinel por voz y ubicación.",
+  "start_url": "/message-alert",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f1b2d",
+  "theme_color": "#01a982",
+  "icons": [
+    { "src": "/icons/icon-192.svg", "sizes": "192x192", "type": "image/svg+xml", "purpose": "any maskable" },
+    { "src": "/icons/icon-512.svg", "sizes": "512x512", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

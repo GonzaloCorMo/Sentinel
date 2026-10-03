@@ -1,0 +1,345 @@
+@import "tailwindcss";
+
+:root {
+  --hpe-green: #01a982;
+  --hpe-green-dark: #00875a;
+  --hpe-green-soft: rgba(1, 169, 130, 0.12);
+  --hpe-accent: #01a982;
+  --hpe-accent-glow: rgba(1, 169, 130, 0.25);
+  --hpe-gradient: linear-gradient(135deg, #01a982, #2dd4bf);
+  --hpe-gradient-subtle: linear-gradient(135deg, rgba(1, 169, 130, 0.15), rgba(45, 212, 191, 0.08));
+  --hpe-bg-body: #020617;
+  --hpe-bg-surface: #0f172a;
+  --hpe-bg-surface-elevated: #1e293b;
+  --hpe-bg-card: rgba(15, 23, 42, 0.8);
+  --hpe-border-subtle: #1e293b;
+  --hpe-border-card: rgba(51, 65, 85, 0.6);
+  --hpe-text-main: #e2e8f0;
+  --hpe-text-muted: #94a3b8;
+  --hpe-text-dim: #64748b;
+}
+
+@theme {
+  --color-hpe-green: #01a982;
+  --color-hpe-green-dark: #00875a;
+  --color-hpe-surface: #0f172a;
+  --color-hpe-surface-elevated: #1e293b;
+  --color-hpe-card: rgba(15, 23, 42, 0.8);
+  --color-hpe-border: rgba(51, 65, 85, 0.6);
+}
+
+#app {
+  min-height: 100vh;
+  width: 100%;
+}
+
+body {
+  background-color: var(--hpe-bg-body);
+  color: var(--hpe-text-main);
+  font-family:
+    Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    Oxygen,
+    Ubuntu,
+    Cantarell,
+    "Helvetica Neue",
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  color: var(--hpe-green);
+  text-decoration: none;
+}
+
+/* ── Global utility: HPE Card ─────────────────────────────────────────── */
+.hpe-card {
+  background: var(--hpe-bg-card);
+  border: 1px solid var(--hpe-border-card);
+  border-radius: 0.75rem;
+  backdrop-filter: blur(8px);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.hpe-card:hover {
+  border-color: rgba(1, 169, 130, 0.3);
+}
+
+.hpe-card-selected {
+  border-color: var(--hpe-green);
+  box-shadow: 0 0 0 1px var(--hpe-green), 0 0 20px var(--hpe-accent-glow);
+}
+
+/* ── Severity badges ──────────────────────────────────────────────────── */
+.severity-stable {
+  background: rgba(34, 197, 94, 0.15);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.severity-moderate {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.severity-critical {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  animation: pulse-critical 2s ease-in-out infinite;
+}
+
+@keyframes pulse-critical {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* ── FSM state chips ──────────────────────────────────────────────────── */
+.fsm-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.fsm-idle { background: rgba(100, 116, 139, 0.2); color: #94a3b8; }
+.fsm-en_route { background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
+.fsm-on_scene { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+.fsm-transporting { background: rgba(168, 85, 247, 0.2); color: #c084fc; }
+.fsm-at_hospital { background: rgba(34, 197, 94, 0.2); color: #4ade80; }
+.fsm-refueling { background: rgba(6, 182, 212, 0.2); color: #22d3ee; }
+
+.fsm-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+}
+
+.fsm-idle .fsm-dot { background: #94a3b8; }
+.fsm-en_route .fsm-dot { background: #60a5fa; }
+.fsm-on_scene .fsm-dot { background: #fbbf24; }
+.fsm-transporting .fsm-dot { background: #c084fc; }
+.fsm-at_hospital .fsm-dot { background: #4ade80; }
+.fsm-refueling .fsm-dot { background: #22d3ee; }
+
+/* ── Map marker icons ────────────────────────────────────────────────── */
+.map-marker-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.map-marker-icon svg {
+  display: block;
+}
+
+.map-marker-ambulance {
+  width: 32px;
+  height: 32px;
+  background: #01a982;
+}
+
+.map-marker-ambulance.has-patient {
+  background: #3b82f6;
+  animation: marker-pulse-blue 2s ease-in-out infinite;
+}
+
+.map-marker-ambulance.is-selected {
+  width: 40px;
+  height: 40px;
+  border-color: #fbbf24;
+  box-shadow: 0 0 0 4px rgba(251, 191, 36, 0.35), 0 2px 12px rgba(251, 191, 36, 0.4);
+}
+
+.map-marker-hospital {
+  width: 30px;
+  height: 30px;
+  background: #8b5cf6;
+}
+
+.map-marker-gas {
+  width: 26px;
+  height: 26px;
+  background: #0ea5e9;
+}
+
+.map-marker-emergency {
+  width: 34px;
+  height: 34px;
+  background: #ef4444;
+  border-radius: 6px;
+  transform: rotate(45deg);
+  animation: marker-pulse-red 1.5s ease-in-out infinite;
+}
+
+.map-marker-emergency.assigned {
+  background: #f97316;
+  animation: none;
+}
+
+.map-marker-emergency.is-pulse-source {
+  background: #0891b2;
+  box-shadow: 0 0 0 2px #67e8f9, 0 0 12px rgba(103, 232, 249, 0.6);
+  animation: marker-pulse-cyan 1.5s ease-in-out infinite;
+}
+
+.map-marker-emergency.is-pulse-source.assigned {
+  background: #0e7490;
+  animation: none;
+}
+
+@keyframes marker-pulse-cyan {
+  0%, 100% { box-shadow: 0 0 0 2px #67e8f9, 0 0 8px rgba(103, 232, 249, 0.5); }
+  50% { box-shadow: 0 0 0 3px #67e8f9, 0 0 16px rgba(103, 232, 249, 0.9); }
+}
+
+.map-marker-emergency svg {
+  transform: rotate(-45deg);
+}
+
+.map-marker-helicopter {
+  width: 32px;
+  height: 32px;
+  background: #06b6d4;
+}
+
+.map-marker-police {
+  width: 30px;
+  height: 30px;
+  background: #2563eb;
+}
+
+.map-marker-custom {
+  width: 30px;
+  height: 30px;
+  background: #94a3b8;
+}
+
+.map-marker-label {
+  position: absolute;
+  bottom: -16px;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: 9px;
+  font-weight: 700;
+  color: #e2e8f0;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8), 0 0 2px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+}
+
+@keyframes marker-pulse-blue {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.5), 0 2px 8px rgba(0, 0, 0, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(59, 130, 246, 0), 0 2px 8px rgba(0, 0, 0, 0.4); }
+}
+
+@keyframes marker-pulse-red {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5), 0 2px 8px rgba(0, 0, 0, 0.4); }
+  50% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0), 0 2px 8px rgba(0, 0, 0, 0.4); }
+}
+
+/* ── Interactive transitions ──────────────────────────────────────────── */
+button, a, [role="button"] {
+  transition: all 0.15s ease;
+}
+
+/* ── Scrollbar styling ────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.3);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.5);
+}
+
+/* ── Cluster marker (varias unidades mismo tipo mismo punto) ─────────── */
+.map-marker-cluster {
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  position: relative;
+  border: 3px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4), 0 0 0 4px rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s;
+}
+.map-marker-cluster:hover { transform: scale(1.08); }
+.map-marker-cluster-icon {
+  font-size: 20px; line-height: 1;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4));
+}
+.map-marker-cluster-count {
+  position: absolute;
+  top: -6px; right: -6px;
+  min-width: 20px; height: 20px; padding: 0 5px;
+  background: #0f172a;
+  color: #fff;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  border-radius: 10px;
+  font-size: 11px; font-weight: 800;
+  display: flex; align-items: center; justify-content: center;
+  line-height: 1;
+}
+
+/* ── Marker genérico de vehículo custom / IA ─────────────────────────── */
+.map-marker-generic-vehicle {
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  position: relative;
+  color: #fff;
+}
+.map-marker-generic-vehicle.is-selected {
+  border-color: #fef08a;
+  box-shadow: 0 0 0 3px rgba(253, 224, 71, 0.4), 0 2px 10px rgba(0, 0, 0, 0.5);
+}
+.map-marker-generic-vehicle.has-patient {
+  animation: pulse-has-patient 1.8s ease-in-out infinite;
+}
+.map-marker-generic-vehicle .map-marker-emoji {
+  font-size: 16px; line-height: 1;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.4));
+}
+.map-marker-generic-vehicle .map-marker-label {
+  position: absolute;
+  bottom: -18px;
+  left: 50%; transform: translateX(-50%);
+  font-size: 9px; font-weight: 700;
+  color: #e2e8f0;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+  white-space: nowrap;
+}
+
+/* ── Halo sobre markers que cumplen filtros activos del ⌘ comando ─────── */
+.leaflet-marker-icon.map-marker-matched {
+  filter: drop-shadow(0 0 0 rgba(168, 85, 247, 0.0));
+  animation: matched-pulse 1.8s ease-in-out infinite;
+}
+@keyframes matched-pulse {
+  0%, 100% { filter: drop-shadow(0 0 4px rgba(168, 85, 247, 0.55)) drop-shadow(0 0 8px rgba(168, 85, 247, 0.35)); }
+  50%      { filter: drop-shadow(0 0 10px rgba(168, 85, 247, 0.9)) drop-shadow(0 0 18px rgba(168, 85, 247, 0.55)); }
+}

@@ -1,0 +1,58 @@
+# Cousas
+hpe-docs/
+
+# Environment
+.env
+.env.local
+.env.*.local
+frontend/.env
+frontend/.env.local
+
+# Node / Vite
+node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Python
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+simulation/.venv/
+docs/.venv/
+.ruff_cache/
+.pytest_cache/
+
+# ML artifacts
+ml-service/models/
+ml-service/__pycache__/
+
+# OSRM grafo (varios GB)
+docker/osrm-data/*
+!docker/osrm-data/.gitkeep
+
+# Ollama models (persistidos en volumen Docker, no en repo)
+ollama-data/
+
+# Editor / OS
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Claude Code / Cursor (personal)
+.claude/
+.cursor/
+.cursorignore
+
+# Logs
+.run-logs/
+*.log
+
+# v0 sandbox (si usaste v0)
+__v0_runtime_loader.js
+__v0_devtools.tsx
+__v0_jsx-dev-runtime.ts
+.v0-trash/
+.vercel/

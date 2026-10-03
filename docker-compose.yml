@@ -1,0 +1,723 @@
+# Arranque (elige perfil GPU según hardware del host para Ollama embeddings):
+#   docker compose --profile gpu-nvidia up -d   # RTX/A100/H100/etc.
+#   docker compose --profile gpu-amd up -d      # MI300X/MI250/etc. (HPE Cray)
+#   docker compose --profile cpu up -d          # sin GPU (lento, solo embeddings)
+# Parada:    docker compose down
+# Reset DB:  docker compose down -v  (borra volúmenes, aplica migraciones de cero)
+#
+# Chat LLM se delega al servicio HPE-hosted vLLM (ver LLM_FLASH_BASE_URL /
+# LLM_FLAGSHIP_BASE_URL en .env). Solo embeddings corren en local vía Ollama
+# (modelo nomic-embed-text).
+#
+# Variables en .env (ver .env.example). Puertos expuestos en el host:
+#   5173  Frontend (Vue + Vite)
+#   8080  Simulation API (FastAPI)
+#   3001  MkDocs
+#   54321 Supabase API gateway (Kong)
+#   54322 Postgres
+#   54323 Supabase Studio (vía Kong también en 54321)
+#   5000  OSRM Madrid (Las Rozas, default)
+#   5001  OSRM Bogotá
+#   5002  OSRM Ciudad de México
+#   5003  OSRM Aruba
+#   1883  Mosquitto (MQTT)
+
+name: hpe-ambulancia-digital-twin
+
+services:
+  # ───────────────────────────────────────── Infra existente ───
+  mosquitto:
+    image: eclipse-mosquitto:2
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./docker/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+
+  # ──────────────────────── OSRM por región (4 grafos paralelos) ──────
+  # Cada región es un trío fetcher → builder → routed. Solo el routed de la
+  # región activa recibe queries; los demás quedan idle (~250 MB RAM cada
+  # uno). El selector de mapa del frontend conmuta la URL OSRM contra la que
+  # rutea el backend, sin reiniciar contenedores.
+  #
+  # Datos en ./docker/osrm-data/<region>/:
+  #   map.osm.pbf  (descargado por fetcher)
+  #   region.osrm*  (compilado por builder, leído por routed)
+
+  osrm-fetcher-aruba:
+    image: alpine:3.19
+    restart: "no"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+        cd /data
+        if [ -f region.osrm ] || [ -f map.osm.pbf ]; then
+          echo "[osrm-fetcher-aruba] datos ya existen, saltando descarga"
+          exit 0
+        fi
+        apk add --no-cache curl >/dev/null
+        echo "[osrm-fetcher-aruba] descargando Aruba PBF..."
+        curl -L --fail -o map.osm.pbf.part "$$PBF_URL"
+        mv map.osm.pbf.part map.osm.pbf
+        echo "[osrm-fetcher-aruba] OK"
+    environment:
+      PBF_URL: ${OSRM_PBF_URL_ARUBA:-https://download.openstreetmap.fr/extracts/central-america/aruba.osm.pbf}
+    volumes:
+      - ./docker/osrm-data/aruba:/data
+
+  osrm-builder-aruba:
+    image: osrm/osrm-backend:latest
+    restart: "no"
+    depends_on:
+      osrm-fetcher-aruba:
+        condition: service_completed_successfully
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+        cd /data
+        if [ -f region.osrm ]; then
+          echo "[osrm-builder-aruba] grafo ya existe, saltando"
+          exit 0
+        fi
+        echo "[osrm-builder-aruba] osrm-extract..."
+        osrm-extract -p /opt/car.lua map.osm.pbf
+        echo "[osrm-builder-aruba] osrm-partition..."
+        osrm-partition map.osrm
+        echo "[osrm-builder-aruba] osrm-customize..."
+        osrm-customize map.osrm
+        for f in map.osrm*; do mv "$$f" "region.$${f#map.}"; done
+        echo "[osrm-builder-aruba] grafo listo"
+    volumes:
+      - ./docker/osrm-data/aruba:/data
+
+  osrm-aruba:
+    image: osrm/osrm-backend:latest
+    restart: unless-stopped
+    depends_on:
+      osrm-builder-aruba:
+        condition: service_completed_successfully
+    ports:
+      - "5003:5000"
+    volumes:
+      - ./docker/osrm-data/aruba:/data:ro
+    command: osrm-routed --algorithm mld /data/region.osrm
+
+  osrm-fetcher-madrid:
+    image: alpine:3.19
+    restart: "no"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+        cd /data
+        if [ -f region.osrm ] || [ -f map.osm.pbf ]; then
+          echo "[osrm-fetcher-madrid] datos ya existen, saltando descarga"
+          exit 0
+        fi
+        apk add --no-cache curl >/dev/null
+        echo "[osrm-fetcher-madrid] descargando Madrid PBF..."
+        curl -L --fail -o map.osm.pbf.part "$$PBF_URL"
+        mv map.osm.pbf.part map.osm.pbf
+        echo "[osrm-fetcher-madrid] OK"
+    environment:
+      PBF_URL: ${OSRM_PBF_URL_MADRID:-https://download.bbbike.org/osm/bbbike/Madrid/Madrid.osm.pbf}
+    volumes:
+      - ./docker/osrm-data/madrid:/data
+
+  osrm-builder-madrid:
+    image: osrm/osrm-backend:latest
+    restart: "no"
+    depends_on:
+      osrm-fetcher-madrid:
+        condition: service_completed_successfully
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+        cd /data
+        if [ -f region.osrm ]; then
+          echo "[osrm-builder-madrid] grafo ya existe, saltando"
+          exit 0
+        fi
+        echo "[osrm-builder-madrid] osrm-extract..."
+        osrm-extract -p /opt/car.lua map.osm.pbf
+        echo "[osrm-builder-madrid] osrm-partition..."
+        osrm-partition map.osrm
+        echo "[osrm-builder-madrid] osrm-customize..."
+        osrm-customize map.osrm
+        for f in map.osrm*; do mv "$$f" "region.$${f#map.}"; done
+        echo "[osrm-builder-madrid] grafo listo"
+    volumes:
+      - ./docker/osrm-data/madrid:/data
+
+  osrm-madrid:
+    image: osrm/osrm-backend:latest
+    restart: unless-stopped
+    depends_on:
+      osrm-builder-madrid:
+        condition: service_completed_successfully
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./docker/osrm-data/madrid:/data:ro
+    command: osrm-routed --algorithm mld /data/region.osrm
+
+  osrm-fetcher-bogota:
+    image: alpine:3.19
+    restart: "no"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+        cd /data
+        if [ -f region.osrm ] || [ -f map.osm.pbf ]; then
+          echo "[osrm-fetcher-bogota] datos ya existen, saltando descarga"
+          exit 0
+        fi
+        apk add --no-cache curl >/dev/null
+        echo "[osrm-fetcher-bogota] descargando Bogotá PBF..."
+        curl -L --fail -o map.osm.pbf.part "$$PBF_URL"
+        mv map.osm.pbf.part map.osm.pbf
+        echo "[osrm-fetcher-bogota] OK"
+    environment:
+      PBF_URL: ${OSRM_PBF_URL_BOGOTA:-https://download.bbbike.org/osm/bbbike/Bogota/Bogota.osm.pbf}
+    volumes:
+      - ./docker/osrm-data/bogota:/data
+
+  osrm-builder-bogota:
+    image: osrm/osrm-backend:latest
+    restart: "no"
+    depends_on:
+      osrm-fetcher-bogota:
+        condition: service_completed_successfully
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+        cd /data
+        if [ -f region.osrm ]; then
+          echo "[osrm-builder-bogota] grafo ya existe, saltando"
+          exit 0
+        fi
+        echo "[osrm-builder-bogota] osrm-extract..."
+        osrm-extract -p /opt/car.lua map.osm.pbf
+        echo "[osrm-builder-bogota] osrm-partition..."
+        osrm-partition map.osrm
+        echo "[osrm-builder-bogota] osrm-customize..."
+        osrm-customize map.osrm
+        for f in map.osrm*; do mv "$$f" "region.$${f#map.}"; done
+        echo "[osrm-builder-bogota] grafo listo"
+    volumes:
+      - ./docker/osrm-data/bogota:/data
+
+  osrm-bogota:
+    image: osrm/osrm-backend:latest
+    restart: unless-stopped
+    depends_on:
+      osrm-builder-bogota:
+        condition: service_completed_successfully
+    ports:
+      - "5001:5000"
+    volumes:
+      - ./docker/osrm-data/bogota:/data:ro
+    command: osrm-routed --algorithm mld /data/region.osrm
+
+  osrm-fetcher-mexico:
+    image: alpine:3.19
+    restart: "no"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+        cd /data
+        if [ -f region.osrm ] || [ -f map.osm.pbf ]; then
+          echo "[osrm-fetcher-mexico] datos ya existen, saltando descarga"
+          exit 0
+        fi
+        apk add --no-cache curl >/dev/null
+        echo "[osrm-fetcher-mexico] descargando Ciudad de México PBF..."
+        curl -L --fail -o map.osm.pbf.part "$$PBF_URL"
+        mv map.osm.pbf.part map.osm.pbf
+        echo "[osrm-fetcher-mexico] OK"
+    environment:
+      PBF_URL: ${OSRM_PBF_URL_MEXICO:-https://download.bbbike.org/osm/bbbike/MexicoCity/MexicoCity.osm.pbf}
+    volumes:
+      - ./docker/osrm-data/mexico:/data
+
+  osrm-builder-mexico:
+    image: osrm/osrm-backend:latest
+    restart: "no"
+    depends_on:
+      osrm-fetcher-mexico:
+        condition: service_completed_successfully
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+        cd /data
+        if [ -f region.osrm ]; then
+          echo "[osrm-builder-mexico] grafo ya existe, saltando"
+          exit 0
+        fi
+        echo "[osrm-builder-mexico] osrm-extract..."
+        osrm-extract -p /opt/car.lua map.osm.pbf
+        echo "[osrm-builder-mexico] osrm-partition..."
+        osrm-partition map.osrm
+        echo "[osrm-builder-mexico] osrm-customize..."
+        osrm-customize map.osrm
+        for f in map.osrm*; do mv "$$f" "region.$${f#map.}"; done
+        echo "[osrm-builder-mexico] grafo listo"
+    volumes:
+      - ./docker/osrm-data/mexico:/data
+
+  osrm-mexico:
+    image: osrm/osrm-backend:latest
+    restart: unless-stopped
+    depends_on:
+      osrm-builder-mexico:
+        condition: service_completed_successfully
+    ports:
+      - "5002:5000"
+    volumes:
+      - ./docker/osrm-data/mexico:/data:ro
+    command: osrm-routed --algorithm mld /data/region.osrm
+
+  # ────────────────────────────────────────── Supabase stack ───
+  supabase-db:
+    image: supabase/postgres:15.1.1.78
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    ports:
+      - "54322:5432"
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_USER: postgres
+      POSTGRES_DB: postgres
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXP: 3600
+    volumes:
+      - supabase-db-data:/var/lib/postgresql/data
+      # La imagen supabase/postgres procesa los scripts de `init-scripts/` como
+      # supabase_admin (superuser real); los del root los corre como `postgres`
+      # demoted y no puede tocar roles reservados.
+      - ./docker/supabase/db/roles.sql:/docker-entrypoint-initdb.d/init-scripts/98-roles.sql:ro
+      - ./docker/supabase/db/jwt.sql:/docker-entrypoint-initdb.d/init-scripts/98-jwt.sql:ro
+      - ./docker/supabase/db/auth-owner.sql:/docker-entrypoint-initdb.d/init-scripts/98-auth-owner.sql:ro
+
+  supabase-migrator:
+    # Aplica las migraciones del proyecto (./supabase/migrations) en orden sobre
+    # la DB ya sana. Idempotente: todas las migraciones usan `IF NOT EXISTS`.
+    image: postgres:15-alpine
+    restart: "no"
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+        export PGPASSWORD="$$POSTGRES_PASSWORD"
+        PSQL="psql -h supabase-db -U postgres -d postgres -v ON_ERROR_STOP=1"
+        # Tabla de tracking: cada migración se aplica una sola vez. Idempotente
+        # frente a CREATE TYPE / CREATE FUNCTION que no soportan IF NOT EXISTS.
+        $$PSQL -c "CREATE TABLE IF NOT EXISTS public._migrations (name text PRIMARY KEY, applied_at timestamptz DEFAULT now());"
+
+        # Reconcile (1 sola vez): sentinel row marca que el reconcile ya corrió.
+        # Si la DB ya tiene schema aplicado (marker = tabla ambulance_units) pero
+        # el sentinel no existe, marcamos todas las migraciones actuales como ya
+        # aplicadas. Futuras migraciones nuevas se ejecutan normalmente porque
+        # el sentinel ya está.
+        sentinel=$$($$PSQL -tAc "INSERT INTO public._migrations(name) VALUES ('__reconciled__') ON CONFLICT DO NOTHING RETURNING 1;")
+        if [ "$$sentinel" = "1" ]; then
+          marker=$$($$PSQL -tAc "SELECT to_regclass('public.ambulance_units') IS NOT NULL")
+          if [ "$$marker" = "t" ]; then
+            echo "[migrator] DB ya poblada — reconcile: marcando migraciones existentes como aplicadas"
+            for f in /migrations/*.sql; do
+              [ -f "$$f" ] || continue
+              $$PSQL -c "INSERT INTO public._migrations(name) VALUES ('$$(basename $$f)') ON CONFLICT DO NOTHING;"
+            done
+            echo "[migrator] reconcile listo"
+            exit 0
+          fi
+        fi
+
+        applied=0; skipped=0
+        for f in /migrations/*.sql; do
+          [ -f "$$f" ] || continue
+          name=$$(basename "$$f")
+          exists=$$($$PSQL -tAc "SELECT 1 FROM public._migrations WHERE name='$$name'")
+          if [ "$$exists" = "1" ]; then
+            echo "[migrator] skip $$name (ya aplicada)"
+            skipped=$$((skipped + 1))
+            continue
+          fi
+          echo "[migrator] aplicando $$name"
+          $$PSQL -f "$$f"
+          $$PSQL -c "INSERT INTO public._migrations(name) VALUES ('$$name');"
+          applied=$$((applied + 1))
+        done
+        echo "[migrator] listo (aplicadas=$$applied, saltadas=$$skipped)"
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ./supabase/migrations:/migrations:ro
+
+  supabase-kong-config:
+    # Renderiza kong.yml.template → kong.yml sustituyendo las variables del .env
+    image: alpine:3.19
+    restart: "no"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+        apk add --no-cache gettext >/dev/null
+        envsubst < /in/kong.yml.template > /out/kong.yml
+        echo "[kong-config] kong.yml generado"
+    environment:
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      DASHBOARD_USERNAME: ${DASHBOARD_USERNAME:-supabase}
+      DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD}
+    volumes:
+      - ./docker/supabase/kong.yml.template:/in/kong.yml.template:ro
+      - supabase-kong-config:/out
+
+  supabase-kong:
+    image: kong:2.8.1
+    restart: unless-stopped
+    depends_on:
+      supabase-kong-config:
+        condition: service_completed_successfully
+    ports:
+      - "54321:8000"
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /var/lib/kong/kong.yml
+      KONG_DNS_ORDER: LAST,A,CNAME
+      KONG_PLUGINS: request-transformer,cors,key-auth,acl,basic-auth
+      KONG_NGINX_PROXY_PROXY_BUFFER_SIZE: 160k
+      KONG_NGINX_PROXY_PROXY_BUFFERS: 64 160k
+    volumes:
+      - supabase-kong-config:/var/lib/kong:ro
+
+  supabase-auth:
+    image: supabase/gotrue:v2.151.0
+    restart: unless-stopped
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: 9999
+      API_EXTERNAL_URL: http://localhost:54321
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD}@supabase-db:5432/postgres
+      GOTRUE_SITE_URL: ${SITE_URL:-http://localhost:5173}
+      GOTRUE_URI_ALLOW_LIST: ${ADDITIONAL_REDIRECT_URLS:-http://localhost:5173,http://localhost:5173/auth/callback}
+      GOTRUE_JWT_SECRET: ${JWT_SECRET}
+      GOTRUE_JWT_EXP: 3600
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_DISABLE_SIGNUP: "false"
+      GOTRUE_MAILER_AUTOCONFIRM: "true"
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
+      GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED: "false"
+      GOTRUE_EXTERNAL_GOOGLE_ENABLED: ${GOOGLE_OAUTH_ENABLED:-true}
+      GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID: ${SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID:-}
+      GOTRUE_EXTERNAL_GOOGLE_SECRET: ${SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET:-}
+      GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI: http://localhost:54321/auth/v1/callback
+      GOTRUE_EXTERNAL_GOOGLE_SKIP_NONCE_CHECK: "true"
+      # SMTP → Inbucket (captura todos los correos, nada sale a internet)
+      GOTRUE_SMTP_HOST: supabase-inbucket
+      GOTRUE_SMTP_PORT: 2500
+      GOTRUE_SMTP_USER: ""
+      GOTRUE_SMTP_PASS: ""
+      GOTRUE_SMTP_ADMIN_EMAIL: admin@hpe-sentinel.local
+      GOTRUE_SMTP_SENDER_NAME: HPE Sentinel
+
+  supabase-inbucket:
+    # Servidor SMTP de pruebas. Captura emails de GoTrue (magic links, resets).
+    # UI web: http://localhost:54324 — POP3 en 1100, SMTP en 2500 (solo red interna).
+    image: inbucket/inbucket:3.0.4
+    restart: unless-stopped
+    ports:
+      - "54324:9000"
+
+  supabase-rest:
+    image: postgrest/postgrest:v12.2.0
+    restart: unless-stopped
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+    environment:
+      PGRST_DB_URI: postgres://authenticator:${POSTGRES_PASSWORD}@supabase-db:5432/postgres
+      PGRST_DB_SCHEMAS: public,graphql_public
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      PGRST_DB_USE_LEGACY_GUCS: "false"
+      PGRST_APP_SETTINGS_JWT_SECRET: ${JWT_SECRET}
+      PGRST_APP_SETTINGS_JWT_EXP: 3600
+
+  supabase-meta:
+    image: supabase/postgres-meta:v0.83.2
+    restart: unless-stopped
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+    environment:
+      PG_META_PORT: 8080
+      PG_META_DB_HOST: supabase-db
+      PG_META_DB_PORT: 5432
+      PG_META_DB_NAME: postgres
+      PG_META_DB_USER: supabase_admin
+      PG_META_DB_PASSWORD: ${POSTGRES_PASSWORD}
+
+  supabase-studio:
+    image: supabase/studio:20240729-ce42139
+    restart: unless-stopped
+    depends_on:
+      supabase-meta:
+        condition: service_started
+    ports:
+      - "54323:3000"
+    environment:
+      STUDIO_PG_META_URL: http://supabase-meta:8080
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      DEFAULT_ORGANIZATION_NAME: HPE
+      DEFAULT_PROJECT_NAME: Ambulancia Digital Twin
+      SUPABASE_URL: http://supabase-kong:8000
+      SUPABASE_PUBLIC_URL: http://localhost:54321
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+
+  # ──────────────────────────── Ollama (embeddings only) ───
+  # Solo corre el embedder local (`nomic-embed-text`) que alimenta pgvector
+  # para RAG. El chat principal se sirve desde el endpoint HPE-vLLM externo
+  # (ver `simulation` env).
+  #
+  # Selección de runtime GPU vía perfil de Compose (un solo perfil activo
+  # por arranque; los servicios comparten hostname `ollama` vía network alias
+  # y `ollama-data` para no rebajar el modelo entre cambios de runtime):
+  #   --profile gpu-nvidia → ollama/ollama:latest + driver nvidia
+  #   --profile gpu-amd    → ollama/ollama:rocm   + /dev/kfd + /dev/dri (ROCm)
+  #   --profile cpu        → ollama/ollama:latest sin GPU (fallback portátil)
+
+  ollama-nvidia:
+    profiles: ["gpu-nvidia"]
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    networks:
+      default:
+        aliases: [ollama]
+    volumes:
+      - ollama-data:/root/.ollama
+    environment:
+      OLLAMA_NUM_PARALLEL: "2"
+      OLLAMA_KEEP_ALIVE: "10m"
+      OLLAMA_FLASH_ATTENTION: "1"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  ollama-amd:
+    profiles: ["gpu-amd"]
+    image: ollama/ollama:rocm
+    restart: unless-stopped
+    networks:
+      default:
+        aliases: [ollama]
+    volumes:
+      - ollama-data:/root/.ollama
+    # ROCm runtime: el contenedor accede a las MI300X vía /dev/kfd (compute
+    # scheduler) y /dev/dri (render nodes). El grupo `video` da permisos de
+    # acceso al usuario interno de Ollama.
+    devices:
+      - /dev/kfd
+      - /dev/dri
+    group_add:
+      - video
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - seccomp=unconfined
+    environment:
+      OLLAMA_NUM_PARALLEL: "2"
+      OLLAMA_KEEP_ALIVE: "10m"
+      OLLAMA_FLASH_ATTENTION: "1"
+      # MI300X = gfx942 (CDNA3); HSA_OVERRIDE no suele ser necesario, pero el
+      # tag :rocm de Ollama trae los kernels precompilados.
+      HSA_OVERRIDE_GFX_VERSION: ${HSA_OVERRIDE_GFX_VERSION:-}
+
+  ollama-cpu:
+    profiles: ["cpu"]
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    networks:
+      default:
+        aliases: [ollama]
+    volumes:
+      - ollama-data:/root/.ollama
+    environment:
+      OLLAMA_NUM_PARALLEL: "1"
+      OLLAMA_KEEP_ALIVE: "10m"
+
+  ollama-init:
+    # Descarga el modelo de embeddings la primera vez (~270 MB) y sale.
+    # Misma imagen base que el runtime activo solo importa para el binario CLI;
+    # el pull se hace contra la API HTTP del servicio activo (alias `ollama`).
+    profiles: ["gpu-nvidia", "gpu-amd", "cpu"]
+    image: ollama/ollama:latest
+    restart: "no"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+        export OLLAMA_HOST=http://ollama:11434
+        echo "[ollama-init] esperando a ollama..."
+        i=0; until ollama list >/dev/null 2>&1; do
+          i=$$((i+1)); [ $$i -gt 60 ] && { echo "ollama no respondió"; exit 1; }
+          sleep 1
+        done
+        m="${OLLAMA_EMBED_MODEL:-nomic-embed-text}"
+        if ollama list | grep -q "$$m"; then
+          echo "[ollama-init] $$m ya instalado"
+        else
+          echo "[ollama-init] pull $$m..."
+          ollama pull "$$m"
+        fi
+        echo "[ollama-init] OK"
+    volumes:
+      - ollama-data:/root/.ollama
+
+  # ─────────────────────────────────── Aplicaciones propias ───
+  simulation:
+    build:
+      context: ./simulation
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+      supabase-migrator:
+        condition: service_completed_successfully
+      supabase-kong:
+        condition: service_started
+    ports:
+      - "8080:8080"
+    environment:
+      # Supabase (dentro de la red Docker hablamos con Kong directamente)
+      SUPABASE_URL: http://supabase-kong:8000
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      # Telemetría
+      MQTT_BROKER_HOST: mosquitto
+      MQTT_BROKER_PORT: 1883
+      MQTT_TELEMETRY_TOPIC: hpe/sentinel/telemetry
+      TELEMETRY_INGEST_URL: http://simulation:8080/api/telemetry/ingest
+      # OSRM por región (selector de mapa). El backend usa la URL de la región
+      # activa; las demás quedan idle pero conectadas.
+      OSRM_URL_ARUBA: http://osrm-aruba:5000
+      OSRM_URL_MADRID: http://osrm-madrid:5000
+      OSRM_URL_BOGOTA: http://osrm-bogota:5000
+      OSRM_URL_MEXICO: http://osrm-mexico:5000
+      DEFAULT_REGION: ${DEFAULT_REGION:-aruba}
+      # Publicación Kafka (AsyncAPI evaluación)
+      KAFKA_TELEMETRY_ENABLED: ${KAFKA_TELEMETRY_ENABLED:-true}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-10.10.48.30:9092}
+      KAFKA_SECURITY_PROTOCOL: ${KAFKA_SECURITY_PROTOCOL:-PLAINTEXT}
+      KAFKA_SASL_MECHANISM: ${KAFKA_SASL_MECHANISM:-}
+      KAFKA_USERNAME: ${KAFKA_USERNAME:-}
+      KAFKA_PASSWORD: ${KAFKA_PASSWORD:-}
+      KAFKA_TOPIC: ${KAFKA_TOPIC:-aruba.team.tres-dias-de-gracia}
+      KAFKA_TEAM_ID: ${KAFKA_TEAM_ID:-tres-dias-de-gracia}
+      KAFKA_PUBLISH_INTERVAL_SEC: ${KAFKA_PUBLISH_INTERVAL_SEC:-5}
+      # Kafka events consumer (Aruba Pulse, read-only)
+      KAFKA_EVENTS_ENABLED: ${KAFKA_EVENTS_ENABLED:-true}
+      KAFKA_EVENTS_TOPIC_EVENTS: ${KAFKA_EVENTS_TOPIC_EVENTS:-aruba.events}
+      KAFKA_EVENTS_TOPIC_WEATHER: ${KAFKA_EVENTS_TOPIC_WEATHER:-aruba.weather}
+      KAFKA_EVENTS_GROUP_ID: ${KAFKA_EVENTS_GROUP_ID:-tres-dias-de-gracia-events}
+      KAFKA_EVENTS_AUTO_OFFSET_RESET: ${KAFKA_EVENTS_AUTO_OFFSET_RESET:-earliest}
+      # LLM
+      # LLM — chat al endpoint HPE-vLLM externo, embeddings al Ollama local.
+      LLM_FLASH_BASE_URL: ${LLM_FLASH_BASE_URL:-http://10.10.48.10:8000/v1}
+      LLM_FLAGSHIP_BASE_URL: ${LLM_FLAGSHIP_BASE_URL:-http://10.10.48.10:8001/v1}
+      LLM_FLASH_MODEL: ${LLM_FLASH_MODEL:-google/gemma-4-31b-it}
+      LLM_FLAGSHIP_MODEL: ${LLM_FLAGSHIP_MODEL:-Qwen/Qwen3-235B-A22B}
+      LLM_API_KEY: ${LLM_API_KEY:-not-needed}
+      OLLAMA_BASE_URL: http://ollama:11434/v1
+      OLLAMA_EMBED_MODEL: ${OLLAMA_EMBED_MODEL:-nomic-embed-text}
+    volumes:
+      # Hot-iteration: cambios en Python locales se aplican al reiniciar el
+      # container sin necesidad de docker build (bloqueado por TLS MITM en red
+      # corporativa). Para producción se puede quitar este volumen y rebuild.
+      - ./simulation/app:/app/app
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - simulation
+      - supabase-kong
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_SUPABASE_URL: http://localhost:54321
+      VITE_SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      VITE_SIMULATION_API_URL: http://localhost:8080
+      # Proxy dev de Vite: /api → simulation, /sb → supabase-kong.
+      # OSRM ya no se proxea desde el frontend: el backend rutea contra la
+      # región activa internamente y devuelve la polilínea ya calculada.
+      DEV_PROXY_API_TARGET: http://simulation:8080
+      DEV_PROXY_SB_TARGET: http://supabase-kong:8000
+    volumes:
+      # Hot-reload: el código se monta live, pero node_modules queda dentro del contenedor
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+      - ./frontend/index.html:/app/index.html
+      - ./frontend/vite.config.ts:/app/vite.config.ts
+      - ./frontend/tsconfig.json:/app/tsconfig.json
+      - ./frontend/env.d.ts:/app/env.d.ts
+
+  ml-service:
+    # Servicio ONNX separado: sirve detector de anomalías de flota y
+    # cualquier modelo futuro. Entrena IsolationForest on-startup si no hay
+    # modelo persistido. Se expone solo en la red interna de compose; el
+    # backend FastAPI (simulation) lo consume vía http://ml-service:9100.
+    build:
+      context: ./ml-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    volumes:
+      - ml-models:/models
+    environment:
+      ML_MODELS_DIR: /models
+
+  docs:
+    build:
+      context: ./docs
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./docs/pages:/docs/pages
+      - ./docs/mkdocs.yml:/docs/mkdocs.yml
+
+volumes:
+  supabase-db-data:
+  supabase-kong-config:
+  ollama-data:
+  ml-models:
