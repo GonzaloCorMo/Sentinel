@@ -85,7 +85,7 @@ def _iso() -> str:
 
 def _seed_poi_id(seed: str) -> str:
     """UUID determinista para POIs por defecto (misma forma que str(uuid4()))."""
-    return str(uuid5(NAMESPACE_DNS, f"hpe-sentinel-default-poi-{seed}"))
+    return str(uuid5(NAMESPACE_DNS, f"sentinel-default-poi-{seed}"))
 
 
 # Centro de spawn por defecto: derivado dinámicamente de la región activa
