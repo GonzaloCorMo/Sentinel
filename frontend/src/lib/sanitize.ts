@@ -1,5 +1,5 @@
 /**
- * Saneado de HTML que se renderiza con v-html o dentro de iconos de Leaflet.
+ * Saneado de HTML que se renderiza con v-html o dentro de marcadores del mapa.
  *
  * - Markdown del chat: lo genera un LLM alimentado con datos externos
  *   (RAG, eventos ingeridos), así que se trata como no confiable.

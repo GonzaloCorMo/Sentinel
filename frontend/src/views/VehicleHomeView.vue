@@ -2,11 +2,9 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
 import { getSupabase } from "@/lib/supabase";
 import { cssVar, useTheme } from "@/composables/useTheme";
-import { addBasemap, type Basemap } from "@/lib/basemap";
+import { createMap, maplibregl, setGeoJson, toLngLat, type LatLon } from "@/lib/mapEngine";
 import { DEFAULT_SPAWN_LAT, DEFAULT_SPAWN_LON } from "@/lib/mapDefaults";
 
 const { t, te } = useI18n();
@@ -137,11 +135,9 @@ const etaSeconds = ref(0);
 const lastHeading = ref(0);
 const lastCoord = ref<[number, number] | null>(null);
 
-let mapInstance: L.Map | null = null;
-let myMarker: L.Marker | null = null;
-let emergencyMarker: L.Marker | null = null;
-let routeLine: L.Polyline | null = null;
-let routeLineShadow: L.Polyline | null = null;
+let mapInstance: maplibregl.Map | null = null;
+let myMarker: maplibregl.Marker | null = null;
+let emergencyMarker: maplibregl.Marker | null = null;
 let pollTimer: number | null = null;
 
 onMounted(async () => {
@@ -301,7 +297,6 @@ async function loadSavedVehicles() {
 
 onBeforeUnmount(() => {
   stopPolling();
-  basemap?.remove(); basemap = null;
   if (mapInstance) { mapInstance.remove(); mapInstance = null; }
 });
 
@@ -459,44 +454,71 @@ async function register() {
   }
 }
 
-let basemap: Basemap | null = null;
+let mapLoading = false;
 
-function initMap(centerLat: number, centerLon: number) {
-  if (mapInstance) return;
+/** Ruta en azul de navegador sobre un borde blanco (el mapa base es claro). */
+const ROUTE_COLOR = "#1a73e8";
+const ROUTE_CASING = "#ffffff";
+
+async function initMap(centerLat: number, centerLon: number) {
+  if (mapInstance || mapLoading) return;
+  await nextTick();
   const el = document.getElementById("vehicle-map");
   if (!el) return;
-  mapInstance = L.map(el, { zoomControl: false, attributionControl: false })
-    .setView([centerLat, centerLon], 15);
-  L.control.zoom({ position: "topright" }).addTo(mapInstance);
-  L.control.attribution({ position: "bottomright", prefix: false })
-    .addAttribution("OSRM").addTo(mapInstance);
-  basemap = addBasemap(mapInstance, theme.value);
+  mapLoading = true;
+  try {
+    const m = await createMap(el, { center: [centerLat, centerLon], zoom: 15 });
+    m.addControl(new maplibregl.AttributionControl({ compact: true, customAttribution: "OSRM" }));
+    setGeoJson(m, "vehicle-route", []);
+    m.addLayer({
+      id: "vehicle-route-casing",
+      type: "line",
+      source: "vehicle-route",
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": ROUTE_CASING, "line-width": 11 },
+    });
+    m.addLayer({
+      id: "vehicle-route-line",
+      type: "line",
+      source: "vehicle-route",
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": ROUTE_COLOR, "line-width": 6 },
+    });
+    mapInstance = m;
+    updateMap(true);
+  } finally {
+    mapLoading = false;
+  }
 }
 
 const vehicleIcon = computed(
   () => VEHICLE_TYPES.value.find((t) => t.id === (myVehicle.value?.entityTypeId || form.value.vehicleType))?.icon || "🚑",
 );
 
-// Marcador monocromo; pasa a ámbar (estado "en ruta") con incidencia asignada.
-function vehicleDivIcon(icon: string, heading: number, assigned: boolean): L.DivIcon {
-  return L.divIcon({
-    className: assigned ? "vh-marker is-assigned" : "vh-marker",
-    html: `
-      <div class="vh-marker-pin">${icon}</div>
-      <div class="vh-marker-arrow" style="transform:rotate(${heading}deg)"></div>
-    `,
-    iconSize: [40, 40],
-    iconAnchor: [20, 20],
-  });
+// Marcador del vehículo con flecha de rumbo; pasa a ámbar con incidencia asignada.
+function vehicleMarkerEl(): HTMLDivElement {
+  const el = document.createElement("div");
+  el.className = "vh-marker";
+  el.innerHTML = `<div class="vh-marker-pin"></div><div class="vh-marker-arrow"></div>`;
+  return el;
+}
+function paintVehicleMarker(el: HTMLElement, icon: string, heading: number, assigned: boolean) {
+  el.classList.toggle("is-assigned", assigned);
+  const pin = el.querySelector(".vh-marker-pin");
+  if (pin && pin.textContent !== icon) pin.textContent = icon;
+  const arrow = el.querySelector<HTMLElement>(".vh-marker-arrow");
+  if (arrow) arrow.style.transform = `rotate(${heading}deg)`;
 }
 
-function emergencyDivIcon(): L.DivIcon {
-  return L.divIcon({
-    className: "vh-marker vh-marker-emergency",
-    html: `<div class="vh-marker-pin">!</div>`,
-    iconSize: [32, 32],
-    iconAnchor: [16, 16],
-  });
+function emergencyMarkerEl(): HTMLDivElement {
+  const el = document.createElement("div");
+  el.className = "vh-marker vh-marker-emergency";
+  el.innerHTML = `<div class="vh-marker-pin">!</div>`;
+  return el;
+}
+
+function escHtml(v: unknown): string {
+  return String(v ?? "").replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 }
 
 // Métricas auxiliares ─────────────────────────────────────────────────────
@@ -642,24 +664,26 @@ function updateMap(autoCenter = false) {
   lastCoord.value = vPos;
 
   if (!myMarker) {
-    myMarker = L.marker(vPos, { icon: vehicleDivIcon(vtype.icon, lastHeading.value, !!assignedEmergency.value) }).addTo(mapInstance);
+    myMarker = new maplibregl.Marker({ element: vehicleMarkerEl(), anchor: "center" }).setLngLat(toLngLat(vPos)).addTo(mapInstance);
   } else {
-    myMarker.setLatLng(vPos);
-    myMarker.setIcon(vehicleDivIcon(vtype.icon, lastHeading.value, !!assignedEmergency.value));
+    myMarker.setLngLat(toLngLat(vPos));
   }
+  paintVehicleMarker(myMarker.getElement(), vtype.icon, lastHeading.value, !!assignedEmergency.value);
 
   // Emergencia
   const em = assignedEmergency.value;
   if (em) {
     const ePos: [number, number] = [em.latitude, em.longitude];
     if (!emergencyMarker) {
-      emergencyMarker = L.marker(ePos, { icon: emergencyDivIcon() }).addTo(mapInstance);
-      emergencyMarker.bindPopup(`<b>${em.title || "Emergencia"}</b><br/>${em.description || ""}`);
+      emergencyMarker = new maplibregl.Marker({ element: emergencyMarkerEl(), anchor: "center" })
+        .setLngLat(toLngLat(ePos))
+        .setPopup(new maplibregl.Popup({ offset: 18, className: "map-popup" }).setHTML(`<div class="mp"><p class="mp-title">${escHtml(em.title)}</p><p class="mp-row">${escHtml(em.description)}</p></div>`))
+        .addTo(mapInstance);
     } else {
-      emergencyMarker.setLatLng(ePos);
+      emergencyMarker.setLngLat(toLngLat(ePos));
     }
   } else if (emergencyMarker) {
-    mapInstance.removeLayer(emergencyMarker);
+    emergencyMarker.remove();
     emergencyMarker = null;
   }
 
@@ -669,36 +693,25 @@ function updateMap(autoCenter = false) {
     : null;
   const routeCoords = routeFromOsrm || (v.routeCoords && v.routeCoords.length >= 2 ? v.routeCoords : null);
 
-  if (routeCoords) {
-    // Ruta de máximo contraste con el mapa (se invierte con el tema) sobre un
-    // ribete del color de fondo para separarla de las calles.
-    const ROUTE_COLOR = cssVar("--n-100");
-    const CASING_COLOR = cssVar("--n-950");
-    if (!routeLineShadow) {
-      routeLineShadow = L.polyline(routeCoords, { color: CASING_COLOR, weight: 11, opacity: 0.9 }).addTo(mapInstance);
-    } else {
-      routeLineShadow.setLatLngs(routeCoords);
-      routeLineShadow.setStyle({ color: CASING_COLOR });
-    }
-    if (!routeLine) {
-      routeLine = L.polyline(routeCoords, { color: ROUTE_COLOR, weight: 7, opacity: 1 }).addTo(mapInstance);
-    } else {
-      routeLine.setLatLngs(routeCoords);
-      routeLine.setStyle({ color: ROUTE_COLOR, weight: 7, opacity: 1 });
-    }
-  } else {
-    if (routeLine) { mapInstance.removeLayer(routeLine); routeLine = null; }
-    if (routeLineShadow) { mapInstance.removeLayer(routeLineShadow); routeLineShadow = null; }
-  }
+  setGeoJson(
+    mapInstance,
+    "vehicle-route",
+    routeCoords
+      ? [{ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: routeCoords.map((c) => toLngLat(c as LatLon)) } }]
+      : [],
+  );
 
   // Centrado
   if (navigating.value) {
-    mapInstance.setView(vPos, 17, { animate: true });
+    mapInstance.easeTo({ center: toLngLat(vPos), zoom: 17, duration: 600 });
   } else if (autoCenter && routeCoords) {
-    const bounds = L.latLngBounds(routeCoords);
-    bounds.extend(vPos);
-    if (em) bounds.extend([em.latitude, em.longitude]);
-    mapInstance.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+    const bounds = new maplibregl.LngLatBounds();
+    for (const c of routeCoords) bounds.extend(toLngLat(c as LatLon));
+    bounds.extend(toLngLat(vPos));
+    if (em) bounds.extend([em.longitude, em.latitude]);
+    mapInstance.fitBounds(bounds, { padding: 60, maxZoom: 16 });
+  } else if (autoCenter) {
+    mapInstance.jumpTo({ center: toLngLat(vPos) });
   }
 
   if (navigating.value) recomputeNavMetrics(vPos);
@@ -751,9 +764,8 @@ async function unregister() {
   myVehicleId.value = null;
   myVehicle.value = null;
   assignedEmergency.value = null;
-  basemap?.remove(); basemap = null;
   if (mapInstance) { mapInstance.remove(); mapInstance = null; }
-  myMarker = emergencyMarker = routeLine = routeLineShadow = null;
+  myMarker = emergencyMarker = null;
   await Promise.all([loadVehicleTypes(), loadSavedVehicles()]);
   stage.value = savedVehicles.value.length > 0 ? "picker" : "register";
 }
@@ -779,10 +791,7 @@ const currentPhaseLabel = computed(() => {
 });
 
 watch(() => myVehicle.value, () => updateMap(), { deep: true });
-watch(theme, (next) => {
-  basemap?.setTheme(next);
-  updateMap();
-});
+
 </script>
 
 <template>
@@ -1499,7 +1508,7 @@ textarea.vh-input { height: auto; padding: 8px 10px; resize: vertical; }
 </style>
 
 <style>
-/* Marcadores globales (Leaflet divIcon) */
+/* Marcadores del mapa (elementos HTML de MapLibre) */
 .vh-marker { position: relative; }
 .vh-marker-pin {
   width: 100%; height: 100%;

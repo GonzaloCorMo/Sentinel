@@ -16,15 +16,14 @@ export default defineConfig({
   worker: { format: "es" },
   optimizeDeps: { exclude: ["maplibre-gl"] },
   build: {
-    // MapLibre (motor del mapa vectorial) ronda 800 kB por sí solo y va en su propio chunk.
-    chunkSizeWarningLimit: 1000,
+    // MapLibre (motor del mapa vectorial) ronda 1 MB por sí solo y va en su propio chunk.
+    chunkSizeWarningLimit: 1100,
     rollupOptions: {
       output: {
         // Dependencias pesadas en chunks propios: se cachean entre despliegues.
         manualChunks(id) {
           if (!id.includes("node_modules")) return;
           if (id.includes("maplibre")) return "vendor-maplibre";
-          if (id.includes("leaflet")) return "vendor-leaflet";
           if (id.includes("@supabase")) return "vendor-supabase";
         },
       },

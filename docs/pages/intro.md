@@ -19,7 +19,7 @@
 
 | Área | Tecnología |
 |---|---|
-| Frontend (dashboard, PWA, panel vehículo) | Vue 3 + Vite + TypeScript + Tailwind + Leaflet/MapLibre GL (teselas OpenFreeMap) + ECharts + Pinia + vue-i18n (es/en/gl) |
+| Frontend (dashboard, PWA, panel vehículo) | Vue 3 + Vite + TypeScript + Tailwind + MapLibre GL (teselas vectoriales OpenFreeMap) + Pinia + vue-i18n (es/en/gl) |
 | Backend de simulación | FastAPI + asyncio + aiomqtt + httpx |
 | Base de datos y auth | Supabase (Postgres + pgvector + GoTrue + Storage) |
 | LLM (chat, comandos, informes) | Ollama local, API compatible con OpenAI (`qwen2.5:3b` por defecto) |

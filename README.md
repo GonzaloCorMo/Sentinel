@@ -6,7 +6,7 @@ Gemelo digital de una flota de emergencias: dashboard de operaciones con telemet
 
 | Área | Tecnología |
 |---|---|
-| Frontend (dashboard, PWA, panel vehículo) | Vue 3 · Vite · TypeScript · Tailwind CSS v4 · Leaflet + MapLibre GL (teselas OpenFreeMap, sin API key) · Pinia · vue-i18n (es/en/gl) |
+| Frontend (dashboard, PWA, panel vehículo) | Vue 3 · Vite · TypeScript · Tailwind CSS v4 · MapLibre GL (teselas vectoriales OpenFreeMap, sin API key) · Pinia · vue-i18n (es/en/gl) |
 | Sistema visual | Tokens CSS con tema Dark (por defecto) / Light · Inter + JetBrains Mono autoalojadas |
 | Backend simulación | FastAPI · asyncio · aiomqtt · httpx |
 | Eventos externos | Fuente mock local + ingesta REST (`/api/events/ingest`, `/api/weather/ingest`) |

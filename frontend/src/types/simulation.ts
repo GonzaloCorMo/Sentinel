@@ -323,5 +323,5 @@ export interface AIProposal {
   createdAt: string;
 }
 
-/** Herramienta de colocación en Leaflet (mapeo desde builder store). */
+/** Herramienta de colocación en el mapa (mapeo desde builder store). */
 export type MapTool = "none" | "emergency" | "hospital" | "gas" | "place" | "jam" | "ambulance" | "vehicle" | "delete";

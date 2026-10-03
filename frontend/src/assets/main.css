@@ -159,107 +159,6 @@
   .fsm-idle,
   .fsm-refueling { color: var(--text-3); }
 
-  /* ── Marcadores del mapa ──────────────────────────────────────────────── */
-  .map-marker-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 50%;
-    color: var(--n-950);
-    border: 1.5px solid var(--n-950);
-    box-shadow: 0 0 0 1px var(--n-500);
-    transition: transform 0.15s ease;
-  }
-
-  .map-marker-icon svg {
-    display: block;
-  }
-
-  .map-marker-ambulance {
-    width: 30px;
-    height: 30px;
-    background: var(--n-100);
-  }
-
-  .map-marker-ambulance.has-patient {
-    background: var(--warn);
-  }
-
-  .map-marker-ambulance.is-selected,
-  .map-marker-generic-vehicle.is-selected {
-    box-shadow: 0 0 0 2px var(--n-950), 0 0 0 4px var(--n-100);
-  }
-
-  .map-marker-ambulance.is-selected {
-    width: 36px;
-    height: 36px;
-  }
-
-  .map-marker-hospital {
-    width: 28px;
-    height: 28px;
-    border-radius: var(--radius-lg);
-    background: var(--n-300);
-  }
-
-  .map-marker-gas {
-    width: 24px;
-    height: 24px;
-    border-radius: var(--radius-lg);
-    background: var(--n-500);
-  }
-
-  .map-marker-emergency {
-    width: 30px;
-    height: 30px;
-    background: var(--crit);
-    border-radius: var(--radius-sm);
-    transform: rotate(45deg);
-    animation: marker-pulse-crit 1.6s ease-in-out infinite;
-  }
-
-  .map-marker-emergency.assigned {
-    background: var(--warn);
-    animation: none;
-  }
-
-  /* Emergencias de la fuente externa: mismo rojo, contorno discontinuo. */
-  .map-marker-emergency.is-pulse-source {
-    outline: 1.5px dashed var(--n-100);
-    outline-offset: 2px;
-  }
-
-  .map-marker-emergency svg {
-    transform: rotate(-45deg);
-  }
-
-  .map-marker-helicopter,
-  .map-marker-police,
-  .map-marker-custom {
-    width: 28px;
-    height: 28px;
-    background: var(--n-300);
-  }
-
-  .map-marker-label {
-    position: absolute;
-    bottom: -16px;
-    left: 50%;
-    transform: translateX(-50%);
-    white-space: nowrap;
-    font-family: var(--font-mono);
-    font-size: 9px;
-    font-weight: 600;
-    color: var(--text);
-    text-shadow: 0 0 2px var(--bg), 0 0 4px var(--bg);
-    pointer-events: none;
-  }
-
-  @keyframes marker-pulse-crit {
-    0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--crit) 55%, transparent); }
-    50% { box-shadow: 0 0 0 8px color-mix(in oklab, var(--crit) 0%, transparent); }
-  }
-
   /* ── Transiciones: solo propiedades de color, nunca `all` ─────────────── */
   button,
   a,
@@ -296,120 +195,170 @@
     background-clip: padding-box;
   }
 
-  /* ── Cluster (varias unidades del mismo tipo en el mismo punto) ───────── */
-  .map-marker-cluster {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-    border: 1.5px solid var(--n-950);
-    box-shadow: 0 0 0 1px var(--n-500);
-    transition: transform 0.15s;
-  }
-  .map-marker-cluster:hover { transform: scale(1.06); }
-  .map-marker-cluster-icon {
-    font-size: 18px;
-    line-height: 1;
-  }
-  .map-marker-cluster-count {
-    position: absolute;
-    top: -6px;
-    right: -6px;
-    min-width: 18px;
-    height: 18px;
-    padding: 0 4px;
-    background: var(--n-950);
-    color: var(--n-100);
-    border: 1px solid var(--n-600);
-    border-radius: var(--radius-sm);
-    font-family: var(--font-mono);
-    font-size: 10px;
-    font-weight: 600;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    line-height: 1;
-  }
 
-  /* ── Vehículo genérico (tipos custom / IA) ────────────────────────────── */
-  .map-marker-generic-vehicle {
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 1.5px solid var(--n-950);
-    box-shadow: 0 0 0 1px var(--n-500);
-    position: relative;
-    color: var(--n-950);
-  }
-  .map-marker-generic-vehicle.has-patient {
-    box-shadow: 0 0 0 2px var(--warn);
-  }
-  .map-marker-generic-vehicle .map-marker-emoji {
-    font-size: 15px;
-    line-height: 1;
-  }
-  .map-marker-generic-vehicle .map-marker-label {
-    bottom: -18px;
-  }
-
-  /* ── Halo sobre marcadores que cumplen filtros activos del ⌘ comando ──── */
-  .leaflet-marker-icon.map-marker-matched {
-    outline: 1px solid var(--n-100);
-    outline-offset: 3px;
-    border-radius: 50%;
-  }
 }
 
-/* Overrides de terceros (leaflet.css, vue-sonner) sin capa: deben ganar a sus hojas. */
-/* ── Leaflet: controles y popups al estilo del sistema ────────────────── */
-/* leaflet.css se importa después (en el componente): se gana por especificidad. */
-#app .leaflet-container {
-  background: var(--bg);
-  font-family: var(--font-sans);
+/* Overrides de terceros (MapLibre, vue-sonner) sin capa: deben ganar a sus hojas. */
+/* ── Mapa (MapLibre) ─────────────────────────────────────────────────────
+ * El mapa base es claro en ambos temas, así que marcadores, etiquetas y
+ * popups usan colores fijos pensados para ese fondo. */
+.sentinel-map {
+  --map-ink: #202124;
+  --map-ink-2: #5f6368;
+  --map-surface: #ffffff;
+  --map-border: #dadce0;
+  --map-crit: #d93025;
+  --map-warn: #e37400;
+  background: #f2f1ed;
 }
-.leaflet-bar,
-.leaflet-control-layers {
-  border: 1px solid var(--border-strong) !important;
+.maplibregl-map { font-family: var(--font-sans); }
+.maplibregl-ctrl-group {
   border-radius: var(--radius-lg) !important;
-  box-shadow: none !important;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.25) !important;
 }
-.leaflet-bar a {
-  background: var(--surface) !important;
-  color: var(--text) !important;
-  border-bottom-color: var(--border) !important;
+.maplibregl-ctrl-attrib { font-size: 10px; }
+
+.map-marker-host { cursor: pointer; }
+.map-marker-icon {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  color: #fff;
+  background: var(--map-ink);
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.35);
+  transition: transform 0.12s ease;
 }
-.leaflet-bar a:hover {
-  background: var(--surface-2) !important;
+.map-marker-host:hover .map-marker-icon { transform: scale(1.08); }
+.map-marker-icon svg { display: block; }
+.map-marker-ambulance.has-patient { background: var(--map-warn); }
+.map-marker-ambulance.is-selected,
+.map-marker-generic-vehicle.is-selected {
+  width: 36px;
+  height: 36px;
+  box-shadow: 0 0 0 3px #1a73e8, 0 2px 8px rgb(0 0 0 / 0.35);
 }
-.leaflet-popup-content-wrapper,
-.leaflet-tooltip {
-  background: var(--surface);
-  color: var(--text);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
+.map-marker-hospital {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: #c5221f;
 }
-.leaflet-popup-tip {
-  background: var(--surface);
-  border: 1px solid var(--border-strong);
-  box-shadow: none;
+.map-marker-gas {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: #5f6368;
 }
-.leaflet-tooltip-top::before { border-top-color: var(--border-strong); }
-.leaflet-tooltip-bottom::before { border-bottom-color: var(--border-strong); }
-.leaflet-tooltip-left::before { border-left-color: var(--border-strong); }
-.leaflet-tooltip-right::before { border-right-color: var(--border-strong); }
-.leaflet-control-attribution {
-  background: color-mix(in oklab, var(--bg) 80%, transparent) !important;
-  color: var(--text-4) !important;
+.map-marker-emergency {
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  transform: rotate(45deg);
+  background: var(--map-crit);
+  animation: marker-pulse-crit 1.6s ease-in-out infinite;
+}
+.map-marker-host:hover .map-marker-emergency { transform: rotate(45deg) scale(1.08); }
+.map-marker-emergency svg { transform: rotate(-45deg); }
+.map-marker-emergency.assigned { background: var(--map-warn); animation: none; }
+.map-marker-emergency.is-pulse-source { outline: 2px dashed var(--map-crit); outline-offset: 3px; }
+.map-marker-helicopter,
+.map-marker-police,
+.map-marker-custom { background: #3c4043; }
+.map-marker-label {
+  position: absolute;
+  top: calc(100% + 3px);
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-family: var(--font-mono);
   font-size: 10px;
+  font-weight: 600;
+  color: var(--map-ink);
+  text-shadow: 0 0 2px #fff, 0 0 2px #fff, 0 0 3px #fff;
+  pointer-events: none;
 }
-.leaflet-control-attribution a {
-  color: var(--text-3) !important;
+.map-marker-emergency .map-marker-label { transform: rotate(-45deg); }
+@keyframes marker-pulse-crit {
+  0%, 100% { box-shadow: 0 0 0 0 rgb(217 48 37 / 0.5), 0 1px 4px rgb(0 0 0 / 0.35); }
+  50% { box-shadow: 0 0 0 8px rgb(217 48 37 / 0), 0 1px 4px rgb(0 0 0 / 0.35); }
 }
+.map-marker-generic-vehicle {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.35);
+  color: #fff;
+}
+.map-marker-generic-vehicle.has-patient { box-shadow: 0 0 0 3px var(--map-warn), 0 1px 4px rgb(0 0 0 / 0.35); }
+.map-marker-emoji { font-size: 14px; line-height: 1; }
+.map-marker-cluster {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 5px rgb(0 0 0 / 0.35);
+}
+.map-marker-cluster-icon { font-size: 17px; line-height: 1; }
+.map-marker-cluster-count {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: var(--map-ink);
+  color: #fff;
+  border: 2px solid #fff;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.map-marker-matched .map-marker-icon,
+.map-marker-matched .map-marker-generic-vehicle { box-shadow: 0 0 0 3px #1a73e8, 0 1px 4px rgb(0 0 0 / 0.35); }
+
+/* Popups y tooltips */
+.maplibregl-popup-content {
+  padding: 8px 10px;
+  border-radius: var(--radius-lg);
+  background: var(--map-surface, #fff);
+  color: #202124;
+  border: 1px solid #dadce0;
+  box-shadow: 0 2px 10px rgb(0 0 0 / 0.18);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.maplibregl-popup-anchor-bottom .maplibregl-popup-tip { border-top-color: #fff; }
+.maplibregl-popup-anchor-top .maplibregl-popup-tip { border-bottom-color: #fff; }
+.maplibregl-popup-anchor-left .maplibregl-popup-tip { border-right-color: #fff; }
+.maplibregl-popup-anchor-right .maplibregl-popup-tip { border-left-color: #fff; }
+.map-tooltip { pointer-events: none; }
+.map-tooltip .maplibregl-popup-content { padding: 5px 8px; font-size: 11.5px; }
+.mp { min-width: 180px; font-variant-numeric: tabular-nums; }
+.mp-title { margin: 0 0 3px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.mp-row { margin: 0; color: #3c4043; }
+.mp-dim { color: #70757a; }
+.mp-num { font-family: var(--font-mono); }
+.mp-badge { padding: 0 5px; border-radius: 2px; font-size: 10px; font-weight: 500; }
+.mp-bar { height: 3px; margin: 3px 0 4px; background: #e8eaed; overflow: hidden; }
+.mp-bar > div { height: 100%; }
 
 /* ── Toasts (vue-sonner) ──────────────────────────────────────────────── */
 [data-sonner-toaster] [data-sonner-toast] {

@@ -39,7 +39,7 @@ export function useTheme() {
   };
 }
 
-/** Lee un token CSS resuelto para el tema activo (para Leaflet / ECharts). */
+/** Lee un token CSS resuelto para el tema activo (para lienzos que no entienden var(): mapas, gráficos). */
 export function cssVar(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
