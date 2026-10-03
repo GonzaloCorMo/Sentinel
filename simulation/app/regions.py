@@ -6,7 +6,7 @@ flota / POIs / emergencias automaticas. La región activa es estado global del
 proceso: cambiarla resetea la simulación (`engine.reset_simulation`) porque las
 coordenadas de POIs/ambulancias previas no son válidas en el nuevo grafo.
 
-Cada OSRM corre en su propio contenedor docker (osrm-aruba, osrm-madrid, ...);
+Cada OSRM corre en su propio contenedor docker (osrm-aruba, osrm-santiago, ...);
 solo el de la región activa recibe queries — los demás quedan idle.
 """
 from __future__ import annotations
@@ -89,20 +89,21 @@ REGIONS: dict[str, RegionConfig] = {
         probe_lon_a=-70.0344, probe_lat_a=12.5398,
         probe_lon_b=-70.0316, probe_lat_b=12.5226,
     ),
-    "madrid": RegionConfig(
-        id="madrid",
-        name="Madrid (Las Rozas)",
+    "santiago": RegionConfig(
+        id="santiago",
+        name="Santiago de Compostela",
         country="España",
         timezone="Europe/Madrid",
-        center_lat=40.4933,
-        center_lon=-3.8742,
+        # Centro junto al Hospital Clínico Universitario (CHUS).
+        center_lat=42.8710,
+        center_lon=-8.5640,
         zoom=14,
-        spawn_lat=40.4942,
-        spawn_lon=-3.8745,
-        pbf_url="https://download.bbbike.org/osm/bbbike/Madrid/Madrid.osm.pbf",
-        osrm_url=_osrm_url("madrid", "osrm-madrid", 5000),
-        probe_lon_a=-3.8742, probe_lat_a=40.4933,
-        probe_lon_b=-3.8755, probe_lat_b=40.4945,
+        spawn_lat=42.8702,
+        spawn_lon=-8.5648,
+        pbf_url="https://download.geofabrik.de/europe/spain/galicia-latest.osm.pbf",
+        osrm_url=_osrm_url("santiago", "osrm-santiago", 5000),
+        probe_lon_a=-8.5640, probe_lat_a=42.8710,
+        probe_lon_b=-8.5445, probe_lat_b=42.8800,
     ),
     "bogota": RegionConfig(
         id="bogota",
@@ -145,7 +146,7 @@ _active_region_id: str = DEFAULT_REGION_ID
 
 
 def list_regions() -> list[RegionConfig]:
-    """Lista de regiones disponibles (orden estable: aruba, madrid, bogota, mexico)."""
+    """Lista de regiones disponibles (orden estable: aruba, santiago, bogota, mexico)."""
     return list(REGIONS.values())
 
 

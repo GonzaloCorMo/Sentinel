@@ -26,7 +26,7 @@ Selector de idioma visible en la cabecera y en el login. Tres idiomas: **Españo
 
 ## 4) Selector de región / mapa
 
-En la cabecera del dashboard hay un `RegionSelector` con 4 opciones: Aruba (default), Madrid, Bogotá, Ciudad de México. Cambiar de región **resetea la simulación** (POIs y flota se borran porque sus coordenadas no son válidas en el nuevo grafo OSRM). El backend conmuta el contenedor OSRM activo automáticamente; los demás quedan idle.
+En la cabecera del dashboard hay un `RegionSelector` con 4 opciones: Aruba (default), Santiago de Compostela, Bogotá, Ciudad de México. Cambiar de región **resetea la simulación** (POIs y flota se borran porque sus coordenadas no son válidas en el nuevo grafo OSRM). El backend conmuta el contenedor OSRM activo automáticamente; los demás quedan idle.
 
 ## 5) Mapa de operaciones (`/map`)
 

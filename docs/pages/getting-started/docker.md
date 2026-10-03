@@ -52,7 +52,7 @@ docker compose logs -f
 La **primera vez** tarda ~10 min:
 
 - Descarga de imágenes Docker (~2 GB; tag `:rocm` añade ~3 GB extra solo si usas el perfil AMD).
-- Descarga de los 4 extractos OSM y compilación de los grafos OSRM (Aruba/Madrid/Bogotá/CDMX). Cada par `osrm-fetcher-<region>` + `osrm-builder-<region>` se ejecuta una sola vez y sale.
+- Descarga de los 4 extractos OSM y compilación de los grafos OSRM (Aruba/Santiago/Bogotá/CDMX). Cada par `osrm-fetcher-<region>` + `osrm-builder-<region>` se ejecuta una sola vez y sale.
 - Descarga del modelo de embeddings `nomic-embed-text` (~270 MB) por `ollama-init`.
 - El chat LLM **no** descarga nada: se sirve desde el endpoint vLLM externo.
 
@@ -70,7 +70,7 @@ A partir de la segunda vez, todo arranca en <1 min (volúmenes persistidos).
 | Supabase Studio | http://localhost:54323 | http://10.10.48.25:54323 | 54323 |
 | Postgres | `localhost:54322` | `10.10.48.25:54322` | 54322 |
 | OSRM Aruba (default) | http://localhost:5003 | http://10.10.48.25:5003 | 5003 |
-| OSRM Madrid | http://localhost:5000 | http://10.10.48.25:5000 | 5000 |
+| OSRM Santiago de Compostela | http://localhost:5000 | http://10.10.48.25:5000 | 5000 |
 | OSRM Bogotá | http://localhost:5001 | http://10.10.48.25:5001 | 5001 |
 | OSRM CDMX | http://localhost:5002 | http://10.10.48.25:5002 | 5002 |
 | Mosquitto (MQTT) | `localhost:1883` | `10.10.48.25:1883` | 1883 |
@@ -145,7 +145,7 @@ Flujo típico tras tocar Dockerfile o `requirements.txt`:
 ## Troubleshooting
 
 **`osrm-builder-<region>` falla con "out of memory"**
-Los extractos por defecto son ligeros (Aruba ~3 MB, Madrid/Bogotá/CDMX ~30-100 MB). Si cambias a un PBF mayor (`OSRM_PBF_URL_<REGION>` en `.env`), considera dar más memoria a Docker Desktop.
+Los extractos por defecto son ligeros (Aruba ~3 MB, Bogotá/CDMX ~30-100 MB; Santiago se recorta de Galicia, ~110 MB de descarga y un grafo pequeño). Si cambias a un PBF mayor (`OSRM_PBF_URL_<REGION>` en `.env`), considera dar más memoria a Docker Desktop.
 
 **Supabase Studio pide login y no entra**
 Usuario y password están en tu `.env` (`DASHBOARD_USERNAME` / `DASHBOARD_PASSWORD`).

@@ -1,6 +1,6 @@
 # Introducción
 
-**Sentinel** es un gemelo digital de una flota de ambulancias. Simula la operación real en distintas regiones (Aruba por defecto; también Madrid, Bogotá y Ciudad de México): despacho de emergencias, telemetría vehicular, clínica, ambiental y de red, resiliencia de comunicaciones, IA que detecta anomalías y propone o ejecuta acciones, ingesta de eventos externos (incidentes y meteorología) y exposición de datos para análisis masivo y ML.
+**Sentinel** es un gemelo digital de una flota de ambulancias. Simula la operación real en distintas regiones (Aruba por defecto; también Santiago de Compostela, Bogotá y Ciudad de México): despacho de emergencias, telemetría vehicular, clínica, ambiental y de red, resiliencia de comunicaciones, IA que detecta anomalías y propone o ejecuta acciones, ingesta de eventos externos (incidentes y meteorología) y exposición de datos para análisis masivo y ML.
 
 ## Componentes
 
@@ -24,7 +24,7 @@
 | Base de datos y auth | Supabase (Postgres + pgvector + GoTrue + Storage) |
 | LLM (chat) | Endpoint vLLM externo, API compatible con OpenAI (Gemma flash · Qwen flagship) |
 | Embeddings | Ollama local (`nomic-embed-text`), perfiles compose `gpu-nvidia` / `gpu-amd` / `cpu` |
-| Routing | OSRM multirregión: 4 grafos en paralelo (Aruba / Madrid / Bogotá / CDMX) |
+| Routing | OSRM multirregión: 4 grafos en paralelo (Aruba / Santiago / Bogotá / CDMX) |
 | Mensajería | Mosquitto (MQTT) + fallback P2P + fallback HTTP |
 | Eventos externos | Generador mock local + ingesta REST (`/api/events/ingest`, `/api/weather/ingest`) |
 | Servicio ML | FastAPI + ONNX Runtime + IsolationForest (`fleet_anomaly`) |

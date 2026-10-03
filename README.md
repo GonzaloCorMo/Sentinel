@@ -1,6 +1,6 @@
 # Sentinel — Digital Twin
 
-Gemelo digital de una flota de emergencias: dashboard de operaciones con telemetría en tiempo real, PWA ciudadana para reportar incidentes, panel de vehículo para la tripulación y un motor de IA con modos HITL / autónomo. Multi-región (Aruba · Madrid · Bogotá · CDMX), routing OSRM, chat RAG y pipeline ML de detección de anomalías.
+Gemelo digital de una flota de emergencias: dashboard de operaciones con telemetría en tiempo real, PWA ciudadana para reportar incidentes, panel de vehículo para la tripulación y un motor de IA con modos HITL / autónomo. Multi-región (Aruba · Santiago de Compostela · Bogotá · CDMX), routing OSRM, chat RAG y pipeline ML de detección de anomalías.
 
 ## Stack
 
@@ -122,7 +122,7 @@ Un único `.env` en la raíz (plantilla: [`.env.example`](.env.example)); Docker
 
 | Variable | Uso |
 |---|---|
-| `DEFAULT_REGION` | Región inicial (`aruba`, `madrid`, `bogota`, `mexico`) |
+| `DEFAULT_REGION` | Región inicial (`aruba`, `santiago`, `bogota`, `mexico`) |
 | `LLM_FLASH_BASE_URL` · `LLM_FLAGSHIP_BASE_URL` | Endpoints vLLM compatibles OpenAI |
 | `LLM_FLASH_MODEL` · `LLM_FLAGSHIP_MODEL` | Modelos de chat |
 | `OLLAMA_EMBED_MODEL` | Modelo de embeddings local |

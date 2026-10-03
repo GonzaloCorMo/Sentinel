@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Compila grafo OSRM (extract → partition → customize) para una región concreta.
 # Uso desde raíz del repo:
-#   bash docker/osrm/build-graph.sh [aruba|madrid|bogota|mexico]   (default: aruba)
+#   bash docker/osrm/build-graph.sh [aruba|santiago|bogota|mexico]   (default: aruba)
 # Variables: PBF_URL=... (override), FORCE=1 (regenerar borrando grafo previo).
 # Requisitos: docker, curl. Tiempo: 1-10 min según extracto.
 
@@ -11,11 +11,13 @@ REGION="${1:-aruba}"
 
 case "$REGION" in
   aruba)  DEFAULT_PBF="https://download.geofabrik.de/central-america/aruba-latest.osm.pbf" ;;
-  madrid) DEFAULT_PBF="https://download.bbbike.org/osm/bbbike/Madrid/Madrid.osm.pbf" ;;
+  # Santiago: no hay extracto de ciudad; se recorta Galicia al área metropolitana.
+  santiago) DEFAULT_PBF="https://download.geofabrik.de/europe/spain/galicia-latest.osm.pbf"
+            CLIP_BBOX="${BBOX:--8.70,42.80,-8.40,42.97}" ;;
   bogota) DEFAULT_PBF="https://download.bbbike.org/osm/bbbike/Bogota/Bogota.osm.pbf" ;;
   mexico) DEFAULT_PBF="https://download.bbbike.org/osm/bbbike/MexicoCity/MexicoCity.osm.pbf" ;;
   *)
-    echo "ERROR: región desconocida: $REGION (use aruba|madrid|bogota|mexico)"
+    echo "ERROR: región desconocida: $REGION (use aruba|santiago|bogota|mexico)"
     exit 1
     ;;
 esac
@@ -52,7 +54,13 @@ if [ ! -f "${DATA}/${PBF_FILE}" ]; then
   echo "==> [${REGION}] Descargando ${PBF_URL}"
   echo "    → ${DATA}/${PBF_FILE}"
   curl -L --fail --progress-bar -o "${DATA}/${PBF_FILE}.part" "${PBF_URL}"
-  mv "${DATA}/${PBF_FILE}.part" "${DATA}/${PBF_FILE}"
+  if [ -n "${CLIP_BBOX:-}" ]; then
+    echo "==> [${REGION}] Recortando bbox ${CLIP_BBOX} con osmium"
+    docker run --rm -v "${DATA}:/data" debian:bookworm-slim sh -c       "apt-get update -qq >/dev/null && apt-get install -y -qq osmium-tool >/dev/null &&        osmium extract --overwrite -b '${CLIP_BBOX}' -o /data/${PBF_FILE} --output-format pbf /data/${PBF_FILE}.part"
+    rm -f "${DATA}/${PBF_FILE}.part"
+  else
+    mv "${DATA}/${PBF_FILE}.part" "${DATA}/${PBF_FILE}"
+  fi
 else
   echo "==> [${REGION}] Reutilizando ${DATA}/${PBF_FILE}"
 fi

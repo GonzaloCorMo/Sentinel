@@ -16,7 +16,7 @@
 #   54321 Supabase API gateway (Kong)
 #   54322 Postgres
 #   54323 Supabase Studio (vía Kong también en 54321)
-#   5000  OSRM Madrid (Las Rozas, default)
+#   5000  OSRM Santiago de Compostela
 #   5001  OSRM Bogotá
 #   5002  OSRM Ciudad de México
 #   5003  OSRM Aruba
@@ -104,8 +104,10 @@ services:
       - ./docker/osrm-data/aruba:/data:ro
     command: osrm-routed --algorithm mld /data/region.osrm
 
-  osrm-fetcher-madrid:
-    image: alpine:3.19
+  # Santiago de Compostela: no hay extracto de ciudad, se descarga Galicia
+  # (Geofabrik) y se recorta con osmium al área metropolitana (grafo pequeño).
+  osrm-fetcher-santiago:
+    image: debian:bookworm-slim
     restart: "no"
     entrypoint: ["/bin/sh", "-c"]
     command:
@@ -113,24 +115,28 @@ services:
         set -eu
         cd /data
         if [ -f region.osrm ] || [ -f map.osm.pbf ]; then
-          echo "[osrm-fetcher-madrid] datos ya existen, saltando descarga"
+          echo "[osrm-fetcher-santiago] datos ya existen, saltando descarga"
           exit 0
         fi
-        apk add --no-cache curl >/dev/null
-        echo "[osrm-fetcher-madrid] descargando Madrid PBF..."
-        curl -L --fail -o map.osm.pbf.part "$$PBF_URL"
+        apt-get update -qq >/dev/null && apt-get install -y -qq curl ca-certificates osmium-tool >/dev/null
+        echo "[osrm-fetcher-santiago] descargando Galicia PBF..."
+        curl -L --fail -o galicia.osm.pbf.part "$$PBF_URL"
+        echo "[osrm-fetcher-santiago] recortando bbox $$BBOX..."
+        osmium extract --overwrite -b "$$BBOX" -o map.osm.pbf.part --output-format pbf galicia.osm.pbf.part
+        rm -f galicia.osm.pbf.part
         mv map.osm.pbf.part map.osm.pbf
-        echo "[osrm-fetcher-madrid] OK"
+        echo "[osrm-fetcher-santiago] OK"
     environment:
-      PBF_URL: ${OSRM_PBF_URL_MADRID:-https://download.bbbike.org/osm/bbbike/Madrid/Madrid.osm.pbf}
+      PBF_URL: ${OSRM_PBF_URL_SANTIAGO:-https://download.geofabrik.de/europe/spain/galicia-latest.osm.pbf}
+      BBOX: ${OSRM_BBOX_SANTIAGO:--8.70,42.80,-8.40,42.97}
     volumes:
-      - ./docker/osrm-data/madrid:/data
+      - ./docker/osrm-data/santiago:/data
 
-  osrm-builder-madrid:
+  osrm-builder-santiago:
     image: osrm/osrm-backend:latest
     restart: "no"
     depends_on:
-      osrm-fetcher-madrid:
+      osrm-fetcher-santiago:
         condition: service_completed_successfully
     entrypoint: ["/bin/sh", "-c"]
     command:
@@ -138,30 +144,30 @@ services:
         set -eu
         cd /data
         if [ -f region.osrm ]; then
-          echo "[osrm-builder-madrid] grafo ya existe, saltando"
+          echo "[osrm-builder-santiago] grafo ya existe, saltando"
           exit 0
         fi
-        echo "[osrm-builder-madrid] osrm-extract..."
+        echo "[osrm-builder-santiago] osrm-extract..."
         osrm-extract -p /opt/car.lua map.osm.pbf
-        echo "[osrm-builder-madrid] osrm-partition..."
+        echo "[osrm-builder-santiago] osrm-partition..."
         osrm-partition map.osrm
-        echo "[osrm-builder-madrid] osrm-customize..."
+        echo "[osrm-builder-santiago] osrm-customize..."
         osrm-customize map.osrm
         for f in map.osrm*; do mv "$$f" "region.$${f#map.}"; done
-        echo "[osrm-builder-madrid] grafo listo"
+        echo "[osrm-builder-santiago] grafo listo"
     volumes:
-      - ./docker/osrm-data/madrid:/data
+      - ./docker/osrm-data/santiago:/data
 
-  osrm-madrid:
+  osrm-santiago:
     image: osrm/osrm-backend:latest
     restart: unless-stopped
     depends_on:
-      osrm-builder-madrid:
+      osrm-builder-santiago:
         condition: service_completed_successfully
     ports:
       - "5000:5000"
     volumes:
-      - ./docker/osrm-data/madrid:/data:ro
+      - ./docker/osrm-data/santiago:/data:ro
     command: osrm-routed --algorithm mld /data/region.osrm
 
   osrm-fetcher-bogota:
@@ -628,7 +634,7 @@ services:
       # OSRM por región (selector de mapa). El backend usa la URL de la región
       # activa; las demás quedan idle pero conectadas.
       OSRM_URL_ARUBA: http://osrm-aruba:5000
-      OSRM_URL_MADRID: http://osrm-madrid:5000
+      OSRM_URL_SANTIAGO: http://osrm-santiago:5000
       OSRM_URL_BOGOTA: http://osrm-bogota:5000
       OSRM_URL_MEXICO: http://osrm-mexico:5000
       DEFAULT_REGION: ${DEFAULT_REGION:-aruba}

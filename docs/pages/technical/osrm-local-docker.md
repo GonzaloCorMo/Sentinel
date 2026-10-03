@@ -1,4 +1,4 @@
-# OSRM multirregión (Aruba · Madrid · Bogotá · CDMX)
+# OSRM multirregión (Aruba · Santiago · Bogotá · CDMX)
 
 El motor FastAPI calcula rutas con `fetch_route` (`simulation/app/routing.py`): consulta el OSRM de la **región activa**, gestionada por `simulation/app/regions.py`. Si la petición HTTP falla, el motor reintenta y, si sigue fallando, usa una polilínea recta entre waypoints como fallback.
 
@@ -7,13 +7,13 @@ El motor FastAPI calcula rutas con `fetch_route` (`simulation/app/routing.py`): 
 | Región | id | Centro | OSRM container | Puerto host |
 |---|---|---|---|---|
 | Aruba (Oranjestad) | `aruba` (default) | 12.5398, -70.0344 | `osrm-aruba` | 5003 |
-| Madrid (Las Rozas) | `madrid` | 40.4933, -3.8742 | `osrm-madrid` | 5000 |
+| Santiago de Compostela | `santiago` | 42.8710, -8.5640 | `osrm-santiago` | 5000 |
 | Bogotá | `bogota` | 4.6286, -74.0653 | `osrm-bogota` | 5001 |
 | Ciudad de México | `mexico` | 19.4326, -99.1332 | `osrm-mexico` | 5002 |
 
 Cada región es un trío de contenedores en `docker-compose.yml`:
 
-1. **`osrm-fetcher-<region>`** — descarga el `.osm.pbf` (URL configurable vía `OSRM_PBF_URL_<REGION>`).
+1. **`osrm-fetcher-<region>`** — descarga el `.osm.pbf` (URL configurable vía `OSRM_PBF_URL_<REGION>`). Para Santiago no existe extracto de ciudad: se descarga Galicia (Geofabrik) y se recorta con `osmium` al bbox `OSRM_BBOX_SANTIAGO` (por defecto `-8.70,42.80,-8.40,42.97`: Santiago, Ames, Teo y el aeropuerto).
 2. **`osrm-builder-<region>`** — corre `osrm-extract` + `osrm-partition` + `osrm-customize` (algoritmo MLD).
 3. **`osrm-<region>`** — sirve `osrm-routed --algorithm mld` en el puerto 5000 interno.
 
@@ -25,9 +25,9 @@ Los datos persisten en `docker/osrm-data/<region>/`. Solo el contenedor de la re
 # Listar regiones
 curl http://localhost:8080/api/regions
 
-# Cambiar a Madrid
+# Cambiar a Santiago de Compostela
 curl -X POST http://localhost:8080/api/regions/active \
-  -H "Content-Type: application/json" -d '{"regionId":"madrid"}'
+  -H "Content-Type: application/json" -d '{"regionId":"santiago"}'
 ```
 
 Conmutar región resetea la simulación (`engine.reset_simulation`) — las coordenadas in-memory de POIs, flota y atascos no son válidas en el grafo del nuevo país.
@@ -40,7 +40,8 @@ El **frontend** llama al endpoint `POST /api/regions/active` desde `RegionSelect
 |---|---|---|
 | `DEFAULT_REGION` | `aruba` | Región inicial al arrancar el motor. |
 | `OSRM_URL_ARUBA` | `http://osrm-aruba:5000` | Override URL OSRM región Aruba. |
-| `OSRM_URL_MADRID` | `http://osrm-madrid:5000` | Override URL Madrid. |
+| `OSRM_URL_SANTIAGO` | `http://osrm-santiago:5000` | Override URL Santiago de Compostela. |
+| `OSRM_BBOX_SANTIAGO` | `-8.70,42.80,-8.40,42.97` | Recorte del extracto de Galicia (`minLon,minLat,maxLon,maxLat`). |
 | `OSRM_URL_BOGOTA` | `http://osrm-bogota:5000` | Override URL Bogotá. |
 | `OSRM_URL_MEXICO` | `http://osrm-mexico:5000` | Override URL CDMX. |
 | `OSRM_PBF_URL_<REGION>` | URL OSM extract | Cambia el PBF descargado por el fetcher. |

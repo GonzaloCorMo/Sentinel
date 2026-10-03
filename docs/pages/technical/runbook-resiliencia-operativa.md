@@ -31,7 +31,7 @@ Tres niveles de fallback para telemetría y comunicaciones entre vehículos y ce
 1. Identificar la región activa: `GET /api/regions`.
 2. Revisar los logs del contenedor `osrm-<region>` (p. ej. `docker compose logs -f osrm-aruba`).
 3. Si el grafo está corrupto, regenerarlo: `rm -rf docker/osrm-data/<region>/region.osrm*` y `docker compose up -d osrm-fetcher-<region> osrm-builder-<region> osrm-<region>`.
-4. Como bypass temporal se puede cambiar de región: `POST /api/regions/active {regionId: "madrid"}`. Esto **reinicia** la simulación.
+4. Como bypass temporal se puede cambiar de región: `POST /api/regions/active {regionId: "santiago"}`. Esto **reinicia** la simulación.
 5. Validar el grafo directamente: `curl http://localhost:<puerto-region>/route/v1/driving/lon1,lat1;lon2,lat2`.
 
 ## 3. Fuente de eventos sin datos

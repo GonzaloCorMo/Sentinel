@@ -1,76 +1,41 @@
-# OSRM local multi-región para rutas por calles
+# OSRM local multirregión
 
-El backend rutea contra el OSRM de la **región activa** (selector en el header del dashboard). Cada región es un trío fetcher → builder → routed con su propio grafo en `docker/osrm-data/<region>/`:
+El backend rutea contra el OSRM de la **región activa** (selector de la cabecera del dashboard). Cada región es un trío fetcher → builder → routed con su propio grafo en `docker/osrm-data/<region>/`:
 
-| Región | Servicio | Puerto host | PBF default |
+| Región | Servicio | Puerto host | Extracto por defecto |
 |---|---|---|---|
-| Aruba (default) | `osrm-aruba` | 5000 | Geofabrik aruba (~3 MB) |
-| Madrid | `osrm-madrid` | 5001 | BBBike Madrid (~75 MB) |
-| Bogotá | `osrm-bogota` | 5002 | BBBike Bogota (~50 MB) |
-| Ciudad de México | `osrm-mexico` | 5003 | BBBike MexicoCity (~80 MB) |
+| Aruba (por defecto) | `osrm-aruba` | 5003 | openstreetmap.fr Aruba (~3 MB) |
+| Santiago de Compostela | `osrm-santiago` | 5000 | Geofabrik Galicia (~110 MB) recortado con osmium al área metropolitana |
+| Bogotá | `osrm-bogota` | 5001 | BBBike Bogota |
+| Ciudad de México | `osrm-mexico` | 5002 | BBBike MexicoCity |
 
-El selector cambia la región activa vía `POST /api/regions/active` — los 4 contenedores siguen corriendo idle (~1 GB RAM total), solo el activo recibe queries. Cambiar región resetea el escenario.
+Cambiar de región (`POST /api/regions/active`) resetea el escenario; los cuatro contenedores siguen corriendo y solo el activo recibe consultas.
 
-## 0. Primera vez: `./start.sh` o script solo
+## Primera vez
 
-`./start.sh` arranca los 4 stacks; cada `osrm-builder-<region>` compila si falta `docker/osrm-data/<region>/region.osrm`.
+`./up.sh` (o `docker compose up -d`) arranca los cuatro stacks; cada `osrm-builder-<region>` compila si falta `docker/osrm-data/<region>/region.osrm`.
 
-Para generar manualmente el grafo de una región:
+Para generar a mano el grafo de una región:
 
 ```bash
-bash docker/osrm/build-graph.sh aruba    # default
-bash docker/osrm/build-graph.sh madrid
+bash docker/osrm/build-graph.sh aruba
+bash docker/osrm/build-graph.sh santiago
 bash docker/osrm/build-graph.sh bogota
 bash docker/osrm/build-graph.sh mexico
 ```
 
-Variables opcionales: `PBF_URL` (sobrescribe extracto), `FORCE=1` (regenerar borrando el grafo actual).
+Variables opcionales: `PBF_URL` (otro extracto), `BBOX` (recorte de Santiago, `minLon,minLat,maxLon,maxLat`) y `FORCE=1` (regenerar).
 
-## 1. Descargar un extracto `.osm.pbf` (manual)
+En compose, los equivalentes son `OSRM_PBF_URL_<REGION>` y `OSRM_BBOX_SANTIAGO` en `.env`. Si cambias el bbox, borra `docker/osrm-data/santiago/` para forzar la descarga y la compilación.
 
-URLs default por región:
-- Aruba: `https://download.geofabrik.de/central-america/aruba-latest.osm.pbf`
-- Madrid: `https://download.bbbike.org/osm/bbbike/Madrid/Madrid.osm.pbf`
-- Bogotá: `https://download.bbbike.org/osm/bbbike/Bogota/Bogota.osm.pbf`
-- CDMX: `https://download.bbbike.org/osm/bbbike/MexicoCity/MexicoCity.osm.pbf`
-
-Override con `OSRM_PBF_URL_<REGION>` en `.env`.
-
-## 2. Procesar con la imagen OSRM (MLD)
-
-Desde la raíz del repo, con `docker` y el `.pbf` en `./docker/osrm-data/<region>/map.osm.pbf`:
+## Simulación sin Docker
 
 ```bash
-REGION=madrid
-cd docker/osrm-data/${REGION}
-
-docker run -t -v "${PWD}:/data" osrm/osrm-backend osrm-extract -p /opt/car.lua /data/map.osm.pbf
-docker run -t -v "${PWD}:/data" osrm/osrm-backend osrm-partition /data/map.osrm
-docker run -t -v "${PWD}:/data" osrm/osrm-backend osrm-customize /data/map.osrm
-
-for f in map.osrm*; do mv "$f" "region.${f#map.}"; done
-```
-
-## 3. Arrancar el servicio
-
-Desde la raíz del repositorio:
-
-```bash
-docker compose up -d osrm-aruba osrm-madrid osrm-bogota osrm-mexico
-```
-
-(`./start.sh` arranca los 4. El frontend conmuta entre ellos vía el selector.)
-
-## 4. Simulación Python
-
-Sin docker compose, exporta las URLs por región:
-
-```bash
-export OSRM_URL_ARUBA=http://127.0.0.1:5000
-export OSRM_URL_MADRID=http://127.0.0.1:5001
-export OSRM_URL_BOGOTA=http://127.0.0.1:5002
-export OSRM_URL_MEXICO=http://127.0.0.1:5003
+export OSRM_URL_ARUBA=http://127.0.0.1:5003
+export OSRM_URL_SANTIAGO=http://127.0.0.1:5000
+export OSRM_URL_BOGOTA=http://127.0.0.1:5001
+export OSRM_URL_MEXICO=http://127.0.0.1:5002
 export DEFAULT_REGION=aruba
 ```
 
-Para forzar un OSRM único (modo legacy): `OSRM_BASE_URL=http://...`. Si OSRM no está disponible, el motor usa **polilínea recta** entre waypoints.
+Para forzar un OSRM único: `OSRM_BASE_URL=http://...`. Si OSRM no está disponible, el motor usa una **polilínea recta** entre waypoints.

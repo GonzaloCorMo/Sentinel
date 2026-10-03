@@ -19,7 +19,7 @@ hero:
 
 features:
   - title: Motor de simulación
-    details: FastAPI + asyncio. Cinco motores de telemetría por unidad, ETA dinámica, scoring de asignación y rutas OSRM multirregión (Aruba, Madrid, Bogotá, CDMX).
+    details: FastAPI + asyncio. Cinco motores de telemetría por unidad, ETA dinámica, scoring de asignación y rutas OSRM multirregión (Aruba, Santiago de Compostela, Bogotá, CDMX).
     link: /technical/simulador-global-despacho
     linkText: Simulador y despacho
   - title: IA HITL y autónoma
