@@ -3,7 +3,7 @@
 -- ============================================================================
 -- Añade 3 tablas que capturan lifecycle + outcomes + feature snapshots de las
 -- decisiones de despacho. Diseñadas para export masivo a Parquet y consumo
--- por el proyecto paralelo hpe-ml-training/.
+-- por el repositorio de entrenamiento ML externo..
 --
 -- Referencias de diseño:
 --  - JSONB flexible > tabla-por-tipo: https://www.postgresql.org/docs/current/datatype-json.html

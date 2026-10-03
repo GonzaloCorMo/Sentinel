@@ -1,6 +1,6 @@
 -- ─────────────────────────────────────────────────────────────────────────────
--- weather_readings: persiste todas las lecturas recibidas del topic Kafka
--- `aruba.weather`. Primary key en `id` (uuid que manda el broker); el upsert
+-- weather_readings: persiste las lecturas meteorológicas de la fuente de
+-- eventos. Primary key en `id` (uuid de la lectura); el upsert
 -- de la app es idempotente — mensajes duplicados no producen filas extra.
 -- ─────────────────────────────────────────────────────────────────────────────
 

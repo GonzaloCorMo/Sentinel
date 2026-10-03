@@ -12,13 +12,6 @@ Ambos comparten la API OpenAI-compatible, así que el cliente ``AsyncOpenAI``
 sirve para los tres y el resto del código es agnóstico del provider.
 Los embeddings se rellenan con ceros o se truncan a ``EMBEDDING_DIM`` (1536)
 para mantener la dimensión esperada por la tabla pgvector.
-
-Restricciones por modelo aplicadas en este módulo:
-
-- Gemma no soporta ``enable_thinking`` ni
-  ``extra_body.chat_template_kwargs.enable_thinking`` → se eliminan antes de enviar.
-- Qwen no soporta input de imagen → se rechaza con ``ValueError`` cualquier
-  mensaje con ``image_url`` cuando el target es Flagship.
 """
 from __future__ import annotations
 
@@ -94,49 +87,6 @@ def _resolve_chat(tier: ChatTier) -> tuple[AsyncOpenAI, str]:
     return _flash_client, _flash_model
 
 
-def _is_gemma(model: str) -> bool:
-    return "gemma" in model.lower()
-
-
-def _is_qwen(model: str) -> bool:
-    return "qwen" in model.lower()
-
-
-def _strip_thinking(kwargs: dict[str, Any]) -> None:
-    """Quita `enable_thinking` y `extra_body.chat_template_kwargs.enable_thinking`."""
-    kwargs.pop("enable_thinking", None)
-    extra = kwargs.get("extra_body")
-    if isinstance(extra, dict):
-        ctk = extra.get("chat_template_kwargs")
-        if isinstance(ctk, dict):
-            ctk.pop("enable_thinking", None)
-            if not ctk:
-                extra.pop("chat_template_kwargs", None)
-        if not extra:
-            kwargs.pop("extra_body", None)
-
-
-def _reject_images(messages: list[dict[str, Any]]) -> None:
-    """Lanza ValueError si algún mensaje contiene `image_url` (Qwen no soporta imagen)."""
-    for m in messages:
-        content = m.get("content")
-        if isinstance(content, list):
-            for part in content:
-                if isinstance(part, dict) and part.get("type") == "image_url":
-                    raise ValueError(
-                        "Qwen flagship endpoint does not support image input; "
-                        "use flash (Gemma) for multimodal calls."
-                    )
-
-
-def _prepare(model: str, kwargs: dict[str, Any]) -> None:
-    """Aplica restricciones por modelo sobre kwargs+messages in-place."""
-    if _is_gemma(model):
-        _strip_thinking(kwargs)
-    if _is_qwen(model):
-        _reject_images(kwargs.get("messages", []))
-
-
 def get_provider_name() -> str:
     """Identificador del provider activo."""
     _init()
@@ -195,7 +145,6 @@ async def chat_completion(
         "temperature": temperature,
         "max_tokens": max_tokens,
     }
-    _prepare(model, kwargs)
     resp = await client.chat.completions.create(**kwargs)
     return resp.choices[0].message.content or ""
 
@@ -238,7 +187,6 @@ async def chat_completion_json(
         "max_tokens": max_tokens,
         "response_format": {"type": "json_object"},
     }
-    _prepare(model, kwargs)
 
     resp = await client.chat.completions.create(**kwargs)
     raw = resp.choices[0].message.content or "{}"
@@ -286,7 +234,6 @@ async def chat_completion_with_tools(
         "tools": tools,
         "tool_choice": tool_choice,
     }
-    _prepare(model, kwargs)
 
     resp = await client.chat.completions.create(**kwargs)
     msg = resp.choices[0].message
@@ -320,7 +267,6 @@ async def chat_completion_stream(
         "max_tokens": max_tokens,
         "stream": True,
     }
-    _prepare(model, kwargs)
     stream = await client.chat.completions.create(**kwargs)
     async for chunk in stream:
         delta = chunk.choices[0].delta

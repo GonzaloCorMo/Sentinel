@@ -1,6 +1,6 @@
 -- Añade powertrain (combustion|electric|unique), crew_min/crew_max, cost_per_min,
 -- activation_cost a fleet_entity_types y precarga 9 vehículos builtin del catálogo
--- HPE Sentinel (matriz Policía/Ambulancia/Bomberos/Protección Civil × Combustión/Eléctrico
+-- Sentinel (matriz Policía/Ambulancia/Bomberos/Protección Civil × Combustión/Eléctrico
 -- + Dron Único). Idempotente: re-ejecutable vía ON CONFLICT DO UPDATE.
 
 ALTER TABLE public.fleet_entity_types
