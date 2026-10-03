@@ -68,7 +68,7 @@ onUnmounted(() => {
     <button
       ref="buttonEl"
       type="button"
-      class="flex items-center gap-1.5 rounded-lg border border-slate-700/50 bg-slate-800/50 px-2.5 py-1.5 text-xs text-slate-300 transition hover:bg-slate-700 hover:text-white disabled:cursor-wait disabled:opacity-60"
+      class="flex items-center gap-1.5 rounded-lg border border-slate-700/50 bg-slate-800/50 px-2.5 py-1.5 text-xs text-slate-300 transition hover:bg-slate-700 hover:text-slate-100 disabled:cursor-wait disabled:opacity-60"
       :disabled="switching"
       :title="active?.name ?? t('region.selector_title')"
       @click="toggle"
@@ -105,7 +105,7 @@ onUnmounted(() => {
           class="flex w-full items-center justify-between gap-3 border-b border-slate-800/60 px-3 py-2.5 text-left text-xs last:border-b-0 transition"
           :class="r.id === activeId
             ? 'bg-emerald-600/15 text-emerald-300'
-            : 'text-slate-200 hover:bg-slate-800 hover:text-white'"
+            : 'text-slate-200 hover:bg-slate-800 hover:text-slate-100'"
           @click="pick($event, r.id)"
         >
           <div class="flex flex-col">
@@ -114,7 +114,7 @@ onUnmounted(() => {
           </div>
           <span
             v-if="r.id === activeId"
-            class="rounded-full border border-emerald-400/40 bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-300"
+            class="rounded-sm border border-emerald-400/40 bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-300"
           >{{ t('region.active_badge') }}</span>
         </button>
       </div>

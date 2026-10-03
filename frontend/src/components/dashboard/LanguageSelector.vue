@@ -58,7 +58,7 @@ onUnmounted(() => {
     <button
       ref="buttonEl"
       type="button"
-      class="flex items-center gap-1.5 rounded-lg border border-slate-700/50 bg-slate-800/50 px-2.5 py-1.5 text-xs font-semibold text-slate-300 transition hover:bg-slate-700 hover:text-white"
+      class="flex items-center gap-1.5 rounded-lg border border-slate-700/50 bg-slate-800/50 px-2.5 py-1.5 text-xs font-semibold text-slate-300 transition hover:bg-slate-700 hover:text-slate-100"
       @click="toggle"
     >
       <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -84,7 +84,7 @@ onUnmounted(() => {
           class="flex w-full items-center justify-between gap-3 border-b border-slate-800/60 px-3 py-2.5 text-left text-xs last:border-b-0 transition"
           :class="l.code === locale
             ? 'bg-emerald-600/15 text-emerald-300'
-            : 'text-slate-200 hover:bg-slate-800 hover:text-white'"
+            : 'text-slate-200 hover:bg-slate-800 hover:text-slate-100'"
           @click="pick($event, l.code)"
         >
           <span class="font-semibold">{{ l.name }}</span>

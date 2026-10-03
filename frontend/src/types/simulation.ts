@@ -94,7 +94,7 @@ export interface Jam {
 export type EmergencyStatus = "pending" | "assigned" | "resolved";
 export type EmergencyType = "medical" | "altercation" | "mass_casualty";
 
-export type EmergencySource = "training" | "manual" | "aruba_pulse" | "citizen";
+export type EmergencySource = "training" | "manual" | "external_feed" | "citizen";
 
 export interface Emergency {
   id: string;
@@ -106,7 +106,7 @@ export interface Emergency {
   emergencyType?: EmergencyType;
   assignedAmbulanceId?: string | null;
   source?: EmergencySource | string;
-  severity?: ArubaEventSeverity | string;
+  severity?: ExternalEventSeverity | string;
   createdAt?: string;
 }
 
@@ -218,7 +218,7 @@ export interface ArubaInventoryStatus {
   itemsUpdated?: number;
 }
 
-export type ArubaEventType =
+export type ExternalEventType =
   | "storm"
   | "fire"
   | "flood"
@@ -230,12 +230,12 @@ export type ArubaEventType =
   | "construction"
   | "public_event";
 
-export type ArubaEventSeverity = "low" | "medium" | "high" | "critical";
+export type ExternalEventSeverity = "low" | "medium" | "high" | "critical";
 
-export interface ArubaEvent {
+export interface ExternalEvent {
   id: string;
-  type: ArubaEventType | string;
-  severity: ArubaEventSeverity | string;
+  type: ExternalEventType | string;
+  severity: ExternalEventSeverity | string;
   title: string;
   description: string;
   latitude: number;
@@ -248,7 +248,7 @@ export interface ArubaEvent {
   receivedAt?: string;
 }
 
-export interface ArubaWeatherReading {
+export interface WeatherReading {
   id: string;
   station_id: string;
   timestamp: string;
@@ -263,12 +263,10 @@ export interface ArubaWeatherReading {
   receivedAt?: string;
 }
 
-export interface ArubaEventsConsumerStatus {
+export interface EventSourceStatus {
   enabled?: boolean;
   status: string;
-  topicEvents?: string | null;
-  topicWeather?: string | null;
-  groupId?: string | null;
+  source?: "mock" | "off" | string | null;
   lastConsumeAt?: string | null;
   consumedTotal?: number;
   consumedEvents?: number;
@@ -297,20 +295,21 @@ export interface SimulationStatePayload {
     activeEmergencies: number;
     resolvedEmergencies: number;
     simulationSpeed: number;
+    tickCount?: number;
   };
   lastHttpIngest?: unknown;
   osrmRouting?: OsrmRoutingStatus;
   arubaInventory?: ArubaInventoryStatus;
-  arubaEvents?: ArubaEvent[];
-  arubaWeather?: Record<string, ArubaWeatherReading>;
-  arubaEventsStatus?: ArubaEventsConsumerStatus;
+  externalEvents?: ExternalEvent[];
+  weatherStations?: Record<string, WeatherReading>;
+  eventSourceStatus?: EventSourceStatus;
   aiMode?: "hitl" | "autonomous";
   aiProposals?: AIProposal[];
   aiLog?: AIProposal[];
   trainingMode?: boolean;
   trainingRatePerMin?: number;
   sessionId?: string;
-  arubaPulseEmergencyRatePerMin?: number;
+  externalEmergencyRatePerMin?: number;
 }
 
 export interface LLMExplanation {

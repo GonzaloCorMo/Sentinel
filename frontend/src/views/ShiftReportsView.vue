@@ -110,7 +110,7 @@ onMounted(fetchReports);
           />
         </div>
         <button
-          class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-500 disabled:opacity-50"
+          class="rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-950 shadow-sm transition hover:bg-slate-300 disabled:opacity-50"
           :disabled="generating"
           @click="generate"
         >

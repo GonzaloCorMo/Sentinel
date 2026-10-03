@@ -174,7 +174,7 @@ const urgencyLabel = computed<Record<string, string>>(() => ({
   critical: t("ai.urg_critical"),
 }));
 function confidenceClass(c: string): string {
-  if (c === "high") return "bg-emerald-500/20 text-emerald-300";
+  if (c === "high") return "bg-green-500/20 text-green-300";
   if (c === "low") return "bg-amber-500/20 text-amber-300";
   return "bg-slate-700/40 text-slate-300";
 }
@@ -196,7 +196,7 @@ function urgencyBorder(u: string | undefined): string {
     <button
       v-if="!expanded"
       type="button"
-      class="group flex items-center gap-2.5 rounded-2xl border border-slate-700/60 bg-slate-900/95 px-4 py-2.5 text-sm font-medium shadow-2xl shadow-black/30 backdrop-blur-sm transition-all hover:border-emerald-600/40 hover:bg-slate-800"
+      class="group flex items-center gap-2.5 rounded-2xl border border-slate-700/60 bg-slate-900 px-4 py-2.5 text-sm font-medium shadow-2xl shadow-black/30 transition-colors hover:border-emerald-600/40 hover:bg-slate-800"
       @click="expanded = true"
     >
       <div class="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-600/15 text-emerald-400">
@@ -207,7 +207,7 @@ function urgencyBorder(u: string | undefined): string {
       <span class="text-slate-300">{{ t('ai.observer') }}</span>
       <span
         v-if="proposals.length"
-        class="flex h-5 min-w-[1.25rem] items-center justify-center rounded-full px-1.5 text-[10px] font-bold"
+        class="flex h-5 min-w-[1.25rem] items-center justify-center rounded-sm px-1.5 text-[10px] font-bold"
         :class="proposals.some(p => anomalyUrgency[p.anomalyType] === 'critical')
           ? 'bg-rose-500 text-white animate-pulse'
           : 'bg-amber-500 text-slate-950'"
@@ -225,7 +225,7 @@ function urgencyBorder(u: string | undefined): string {
     <!-- Expanded panel -->
     <div
       v-else
-      class="w-[24rem] max-h-[75vh] overflow-hidden rounded-2xl border border-slate-700/60 bg-slate-900/95 shadow-2xl shadow-black/30 backdrop-blur-sm transition-all"
+      class="w-[24rem] max-h-[75vh] overflow-hidden rounded-2xl border border-slate-700/60 bg-slate-900 shadow-2xl shadow-black/30 transition-colors"
     >
       <!-- Header -->
       <div class="flex items-center justify-between border-b border-slate-800/80 bg-slate-950/60 px-4 py-3">
@@ -296,7 +296,7 @@ function urgencyBorder(u: string | undefined): string {
           <div
             v-for="p in proposals"
             :key="p.id"
-            class="hpe-card overflow-hidden p-0"
+            class="panel overflow-hidden p-0"
           >
             <!-- Urgency indicator bar -->
             <div
@@ -422,10 +422,10 @@ function urgencyBorder(u: string | undefined): string {
               <div class="flex gap-2">
                 <button
                   type="button"
-                  class="flex-1 rounded-lg px-3 py-1.5 text-xs font-medium text-white transition"
+                  class="flex-1 rounded-lg px-3 py-1.5 text-xs font-medium transition"
                   :class="p.clientStaleReason
-                    ? 'bg-slate-700 cursor-not-allowed opacity-50'
-                    : 'bg-emerald-600 hover:bg-emerald-500'"
+                    ? 'bg-slate-800 text-slate-400 cursor-not-allowed opacity-60'
+                    : 'bg-slate-100 text-slate-950 hover:bg-slate-300'"
                   :disabled="!!p.clientStaleReason"
                   :title="p.clientStaleReason ? t('ai.approved_disabled') : t('ai.approve')"
                   @click="!p.clientStaleReason && resolve(p.id, 'approved')"
@@ -458,7 +458,7 @@ function urgencyBorder(u: string | undefined): string {
               p.status === 'auto_approved'
                 ? 'border-cyan-700/40 bg-cyan-950/20 text-cyan-300'
                 : p.status === 'approved'
-                  ? 'border-emerald-700/40 bg-emerald-950/20 text-emerald-300'
+                  ? 'border-green-700/40 bg-green-950/20 text-green-300'
                   : 'border-red-700/40 bg-red-950/20 text-red-300'
             "
           >
@@ -467,7 +467,7 @@ function urgencyBorder(u: string | undefined): string {
                 class="h-1.5 w-1.5 rounded-full"
                 :class="
                   p.status === 'auto_approved' ? 'bg-cyan-400'
-                  : p.status === 'approved' ? 'bg-emerald-400'
+                  : p.status === 'approved' ? 'bg-green-400'
                   : 'bg-red-400'
                 "
               />
@@ -478,7 +478,7 @@ function urgencyBorder(u: string | undefined): string {
                   p.status === 'auto_approved'
                     ? 'bg-cyan-600/30 text-cyan-200'
                     : p.status === 'approved'
-                      ? 'bg-emerald-600/30 text-emerald-200'
+                      ? 'bg-green-600/30 text-green-200'
                       : 'bg-red-600/30 text-red-200'
                 "
               >

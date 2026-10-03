@@ -126,26 +126,29 @@ async function runMlPrediction() {
   <div class="space-y-5">
     <div class="flex flex-wrap items-start justify-between gap-4">
       <div>
-        <h2 class="text-lg font-semibold text-slate-200">{{ t('fleet.title') }}</h2>
+        <h2 class="text-lg font-semibold tracking-tight text-slate-100">{{ t('fleet.title') }}</h2>
         <p class="mt-0.5 text-sm text-slate-500">
           {{ t('fleet.subtitle') }}
         </p>
       </div>
-      <div class="flex flex-wrap gap-2 text-[11px]">
-        <span class="rounded-lg border border-slate-700/70 bg-slate-900/60 px-2.5 py-1.5 text-slate-300">
-          <span class="font-bold text-slate-100">{{ stats.shown }}</span>
-          <span class="text-slate-500">/{{ stats.total }}</span> {{ t('fleet.units') }}
-        </span>
-        <span class="rounded-lg border border-emerald-800/40 bg-emerald-950/40 px-2.5 py-1.5 text-emerald-300">
-          <span class="font-bold">{{ stats.withPatient }}</span> {{ t('fleet.with_patient') }}
-        </span>
-        <span class="rounded-lg border border-amber-800/40 bg-amber-950/40 px-2.5 py-1.5 text-amber-300">
-          <span class="font-bold">{{ stats.lowFuel }}</span> {{ t('fleet.low_fuel') }}
-        </span>
-        <span class="rounded-lg border border-sky-800/40 bg-sky-950/40 px-2.5 py-1.5 text-sky-300">
-          <span class="font-bold">{{ stats.idle }}</span> {{ t('fleet.available') }}
-        </span>
-      </div>
+      <dl class="flex divide-x divide-slate-800 rounded border border-slate-800 bg-slate-900 text-[11px]">
+        <div class="px-3 py-1.5">
+          <dt class="text-[10px] uppercase tracking-wider text-slate-500">{{ t('fleet.units') }}</dt>
+          <dd class="font-mono text-sm text-slate-100">{{ stats.shown }}<span class="text-slate-500">/{{ stats.total }}</span></dd>
+        </div>
+        <div class="px-3 py-1.5">
+          <dt class="text-[10px] uppercase tracking-wider text-slate-500">{{ t('fleet.with_patient') }}</dt>
+          <dd class="font-mono text-sm text-slate-100">{{ stats.withPatient }}</dd>
+        </div>
+        <div class="px-3 py-1.5">
+          <dt class="text-[10px] uppercase tracking-wider text-slate-500">{{ t('fleet.low_fuel') }}</dt>
+          <dd class="font-mono text-sm" :class="stats.lowFuel > 0 ? 'text-amber-300' : 'text-slate-100'">{{ stats.lowFuel }}</dd>
+        </div>
+        <div class="px-3 py-1.5">
+          <dt class="text-[10px] uppercase tracking-wider text-slate-500">{{ t('fleet.available') }}</dt>
+          <dd class="font-mono text-sm text-slate-100">{{ stats.idle }}</dd>
+        </div>
+      </dl>
     </div>
 
     <div class="rounded-xl border border-slate-800/70 bg-slate-950/40 p-3">

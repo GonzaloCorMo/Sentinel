@@ -9,7 +9,7 @@
     "maxWind": "Max wind",
     "alerts": "Active weather alerts",
     "allClear": "All stations clear",
-    "activeEvents": "Aruba Pulse Events",
+    "activeEvents": "External events",
     "active": "Active",
     "byType": "By type",
     "bySeverity": "By severity",
@@ -18,7 +18,7 @@
     "activeEmergencies": "Active emerg.",
     "fuelLow": "Fuel low",
     "avgEta": "Avg ETA",
-    "pulseRate": "Pulse rate",
+    "pulseRate": "External event rate",
     "weatherImpact": "Weather impact on ETA",
     "affectedMissions": "Affected missions",
     "map": "Island map",
@@ -68,7 +68,7 @@
     "hours": "hours"
   },
   "header": {
-    "brand": "HPE Sentinel",
+    "brand": "Sentinel",
     "sse_connected": "SSE active",
     "sse_connecting": "Connecting…",
     "sse_disconnected": "Disconnected",
@@ -81,14 +81,17 @@
     "ai_auto": "AI Auto",
     "ai_hitl": "AI HITL",
     "help_tooltip": "Help (i key)",
-    "logout_tooltip": "Sign out"
+    "logout_tooltip": "Sign out",
+    "theme_light": "Light mode",
+    "theme_dark": "Dark mode"
   },
   "nav": {
     "operations": "Operations",
     "telemetry": "Telemetry",
     "comms": "Comms",
     "reports": "Reports",
-    "config": "Settings"
+    "config": "Settings",
+    "island": "Island"
   },
   "filters": {
     "title": "Active filters",
@@ -116,7 +119,7 @@
   },
   "auth": {
     "all_systems_ok": "All systems operational",
-    "tagline_html": "Digital twin<br />of ambulances <span class=\"highlight\">HPE CDS</span>",
+    "tagline_html": "Digital twin<br />of ambulances",
     "tagline_desc": "Real-time telemetry, AI engine with HITL and autonomous mode, RAG chatbot over clinical protocols. MQTT → P2P → HTTP resilience.",
     "feature_zero_trust_title": "Zero Trust",
     "feature_zero_trust_desc": "Supabase + JWT auth, no credentials in browser",
@@ -128,9 +131,9 @@
     "supabase_not_configured": "Supabase not configured",
     "supabase_missing": "Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY in .env",
     "login_title": "Sign in",
-    "login_subtitle": "Access HPE Sentinel with your email",
+    "login_subtitle": "Access Sentinel with your email",
     "register_title": "Create account",
-    "register_subtitle": "Sign up to HPE Sentinel",
+    "register_subtitle": "Sign up to Sentinel",
     "forgot_title": "Reset password",
     "forgot_subtitle": "Enter your email and we'll send you a reset link.",
     "email": "Email",
@@ -180,7 +183,7 @@
     "password_updated_desc": "You can now sign in with your new password"
   },
   "info": {
-    "title": "HPE Sentinel — Digital twin",
+    "title": "Sentinel — Digital twin",
     "intro": "Three telemetry engines per ambulance (Python composition): GPS/kinematic positioning, mechanical (fuel, battery, tires, sirens), and medical (BPM, BP, SpO₂, defibrillator).",
     "network": "Network resilience: MQTT (Mosquitto) → in-memory P2P → HTTP POST to {endpoint}. Link state is shown on the dashboard and notifies on change.",
     "shortcut_hint": "Keyboard shortcut: {key} opens/closes this help."
@@ -643,20 +646,6 @@
     "generate_scenario": "Generate scenario",
     "generating_scenario": "Generating scenario…",
     "scenario_generated": "Scenario generated",
-    "backup_title": "Backup mode",
-    "backup_desc": "Recreates the full scenario for the day: emergencies, critical events and weather data from Kafka. Min. April 1st 2026.",
-    "backup_date": "Day to replay",
-    "backup_start": "▶ Replay day",
-    "backup_stop": "■ Stop",
-    "backup_running": "Replaying… {events} ev · {weather} weather ({scanned} scanned)",
-    "backup_done": "Done: {events} events + {weather} weather readings from {day}",
-    "backup_error": "Backup error: {err}",
-    "backup_min_date": "Min date 2026-04-01",
-    "backup_topics": "Topics: aruba.events + aruba.weather",
-    "backup_show_all_label": "Show all incidents at once",
-    "backup_show_all_help_on": "On: all incidents from that day appear on the map instantly.",
-    "backup_show_all_help_off": "Off: incidents appear naturally, respecting real timing (accelerated).",
-    "backup_speed": "Speed",
     "scenario_error": "Scenario generation error",
     "crisis_failed": "Could not trigger crisis",
     "crisis_error": "Crisis trigger error",

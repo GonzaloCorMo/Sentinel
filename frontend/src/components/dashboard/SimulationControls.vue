@@ -76,16 +76,16 @@ async function setSpeed(mult: number) {
 </script>
 
 <template>
-  <div class="hpe-card p-4">
+  <div class="panel p-4">
     <div class="flex flex-wrap items-center gap-4">
       <!-- Play/Pause toggle + Reset -->
       <div class="flex items-center gap-2">
         <button
           type="button"
-          class="flex h-10 w-10 items-center justify-center rounded-xl transition-all"
+          class="flex h-10 w-10 items-center justify-center rounded-xl transition-colors"
           :class="paused
-            ? 'bg-emerald-600 text-white hover:bg-emerald-500 shadow-sm shadow-emerald-900/30'
-            : 'bg-amber-600 text-white hover:bg-amber-500 shadow-sm shadow-amber-900/30'"
+            ? 'bg-slate-100 text-slate-950 hover:bg-slate-300'
+            : 'border border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800'"
           :disabled="busy"
           :title="paused ? t('sim.resume_tooltip') : t('sim.pause_tooltip')"
           @click="toggle"
@@ -102,7 +102,7 @@ async function setSpeed(mult: number) {
 
         <button
           type="button"
-          class="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-700 bg-slate-800/80 text-slate-300 transition hover:bg-slate-700 hover:text-white disabled:opacity-40"
+          class="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-700 bg-slate-800/80 text-slate-300 transition hover:bg-slate-700 hover:text-slate-100 disabled:opacity-40"
           :title="t('sim.reset_tooltip')"
           :disabled="busy"
           @click="reset"
@@ -124,10 +124,10 @@ async function setSpeed(mult: number) {
             v-for="p in presets"
             :key="p"
             type="button"
-            class="rounded-md px-2.5 py-1 text-xs font-medium transition-all"
+            class="rounded-md px-2.5 py-1 text-xs font-medium transition-colors"
             :class="
               Math.abs(speed - p) < 0.01
-                ? 'bg-emerald-600 text-white shadow-sm'
+                ? 'bg-slate-100 text-slate-950 shadow-sm'
                 : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
             "
             :title="t('sim.speed_n', { n: p })"
@@ -164,14 +164,14 @@ async function setSpeed(mult: number) {
             max="60"
             step="1"
             :disabled="busy || trainingMode"
-            class="w-12 rounded-md border border-slate-700/80 bg-slate-900/80 px-1.5 py-0.5 text-center text-xs text-slate-200 focus:border-purple-500/50 focus:outline-none disabled:opacity-50"
+            class="w-12 rounded-md border border-slate-700/80 bg-slate-900 px-1.5 py-0.5 text-center text-xs text-slate-200 focus:border-purple-500/50 focus:outline-none disabled:opacity-50"
             :title="trainingMode ? t('sim.training_change_off_first') : t('sim.training_rate_tooltip')"
           />
           <button
             type="button"
-            class="rounded-md px-2 py-1 text-xs font-semibold transition-all"
+            class="rounded-md px-2 py-1 text-xs font-semibold transition-colors"
             :class="trainingMode
-              ? 'bg-purple-600 text-white shadow-sm shadow-purple-900/40 animate-pulse'
+              ? 'bg-slate-100 text-slate-950'
               : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'"
             :disabled="busy"
             :title="trainingMode
@@ -187,8 +187,8 @@ async function setSpeed(mult: number) {
 
       <!-- OSRM status -->
       <div v-if="osrm" class="ml-auto hidden items-center gap-1.5 text-[11px] lg:flex">
-        <span class="h-2 w-2 rounded-full" :class="osrm.ready ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse'" />
-        <span :class="osrm.ready ? 'text-emerald-500/80' : 'text-amber-500/80'">
+        <span class="h-2 w-2 rounded-full" :class="osrm.ready ? 'bg-green-400' : 'bg-amber-400 animate-pulse'" />
+        <span :class="osrm.ready ? 'text-green-500/80' : 'text-amber-500/80'">
           {{ osrm.ready ? t('sim.routes_street') : t('sim.osrm_loading') }}
         </span>
       </div>

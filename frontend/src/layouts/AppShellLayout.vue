@@ -9,6 +9,7 @@ import InfoModal from "@/components/dashboard/InfoModal.vue";
 import LanguageSelector from "@/components/dashboard/LanguageSelector.vue";
 import RegionSelector from "@/components/dashboard/RegionSelector.vue";
 import { getSupabase } from "@/lib/supabase";
+import { useTheme } from "@/composables/useTheme";
 import { useRegionStore } from "@/stores/region";
 import { useSimulationStore } from "@/stores/simulation";
 
@@ -21,6 +22,7 @@ const regionStore = useRegionStore();
 const { state, streamStatus } = storeToRefs(store);
 const { active: activeRegion } = storeToRefs(regionStore);
 
+const { theme, toggleTheme } = useTheme();
 const infoOpen = ref(false);
 const nowTs = ref(Date.now());
 let clockTimer: ReturnType<typeof setInterval> | null = null;
@@ -83,7 +85,7 @@ function removePill(key: string) {
   store.setUiFilters(current);
 }
 function clearAllPills() { store.clearUiFilters(); }
-const activeEmergencies = computed(() => state.value?.emergencies?.filter((e) => e.status === "pending" || e.status === "dispatched").length ?? 0);
+const activeEmergencies = computed(() => state.value?.emergencies?.filter((e) => e.status === "pending" || e.status === "assigned").length ?? 0);
 const resolvedCount = computed(() => state.value?.emergencies?.filter((e) => e.status === "resolved").length ?? 0);
 const aiMode = computed(() => state.value?.aiMode ?? "hitl");
 const activeTimezone = computed(() => activeRegion.value?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone);
@@ -114,7 +116,7 @@ const nav = computed(() => [
   },
   {
     to: "/island",
-    label: t("nav.island", "Isla"),
+    label: t("nav.island"),
     icon: "M3 12h18 M12 3v18 M5 5l14 14 M19 5L5 19",
   },
   {
@@ -142,151 +144,143 @@ const nav = computed(() => [
 
 <template>
   <div class="min-h-screen bg-slate-950 text-slate-100">
-    <!-- HPE accent line -->
-    <div class="h-0.5 bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-600" />
-
-    <header class="border-b border-slate-800/80 bg-slate-900/90 backdrop-blur-sm">
-      <div class="mx-auto flex max-w-[1800px] flex-wrap items-center justify-between gap-4 px-4 py-2.5">
-        <div class="flex flex-wrap items-center gap-5">
-          <!-- Brand -->
-          <div class="flex items-center gap-3">
-            <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-600/15">
-              <div class="h-3 w-3 rounded-full bg-gradient-to-br from-emerald-400 to-teal-400" />
-            </div>
-            <div>
-              <h1 class="text-sm font-bold tracking-tight text-emerald-400">HPE Sentinel</h1>
-              <p class="flex items-center gap-1.5 text-[10px] text-slate-500">
-                <span
-                  class="inline-block h-1.5 w-1.5 rounded-full"
-                  :class="streamStatus === 'connected' ? 'bg-emerald-400' : streamStatus === 'connecting' ? 'bg-amber-400 animate-pulse' : 'bg-red-400'"
-                />
-                {{ streamStatus === 'connected' ? t('header.sse_connected') : streamStatus === 'connecting' ? t('header.sse_connecting') : t('header.sse_disconnected') }}
-                <template v-if="state?.osrmRouting">
-                  <span class="text-slate-700">·</span>
-                  <span :class="state.osrmRouting.ready ? 'text-emerald-500/80' : 'text-amber-500/80'">
-                    {{ state.osrmRouting.ready ? t('header.osrm_ok') : t('header.osrm_loading') }}
-                  </span>
-                </template>
-              </p>
-            </div>
-          </div>
-
-          <!-- Stats badges -->
-          <div class="hidden items-center gap-2 sm:flex">
-            <div class="flex items-center gap-1.5 rounded-lg border border-slate-700/50 bg-slate-800/50 px-2.5 py-1">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-              <span class="text-xs font-medium text-slate-300">{{ vehicleCount }}</span>
-              <span class="text-[10px] text-slate-500">{{ t('header.vehicles') }}</span>
-            </div>
-            <div class="flex items-center gap-1.5 rounded-lg border border-slate-700/50 bg-slate-800/50 px-2.5 py-1">
-              <span class="h-2 w-2 rounded-full" :class="activeEmergencies > 0 ? 'bg-rose-400 animate-pulse' : 'bg-slate-600'" />
-              <span class="text-xs font-medium text-slate-300">{{ activeEmergencies }}</span>
-              <span class="text-[10px] text-slate-500">{{ t('header.active') }}</span>
-            </div>
-            <div class="flex items-center gap-1.5 rounded-lg border border-slate-700/50 bg-slate-800/50 px-2.5 py-1">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-emerald-400/70" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
-              </svg>
-              <span class="text-xs font-medium text-slate-300">{{ resolvedCount }}</span>
-              <span class="text-[10px] text-slate-500">{{ t('header.resolved') }}</span>
-            </div>
-          </div>
-
-          <!-- Navigation -->
-          <nav class="flex gap-0.5 rounded-xl border border-slate-700/50 bg-slate-950/80 p-0.5">
-            <RouterLink
-              v-for="n in nav"
-              :key="n.to"
-              :to="n.to"
-              class="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all"
-              :class="
-                route.path === n.to
-                  ? 'bg-emerald-600/90 text-white shadow-sm shadow-emerald-900/30'
-                  : 'text-slate-400 hover:bg-slate-800/80 hover:text-slate-200'
-              "
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" :d="n.icon" />
-              </svg>
-              {{ n.label }}
-            </RouterLink>
-          </nav>
+    <header class="sticky top-0 z-[600] border-b border-slate-800 bg-slate-950">
+      <div class="mx-auto flex h-11 max-w-[1800px] items-stretch">
+        <!-- Marca + estado de enlaces -->
+        <div class="flex items-center gap-2.5 border-r border-slate-800 pl-4 pr-4">
+          <svg viewBox="0 0 64 64" class="h-5 w-5 text-slate-100" aria-hidden="true">
+            <rect x="17" y="17" width="30" height="30" fill="none" stroke="currentColor" stroke-width="4" />
+            <rect x="28" y="28" width="8" height="8" fill="currentColor" />
+          </svg>
+          <span class="text-[13px] font-semibold tracking-tight text-slate-100">Sentinel</span>
+          <span
+            class="ml-1 h-1.5 w-1.5 rounded-full"
+            :class="streamStatus === 'connected' ? 'bg-green-400' : streamStatus === 'connecting' ? 'bg-amber-400 animate-pulse' : 'bg-red-400'"
+            :title="streamStatus === 'connected' ? t('header.sse_connected') : streamStatus === 'connecting' ? t('header.sse_connecting') : t('header.sse_disconnected')"
+          />
+          <span
+            v-if="state?.osrmRouting"
+            class="hidden font-mono text-[10px] uppercase tracking-wider lg:inline"
+            :class="state.osrmRouting.ready ? 'text-slate-500' : 'text-amber-400'"
+          >
+            {{ state.osrmRouting.ready ? t('header.osrm_ok') : t('header.osrm_loading') }}
+          </span>
         </div>
 
-        <div class="flex items-center gap-2">
+        <!-- Navegación -->
+        <nav class="flex items-stretch overflow-x-auto">
+          <RouterLink
+            v-for="n in nav"
+            :key="n.to"
+            :to="n.to"
+            class="flex items-center gap-1.5 border-b-2 px-3 text-xs font-medium no-underline"
+            :class="
+              route.path === n.to
+                ? 'border-slate-100 text-slate-100'
+                : 'border-transparent text-slate-400 hover:text-slate-100'
+            "
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75">
+              <path stroke-linecap="round" stroke-linejoin="round" :d="n.icon" />
+            </svg>
+            {{ n.label }}
+          </RouterLink>
+        </nav>
+
+        <!-- KPIs -->
+        <div class="ml-auto hidden items-stretch xl:flex">
+          <div class="flex items-center gap-2 border-l border-slate-800 px-3">
+            <span class="text-[10px] uppercase tracking-wider text-slate-500">{{ t('header.vehicles') }}</span>
+            <span class="font-mono text-xs text-slate-100">{{ vehicleCount }}</span>
+          </div>
+          <div class="flex items-center gap-2 border-l border-slate-800 px-3">
+            <span class="h-1.5 w-1.5 rounded-full" :class="activeEmergencies > 0 ? 'bg-red-400' : 'bg-slate-600'" />
+            <span class="text-[10px] uppercase tracking-wider text-slate-500">{{ t('header.active') }}</span>
+            <span class="font-mono text-xs" :class="activeEmergencies > 0 ? 'text-red-300' : 'text-slate-100'">{{ activeEmergencies }}</span>
+          </div>
+          <div class="flex items-center gap-2 border-l border-slate-800 px-3">
+            <span class="text-[10px] uppercase tracking-wider text-slate-500">{{ t('header.resolved') }}</span>
+            <span class="font-mono text-xs text-slate-100">{{ resolvedCount }}</span>
+          </div>
+          <div class="flex items-center gap-2 border-l border-slate-800 px-3" :title="activeTimezone">
+            <span class="text-[10px] uppercase tracking-wider text-slate-500">{{ t("header.local_time") }}</span>
+            <span class="font-mono text-xs text-slate-100">{{ localTime }}</span>
+          </div>
+        </div>
+
+        <!-- Controles -->
+        <div class="ml-auto flex items-center gap-1.5 border-l border-slate-800 px-3 xl:ml-0">
+          <span
+            class="flex items-center gap-1.5 rounded border px-2 py-1 font-mono text-[10px] uppercase tracking-wider"
+            :class="aiMode === 'autonomous' ? 'border-slate-600 text-slate-100' : 'border-amber-500/40 text-amber-300'"
+          >
+            <span class="h-1.5 w-1.5 rounded-full" :class="aiMode === 'autonomous' ? 'bg-slate-300' : 'bg-amber-400'" />
+            {{ aiMode === 'autonomous' ? t('header.ai_auto') : t('header.ai_hitl') }}
+          </span>
           <LanguageSelector />
           <RegionSelector />
-          <div
-            class="hidden rounded-lg border border-slate-700/50 bg-slate-800/50 px-2.5 py-1 sm:flex sm:flex-col"
-            :title="activeTimezone"
-          >
-            <span class="text-[9px] uppercase tracking-wider text-slate-500">{{ t("header.local_time") }}</span>
-            <span class="text-xs font-semibold text-slate-200">{{ localTime }}</span>
-          </div>
-
-          <!-- AI mode indicator -->
-          <div
-            class="flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider"
-            :class="aiMode === 'autonomous'
-              ? 'border border-cyan-600/40 bg-cyan-950/30 text-cyan-300'
-              : 'border border-amber-600/40 bg-amber-950/30 text-amber-300'"
-          >
-            <span class="h-1.5 w-1.5 rounded-full" :class="aiMode === 'autonomous' ? 'bg-cyan-400' : 'bg-amber-400'" />
-            {{ aiMode === 'autonomous' ? t('header.ai_auto') : t('header.ai_hitl') }}
-          </div>
-
           <button
             type="button"
-            class="rounded-lg border border-slate-700/50 p-2 text-slate-400 transition hover:bg-slate-800 hover:text-slate-200"
+            class="rounded border border-slate-800 p-1.5 text-slate-400 hover:border-slate-700 hover:text-slate-100"
+            :title="theme === 'dark' ? t('header.theme_light') : t('header.theme_dark')"
+            :aria-label="theme === 'dark' ? t('header.theme_light') : t('header.theme_dark')"
+            @click="toggleTheme"
+          >
+            <svg v-if="theme === 'dark'" xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75">
+              <circle cx="12" cy="12" r="4" />
+              <path stroke-linecap="round" d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+            </svg>
+            <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            class="rounded border border-slate-800 p-1.5 text-slate-400 hover:border-slate-700 hover:text-slate-100"
             :title="t('header.help_tooltip')"
             @click="infoOpen = true"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75">
               <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </button>
           <button
             type="button"
-            class="flex items-center gap-1.5 rounded-lg border border-slate-700/50 bg-slate-800/50 px-3 py-2 text-xs text-slate-300 transition hover:bg-slate-700 hover:text-white"
+            class="rounded border border-slate-800 p-1.5 text-slate-400 hover:border-slate-700 hover:text-slate-100"
             :title="t('header.logout_tooltip')"
+            :aria-label="t('common.logout')"
             @click="logout"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75">
               <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
             </svg>
-            {{ t('common.logout') }}
           </button>
         </div>
       </div>
     </header>
 
-    <!-- Pill bar: filtros activos desde ⌘ comando -->
+    <!-- Filtros activos desde ⌘ comando -->
     <Transition name="pills">
-      <div
-        v-if="activePills.length"
-        class="border-b border-purple-500/20 bg-purple-950/30 backdrop-blur-sm"
-      >
-        <div class="mx-auto flex max-w-[1800px] flex-wrap items-center gap-2 px-4 py-2">
-          <span class="text-[10px] font-semibold uppercase tracking-wider text-purple-300">
-            🔎 {{ t('filters.title') }}
+      <div v-if="activePills.length" class="border-b border-slate-800 bg-slate-900">
+        <div class="mx-auto flex max-w-[1800px] flex-wrap items-center gap-1.5 px-4 py-1.5">
+          <span class="mr-1 text-[10px] font-medium uppercase tracking-wider text-slate-500">
+            {{ t('filters.title') }}
           </span>
           <span
             v-for="p in activePills"
             :key="p.key"
-            class="group inline-flex items-center gap-1.5 rounded-full border border-purple-400/40 bg-purple-600/25 px-2.5 py-0.5 text-[11px] font-medium text-purple-100"
+            class="inline-flex items-center gap-1.5 rounded border border-slate-700 px-2 py-0.5 text-[11px] text-slate-200"
           >
             {{ p.label }}
             <button
               type="button"
-              class="text-purple-200/60 transition hover:text-white"
+              class="text-slate-500 hover:text-slate-100"
               :title="`Quitar ${p.label}`"
               @click="removePill(p.key)"
             >✕</button>
           </span>
           <button
-            class="ml-auto rounded-full border border-purple-400/30 px-3 py-0.5 text-[11px] text-purple-200 transition hover:bg-purple-600/30"
+            class="ml-auto rounded px-2 py-0.5 text-[11px] text-slate-400 hover:text-slate-100"
             @click="clearAllPills"
           >Limpiar todo</button>
         </div>
@@ -304,7 +298,6 @@ const nav = computed(() => [
 </template>
 
 <style scoped>
-.pills-enter-active, .pills-leave-active { transition: all 0.25s ease; }
-.pills-enter-from, .pills-leave-to { opacity: 0; transform: translateY(-6px); max-height: 0; }
-.pills-enter-to, .pills-leave-from { opacity: 1; max-height: 60px; }
+.pills-enter-active, .pills-leave-active { transition: opacity 0.15s ease, transform 0.15s ease; }
+.pills-enter-from, .pills-leave-to { opacity: 0; transform: translateY(-4px); }
 </style>

@@ -4,6 +4,7 @@ import { toast } from "vue-sonner";
 import { useI18n } from "vue-i18n";
 import { useEntitiesStore } from "@/stores/entities";
 import type { EntityType } from "@/types/simulation";
+import { sanitizeSvg } from "@/lib/sanitize";
 
 const { t } = useI18n();
 const store = useEntitiesStore();
@@ -238,12 +239,12 @@ function cancelDelete() {
 <template>
   <div class="space-y-6">
     <div>
-      <h2 class="text-lg font-bold text-emerald-400">{{ t('scenario.config_title') }}</h2>
+      <h2 class="text-lg font-semibold tracking-tight text-slate-100">{{ t('scenario.config_title') }}</h2>
       <p class="mt-1 text-xs text-slate-500">{{ t('scenario.config_subtitle') }}</p>
     </div>
 
     <!-- Tabs -->
-    <div class="flex gap-1 rounded-xl border border-slate-700/50 bg-slate-950/80 p-1">
+    <div class="flex gap-1 rounded-xl border border-slate-700/50 bg-slate-950 p-1">
       <button
         v-for="tab in [
           { key: 'vehicles', label: t('scenario.tab_vehicles') },
@@ -251,9 +252,9 @@ function cancelDelete() {
           { key: 'dispatch', label: t('scenario.tab_dispatch') },
         ]"
         :key="tab.key"
-        class="flex-1 rounded-lg px-3 py-2 text-xs font-medium transition-all"
+        class="flex-1 rounded-lg px-3 py-2 text-xs font-medium transition-colors"
         :class="activeTab === tab.key
-          ? 'bg-emerald-600/90 text-white shadow-sm shadow-emerald-900/30'
+          ? 'bg-slate-100 text-slate-950'
           : 'text-slate-400 hover:bg-slate-800/80 hover:text-slate-200'"
         @click="activeTab = tab.key as 'vehicles' | 'places' | 'dispatch'"
       >
@@ -267,16 +268,14 @@ function cancelDelete() {
         <div
           v-for="v in vehicleTypes"
           :key="v.id"
-          class="relative rounded-xl border bg-slate-900/70 p-4 transition-colors"
-          :class="confirmDeleteId === v.id ? 'border-rose-500/60 bg-rose-950/20' : 'border-slate-700/50'"
+          class="relative rounded border bg-slate-900 p-3 transition-colors"
+          :class="confirmDeleteId === v.id ? 'border-red-500/60' : 'border-slate-800'"
         >
           <div class="flex items-center gap-3">
-            <div
-              class="flex h-10 w-10 items-center justify-center rounded-full border-2 border-white/20 shrink-0"
-              :style="{ background: v.color }"
-            >
-              <span v-if="v.iconSvg" class="h-5 w-5 [&>svg]:h-full [&>svg]:w-full" v-html="v.iconSvg" />
-              <span v-else class="text-sm font-bold text-white">{{ v.name.charAt(0) }}</span>
+            <div class="relative flex h-9 w-9 shrink-0 items-center justify-center rounded border border-slate-700 bg-slate-950 text-slate-200">
+              <span v-if="v.iconSvg" class="h-4 w-4 [&>svg]:h-full [&>svg]:w-full" v-html="sanitizeSvg(v.iconSvg)" />
+              <span v-else class="font-mono text-sm">{{ v.name.charAt(0) }}</span>
+              <span class="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full" :style="{ background: v.color }" />
             </div>
             <div class="flex-1 min-w-0">
               <p class="text-sm font-semibold text-slate-200 truncate">{{ v.name }}</p>
@@ -340,7 +339,7 @@ function cancelDelete() {
 
       <!-- Add vehicle form -->
       <div class="rounded-xl border border-slate-700/50 bg-slate-900/70 p-5 space-y-4">
-        <h3 class="text-sm font-semibold text-emerald-400">Nuevo vehiculo / unidad</h3>
+        <h3 class="text-[11px] font-medium uppercase tracking-wider text-slate-400">Nuevo vehiculo / unidad</h3>
         <div class="grid gap-4 sm:grid-cols-2">
           <div>
             <label class="block text-[11px] font-medium text-slate-400 mb-1">Nombre *</label>
@@ -388,7 +387,7 @@ function cancelDelete() {
             <div
               v-if="newVehicle.iconSvg"
               class="mt-2 flex h-10 w-10 items-center justify-center rounded-full border border-slate-700 bg-slate-800 p-1.5 [&>svg]:h-full [&>svg]:w-full"
-              v-html="newVehicle.iconSvg"
+              v-html="sanitizeSvg(newVehicle.iconSvg)"
             />
           </div>
           <div class="sm:col-span-2">
@@ -456,7 +455,7 @@ function cancelDelete() {
           </div>
         </div>
         <button
-          class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500"
+          class="rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-slate-300"
           @click="addVehicle"
         >
           Añadir vehiculo
@@ -470,16 +469,14 @@ function cancelDelete() {
         <div
           v-for="p in placeTypes"
           :key="p.id"
-          class="relative rounded-xl border bg-slate-900/70 p-4 transition-colors"
-          :class="confirmDeleteId === p.id ? 'border-rose-500/60 bg-rose-950/20' : 'border-slate-700/50'"
+          class="relative rounded border bg-slate-900 p-3 transition-colors"
+          :class="confirmDeleteId === p.id ? 'border-red-500/60' : 'border-slate-800'"
         >
           <div class="flex items-center gap-3">
-            <div
-              class="flex h-10 w-10 items-center justify-center rounded-lg border-2 border-white/20 shrink-0"
-              :style="{ background: p.color }"
-            >
-              <span v-if="p.iconSvg" class="h-5 w-5 [&>svg]:h-full [&>svg]:w-full" v-html="p.iconSvg" />
-              <span v-else class="text-sm font-bold text-white">{{ p.name.charAt(0) }}</span>
+            <div class="relative flex h-9 w-9 shrink-0 items-center justify-center rounded border border-slate-700 bg-slate-950 text-slate-200">
+              <span v-if="p.iconSvg" class="h-4 w-4 [&>svg]:h-full [&>svg]:w-full" v-html="sanitizeSvg(p.iconSvg)" />
+              <span v-else class="font-mono text-sm">{{ p.name.charAt(0) }}</span>
+              <span class="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full" :style="{ background: p.color }" />
             </div>
             <div class="flex-1 min-w-0">
               <p class="text-sm font-semibold text-slate-200 truncate">{{ p.name }}</p>
@@ -526,7 +523,7 @@ function cancelDelete() {
 
       <!-- Add place form -->
       <div class="rounded-xl border border-slate-700/50 bg-slate-900/70 p-5 space-y-4">
-        <h3 class="text-sm font-semibold text-emerald-400">{{ t('scenario.new_place_title') }}</h3>
+        <h3 class="text-[11px] font-medium uppercase tracking-wider text-slate-400">{{ t('scenario.new_place_title') }}</h3>
         <div class="grid gap-4 sm:grid-cols-2">
           <div>
             <label class="block text-[11px] font-medium text-slate-400 mb-1">Nombre *</label>
@@ -587,7 +584,7 @@ function cancelDelete() {
           </div>
         </div>
         <button
-          class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500"
+          class="rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-slate-300"
           @click="addPlace"
         >
           Añadir lugar
@@ -598,12 +595,12 @@ function cancelDelete() {
     <!-- Editor modal (vehículos / lugares) -->
     <div
       v-if="editor.open"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
       @click.self="closeEditor"
     >
       <div class="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl overflow-hidden">
         <div class="flex items-center justify-between border-b border-slate-800 px-5 py-3">
-          <h3 class="text-sm font-semibold text-emerald-400">
+          <h3 class="text-[11px] font-medium uppercase tracking-wider text-slate-400">
             Editar {{ editor.kind === "vehicle" ? "vehículo / unidad" : "lugar" }}
           </h3>
           <button class="text-slate-500 hover:text-slate-200" @click="closeEditor">✕</button>
@@ -718,7 +715,7 @@ function cancelDelete() {
             @click="closeEditor"
           >{{ t('scenario.cancel') }}</button>
           <button
-            class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-50"
+            class="rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-slate-300 disabled:opacity-50"
             :disabled="editor.saving || !editor.name.trim()"
             @click="saveEditor"
           >{{ editor.saving ? "…" : t('common.save') }}</button>
@@ -729,7 +726,7 @@ function cancelDelete() {
     <!-- Dispatch Config Tab -->
     <div v-if="activeTab === 'dispatch'" class="space-y-4">
       <div class="rounded-xl border border-slate-700/50 bg-slate-900/70 p-5 space-y-4">
-        <h3 class="text-sm font-semibold text-emerald-400">{{ t('scenario.dispatch_config') }}</h3>
+        <h3 class="text-[11px] font-medium uppercase tracking-wider text-slate-400">{{ t('scenario.dispatch_config') }}</h3>
         <div class="flex items-start gap-3">
           <button
             class="relative mt-0.5 inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none"
@@ -751,9 +748,9 @@ function cancelDelete() {
             <div class="mt-2 inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[10px] font-semibold uppercase"
               :class="store.dispatchConfig.dispatchRequiresApproval
                 ? 'border-amber-600/40 bg-amber-950/30 text-amber-300'
-                : 'border-emerald-600/40 bg-emerald-950/30 text-emerald-300'"
+                : 'border-green-600/40 bg-green-950/30 text-green-300'"
             >
-              <span class="h-1.5 w-1.5 rounded-full" :class="store.dispatchConfig.dispatchRequiresApproval ? 'bg-amber-400' : 'bg-emerald-400'" />
+              <span class="h-1.5 w-1.5 rounded-full" :class="store.dispatchConfig.dispatchRequiresApproval ? 'bg-amber-400' : 'bg-green-400'" />
               {{ store.dispatchConfig.dispatchRequiresApproval ? 'Aprobacion manual' : 'Despacho automatico' }}
             </div>
           </div>

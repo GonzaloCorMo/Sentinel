@@ -233,20 +233,15 @@ onBeforeUnmount(() => { stopRecognition(); });
   <div class="cr-app">
     <header class="cr-header">
       <div class="cr-logo">
-        <div class="cr-logo-icon">
-          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M12 2L4 5v6c0 5 3.4 9.5 8 11 4.6-1.5 8-6 8-11V5l-8-3z" fill="#01A982"/>
-            <path d="M12 8v8M8 12h8" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/>
-          </svg>
-        </div>
+        <svg class="cr-logo-mark" viewBox="0 0 64 64" width="28" height="28" aria-hidden="true"><rect x="17" y="17" width="30" height="30" fill="none" stroke="currentColor" stroke-width="3"/><rect x="28" y="28" width="8" height="8" fill="currentColor"/></svg>
         <div class="cr-logo-text">
-          <div class="cr-brand">HPE Sentinel</div>
+          <div class="cr-brand">Sentinel</div>
           <div class="cr-sub">{{ t('citizen.title') }}</div>
         </div>
       </div>
       <button v-if="isAuthed" class="cr-logout" @click="signOut" :title="t('citizen.logout')">
         <span class="cr-logout-email">{{ userEmail }}</span>
-        <span class="cr-logout-icon">⎋</span>
+        <svg class="cr-logout-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" aria-hidden="true"><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/></svg>
       </button>
     </header>
 
@@ -274,14 +269,14 @@ onBeforeUnmount(() => { stopRecognition(); });
 
         <div class="cr-mode-grid">
           <button class="cr-mode-btn voice" :disabled="!speechSupported" @click="startVoice">
-            <div class="cr-mode-icon">🎙️</div>
+            <svg class="cr-mode-icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
             <div class="cr-mode-label">{{ t('citizen.by_voice') }}</div>
             <div class="cr-mode-sub">
               {{ speechSupported ? "Habla y lo transcribimos" : "No soportado en este navegador" }}
             </div>
           </button>
           <button class="cr-mode-btn text" @click="startText">
-            <div class="cr-mode-icon">✏️</div>
+            <svg class="cr-mode-icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4zM13 7l4 4"/></svg>
             <div class="cr-mode-label">{{ t('citizen.by_text') }}</div>
             <div class="cr-mode-sub">{{ t('citizen.by_text_sub') }}</div>
           </button>
@@ -291,8 +286,8 @@ onBeforeUnmount(() => { stopRecognition(); });
       <!-- LOCATING -->
       <section v-else-if="stage === 'locating'" class="cr-stage">
         <div class="cr-big-status">
-          <div class="cr-pulse cr-pulse-blue" />
-          <div class="cr-status-icon">📍</div>
+          <div class="cr-spinner" />
+          <svg class="cr-status-icon" viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11z"/><circle cx="12" cy="10" r="2"/></svg>
         </div>
         <h2 class="cr-title">{{ t('citizen.getting_location') }}</h2>
         <p class="cr-desc">{{ t('citizen.location_hint') }}</p>
@@ -301,8 +296,8 @@ onBeforeUnmount(() => { stopRecognition(); });
       <!-- LISTENING (solo modo voz) -->
       <section v-else-if="stage === 'listening'" class="cr-stage">
         <div class="cr-big-status">
-          <div class="cr-pulse cr-pulse-red" />
-          <div class="cr-status-icon">🎙️</div>
+          <div class="cr-pulse" />
+          <svg class="cr-status-icon rec" viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
         </div>
         <h2 class="cr-title">{{ t('citizen.listening') }}</h2>
         <p class="cr-desc">{{ t('citizen.listening_hint') }}</p>
@@ -325,9 +320,9 @@ onBeforeUnmount(() => { stopRecognition(); });
         <div class="cr-card">
           <div class="cr-card-label">{{ t('citizen.card_location') }}</div>
           <div class="cr-card-value">
-            <span v-if="coords">
+            <span v-if="coords" class="cr-num">
               {{ coords.lat.toFixed(5) }}, {{ coords.lon.toFixed(5) }}
-              <span class="cr-accuracy">±{{ Math.round(coords.accuracy) }}m</span>
+              <span class="cr-accuracy">±{{ Math.round(coords.accuracy) }} m</span>
             </span>
           </div>
           <iframe
@@ -365,7 +360,7 @@ onBeforeUnmount(() => { stopRecognition(); });
           />
         </div>
 
-        <button class="cr-btn-primary big" @click="send">{{ t('citizen.submit') }}</button>
+        <button class="cr-btn-sos" @click="send">{{ t('citizen.submit') }}</button>
         <button class="cr-btn-ghost" @click="reset">{{ t('citizen.cancel') }}</button>
       </section>
 
@@ -384,7 +379,7 @@ onBeforeUnmount(() => { stopRecognition(); });
         </div>
         <h2 class="cr-title">{{ t('citizen.sent_title') }}</h2>
         <p class="cr-desc">
-          ID: <code>{{ result?.id.slice(0, 8) }}</code><br/>
+          ID <code class="cr-num">{{ result?.id.slice(0, 8) }}</code><br/>
           Una unidad será asignada automáticamente.
         </p>
         <button class="cr-btn-primary" @click="reset">{{ t('citizen.report_another') }}</button>
@@ -402,30 +397,16 @@ onBeforeUnmount(() => { stopRecognition(); });
     </main>
 
     <footer class="cr-footer">
-      <small>HPE CDS Tech Challenge · Demo. Para emergencias reales llama al 112.</small>
+      <small>Demo. Para emergencias reales llama al <span class="cr-num">112</span>.</small>
     </footer>
   </div>
 </template>
 
 <style scoped>
-@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap");
-
 .cr-app {
-  --green: #01a982;
-  --green-glow: rgba(1, 169, 130, 0.25);
-  --navy: #0f1b2d;
-  --navy-mid: #162036;
-  --navy-light: #1e2d4a;
-  --red: #e53e3e;
-  --red-glow: rgba(229, 62, 62, 0.4);
-  --blue: #3b82f6;
-  --white: #fff;
-  --muted: rgba(255, 255, 255, 0.55);
-  --dim: rgba(255, 255, 255, 0.3);
-
-  font-family: "IBM Plex Sans", sans-serif;
-  background: var(--navy);
-  color: var(--white);
+  font-family: var(--font-sans);
+  background: var(--bg);
+  color: var(--text);
   min-height: 100vh;
   min-height: 100dvh;
   display: flex;
@@ -435,246 +416,269 @@ onBeforeUnmount(() => { stopRecognition(); });
 
 .cr-app * { box-sizing: border-box; }
 
+.cr-num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Cabecera */
 .cr-header {
-  padding: 14px 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  background: rgba(255, 255, 255, 0.02);
-  backdrop-filter: blur(10px);
+  height: 52px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
   position: sticky; top: 0; z-index: 10;
   display: flex; justify-content: space-between; align-items: center; gap: 10px;
 }
-.cr-logo { display: flex; align-items: center; gap: 12px; min-width: 0; }
-.cr-logo-icon {
-  width: 40px; height: 40px; flex-shrink: 0;
-  background: rgba(1, 169, 130, 0.12);
-  border-radius: 10px;
-  display: flex; align-items: center; justify-content: center;
-}
-.cr-logo-icon svg { width: 26px; height: 26px; }
-.cr-logo-text { min-width: 0; }
-.cr-brand { font-family: "Space Grotesk"; font-size: 16px; font-weight: 700; }
-.cr-sub { font-size: 12px; color: var(--muted); }
+.cr-logo { display: flex; align-items: center; gap: 10px; min-width: 0; color: var(--text); }
+.cr-logo-mark { flex-shrink: 0; }
+.cr-logo-text { min-width: 0; line-height: 1.25; }
+.cr-brand { font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
+.cr-sub { font-size: 12px; color: var(--text-3); }
 
 .cr-logout {
   display: flex; align-items: center; gap: 8px;
-  padding: 8px 12px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
-  color: var(--muted);
+  height: 28px; padding: 0 10px;
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  color: var(--text-2);
   font-family: inherit; font-size: 12px; cursor: pointer;
-  transition: 0.2s;
   max-width: 60%;
 }
-.cr-logout:hover { border-color: var(--red); color: var(--red); }
+.cr-logout:hover { border-color: var(--n-600); color: var(--text); }
 .cr-logout-email {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.cr-logout-icon { font-size: 16px; line-height: 1; flex-shrink: 0; }
+.cr-logout-icon { flex-shrink: 0; }
 
+/* Contenido */
 .cr-main {
   flex: 1;
-  padding: 24px 20px 100px;
+  padding: 24px 16px 96px;
   max-width: 520px;
   width: 100%;
   margin: 0 auto;
 }
 
-.cr-stage { display: flex; flex-direction: column; align-items: stretch; gap: 16px; }
+.cr-stage { display: flex; flex-direction: column; align-items: stretch; gap: 12px; }
 
 .cr-title {
-  font-family: "Space Grotesk";
-  font-size: 26px; font-weight: 700;
-  margin-top: 8px; letter-spacing: -0.3px;
+  font-size: 22px; font-weight: 600;
+  margin: 8px 0 0; letter-spacing: -0.02em;
   text-align: center;
 }
 .cr-desc {
-  color: var(--muted); font-size: 14px; line-height: 1.55;
-  margin-bottom: 8px; text-align: center;
+  color: var(--text-3); font-size: 14px; line-height: 1.55;
+  margin: 0 0 8px; text-align: center;
 }
 
+/* Tipo de emergencia */
 .cr-type-picker { margin: 12px 0 4px; }
 .cr-type-label {
-  font-size: 12px; color: var(--muted);
-  display: block; margin-bottom: 8px;
+  font-size: 11px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--text-3);
+  display: block; margin-bottom: 6px;
 }
 .cr-type-grid {
-  display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px;
 }
-.cr-type-grid.small .cr-type-btn { padding: 10px 8px; font-size: 13px; }
+.cr-type-grid.small .cr-type-btn { height: 36px; font-size: 13px; }
 .cr-type-btn {
-  padding: 14px 12px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
-  color: var(--white);
+  height: 44px;
+  padding: 0 12px;
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  color: var(--text-2);
   font-family: inherit;
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: 0.2s;
 }
+.cr-type-btn:hover { background: var(--surface-2); color: var(--text); }
 .cr-type-btn.active {
-  background: rgba(1, 169, 130, 0.12);
-  border-color: var(--green);
-  color: var(--green);
+  background: var(--n-100);
+  border-color: var(--n-100);
+  color: var(--n-950);
 }
 
-/* Mode picker (voice/text) */
+/* Selector de modo (voz / texto) */
 .cr-mode-grid {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
-  margin-top: 20px;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+  margin-top: 16px;
 }
 .cr-mode-btn {
-  padding: 28px 16px;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.03);
-  color: var(--white);
+  padding: 24px 14px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text);
   cursor: pointer;
   font-family: inherit;
-  display: flex; flex-direction: column; align-items: center; gap: 8px;
-  transition: 0.25s;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
 }
 .cr-mode-btn:hover:not(:disabled) {
-  transform: translateY(-2px);
-  border-color: var(--green);
-  background: rgba(1, 169, 130, 0.06);
-  box-shadow: 0 8px 24px rgba(1, 169, 130, 0.15);
-}
-.cr-mode-btn.text:hover:not(:disabled) {
-  border-color: #3b82f6;
-  background: rgba(59, 130, 246, 0.08);
-  box-shadow: 0 8px 24px rgba(59, 130, 246, 0.15);
+  border-color: var(--n-500);
+  background: var(--surface-2);
 }
 .cr-mode-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.cr-mode-icon { font-size: 40px; }
-.cr-mode-label { font-family: "Space Grotesk"; font-weight: 700; font-size: 16px; }
-.cr-mode-sub { font-size: 11px; color: var(--muted); text-align: center; line-height: 1.4; }
+.cr-mode-icon { color: var(--text-2); margin-bottom: 4px; }
+.cr-mode-label { font-weight: 600; font-size: 14px; }
+.cr-mode-sub { font-size: 12px; color: var(--text-3); text-align: center; line-height: 1.4; }
 
-/* Status views */
+/* Estados */
 .cr-big-status {
   position: relative;
-  width: 160px; height: 160px;
-  margin: 24px auto 8px;
+  width: 96px; height: 96px;
+  margin: 24px auto 4px;
   display: flex; align-items: center; justify-content: center;
 }
+.cr-status-icon { position: relative; z-index: 1; color: var(--text-2); }
+.cr-status-icon.rec { color: var(--crit); }
+
+/* Grabando: anillo de alerta (indicador de micrófono activo). */
 .cr-pulse {
-  position: absolute; inset: 0;
+  position: absolute; inset: 16px;
   border-radius: 50%;
-  animation: pulsate 1.8s ease-in-out infinite;
+  border: 1px solid var(--crit);
+  animation: cr-rec 1.6s ease-out infinite;
 }
-.cr-pulse-red { background: radial-gradient(circle, var(--red-glow) 0%, transparent 70%); }
-.cr-pulse-blue { background: radial-gradient(circle, rgba(59, 130, 246, 0.35) 0%, transparent 70%); }
-@keyframes pulsate {
-  0%, 100% { transform: scale(1); opacity: 0.7; }
-  50%      { transform: scale(1.15); opacity: 1; }
+@keyframes cr-rec {
+  0%   { transform: scale(1); opacity: 0.9; }
+  100% { transform: scale(1.5); opacity: 0; }
 }
-.cr-status-icon { font-size: 60px; z-index: 1; }
 
 .cr-spinner {
-  width: 80px; height: 80px;
-  border: 6px solid rgba(255, 255, 255, 0.1);
-  border-top-color: var(--green);
+  width: 48px; height: 48px;
+  border: 2px solid var(--border-strong);
+  border-top-color: var(--text);
   border-radius: 50%;
-  animation: spin 0.8s linear infinite;
+  animation: cr-spin 0.8s linear infinite;
 }
-@keyframes spin { to { transform: rotate(360deg); } }
+.cr-big-status > .cr-spinner {
+  position: absolute; inset: 12px;
+  width: auto; height: auto;
+}
+@keyframes cr-spin { to { transform: rotate(360deg); } }
 
 .cr-check, .cr-cross {
-  width: 120px; height: 120px;
-  border-radius: 50%;
+  width: 64px; height: 64px;
+  border-radius: var(--radius-lg);
   display: flex; align-items: center; justify-content: center;
-  font-family: "Space Grotesk";
-  font-size: 64px; font-weight: 700;
+  font-family: var(--font-mono);
+  font-size: 28px; font-weight: 600;
 }
-.cr-check { background: rgba(1, 169, 130, 0.15); color: var(--green); border: 3px solid var(--green); }
-.cr-cross { background: rgba(229, 62, 62, 0.15); color: var(--red); border: 3px solid var(--red); }
+.cr-check {
+  color: var(--ok);
+  background: color-mix(in oklab, var(--ok-500) 10%, transparent);
+  border: 1px solid color-mix(in oklab, var(--ok-500) 40%, transparent);
+}
+.cr-cross {
+  color: var(--crit);
+  background: color-mix(in oklab, var(--crit-500) 10%, transparent);
+  border: 1px solid color-mix(in oklab, var(--crit-500) 40%, transparent);
+}
 
-/* Transcript live */
+/* Transcripción en vivo */
 .cr-transcript-live {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
-  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 14px;
   min-height: 140px;
   font-size: 15px; line-height: 1.55;
-  margin: 12px 0;
+  margin: 8px 0;
 }
-.cr-transcript-final { color: var(--white); }
-.cr-transcript-interim { color: var(--muted); font-style: italic; margin-top: 6px; }
-.cr-transcript-hint { color: var(--dim); text-align: center; padding: 30px 0; }
+.cr-transcript-final { color: var(--text); }
+.cr-transcript-interim { color: var(--text-3); font-style: italic; margin-top: 6px; }
+.cr-transcript-hint { color: var(--text-4); text-align: center; padding: 30px 0; }
 
-/* Review cards */
+/* Tarjetas de revisión */
 .cr-card {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 12px;
-  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 12px 14px;
 }
 .cr-card-label {
-  font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
-  color: var(--muted); margin-bottom: 8px; font-weight: 600;
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--text-3); margin-bottom: 8px; font-weight: 500;
 }
-.cr-card-hint { font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--dim); }
-.cr-card-value { font-size: 14px; }
-.cr-accuracy { color: var(--dim); margin-left: 6px; font-size: 12px; }
+.cr-card-hint { font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--text-4); }
+.cr-card-value { font-size: 13px; color: var(--text); }
+.cr-accuracy { color: var(--text-4); margin-left: 6px; font-size: 12px; }
 .cr-map {
+  display: block;
   width: 100%; height: 180px;
-  border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-sm); border: 1px solid var(--border);
   margin-top: 10px;
-  filter: hue-rotate(180deg) invert(0.92);
+  filter: grayscale(1);
+}
+:root[data-theme="dark"] .cr-map {
+  filter: grayscale(1) invert(0.92) contrast(0.9);
 }
 .cr-textarea {
   width: 100%;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  color: var(--white);
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  color: var(--text);
   font-family: inherit;
   font-size: 14px;
   padding: 10px 12px;
   resize: vertical;
   outline: none;
+  transition: border-color 0.12s ease;
 }
-.cr-textarea:focus {
-  border-color: var(--green);
-  box-shadow: 0 0 0 3px var(--green-glow);
-}
+.cr-textarea::placeholder { color: var(--text-4); }
+.cr-textarea:focus { border-color: var(--focus); }
 
-.cr-btn-primary {
-  width: 100%;
-  padding: 16px;
-  border: none;
-  border-radius: 12px;
-  background: linear-gradient(135deg, var(--green), #00c9a1);
-  color: var(--white);
-  font-family: inherit;
-  font-weight: 600;
-  font-size: 15px;
-  cursor: pointer;
-  box-shadow: 0 4px 20px var(--green-glow);
-  transition: 0.2s;
-}
-.cr-btn-primary:active { transform: scale(0.98); }
-.cr-btn-primary.big { padding: 20px; font-size: 17px; }
+/* Botones */
+.cr-btn-primary,
+.cr-btn-sos,
 .cr-btn-ghost {
   width: 100%;
-  padding: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  background: transparent;
-  color: var(--muted);
+  height: 44px;
+  border-radius: var(--radius-lg);
   font-family: inherit;
+  font-weight: 500;
   font-size: 14px;
   cursor: pointer;
 }
+.cr-btn-primary {
+  border: 1px solid var(--n-100);
+  background: var(--n-100);
+  color: var(--n-950);
+}
+.cr-btn-primary:hover { background: var(--n-200); border-color: var(--n-200); }
+
+/* Envío de emergencia: único botón en color vivo. */
+.cr-btn-sos {
+  height: 52px;
+  border: 1px solid var(--crit-600);
+  background: var(--crit-600);
+  color: var(--crit-50);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+:root[data-theme="light"] .cr-btn-sos { color: var(--crit-950); }
+.cr-btn-sos:hover { background: var(--crit-500); border-color: var(--crit-500); }
+
+.cr-btn-ghost {
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text-2);
+}
+.cr-btn-ghost:hover { background: var(--surface-2); color: var(--text); }
 
 .cr-footer {
-  padding: 16px 20px;
+  padding: 14px 16px;
   text-align: center;
-  color: var(--dim);
+  color: var(--text-4);
   font-size: 11px;
-  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  border-top: 1px solid var(--border);
 }
 </style>

@@ -5,15 +5,41 @@ import { storeToRefs } from "pinia";
 import { nextTick, onMounted, onUnmounted, toRef, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { MAP_DEFAULT_CENTER, MAP_DEFAULT_ZOOM, DEFAULT_SPAWN_LAT, DEFAULT_SPAWN_LON } from "@/lib/mapDefaults";
-import { energyOf, operatingCostOf, powertrainOf } from "@/lib/energyDisplay";
+import { energyOf, operatingCostOf } from "@/lib/energyDisplay";
 import { remainingRouteCoords } from "@/lib/routePolyline";
+import { cssVar, useTheme } from "@/composables/useTheme";
+import { sanitizeSvg } from "@/lib/sanitize";
 import { useRegionStore } from "@/stores/region";
 import { useSimulationStore } from "@/stores/simulation";
 
 const { t: i18nT } = useI18n();
-import type { Ambulance, ArubaEvent, ArubaWeatherReading, Emergency, EntityType, Jam, MapTool, Poi, Companion } from "@/types/simulation";
+import type { Ambulance, ExternalEvent, WeatherReading, Emergency, EntityType, Jam, MapTool, Poi, Companion } from "@/types/simulation";
 
-type ArubaEventMarker = ArubaEvent;
+type ExternalEventMarker = ExternalEvent;
+
+/** Escapa texto de origen externo (PWA ciudadana, ingesta REST, nombres de usuario)
+ *  antes de interpolarlo en HTML de Leaflet (tooltips/popups usan innerHTML). */
+function esc(v: unknown): string {
+  return String(v ?? "").replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+}
+
+/** Leaflet escribe los colores como atributos SVG, donde var() no resuelve:
+ *  se leen los tokens del tema activo y se refrescan al cambiar de tema. */
+function readPalette() {
+  return {
+    strong: cssVar("--n-100"),
+    muted: cssVar("--n-400"),
+    dim: cssVar("--n-600"),
+    warn: cssVar("--warn-400"),
+    crit: cssVar("--crit-400"),
+  };
+}
+let palette = readPalette();
+
+/** Teselas OSM estándar; el monocromo por tema lo aplica `.map-tiles` en main.css
+ *  (los estilos oscuros/claros de CARTO ya exigen API key). */
+const TILE_URL = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+const { theme } = useTheme();
 
 const props = withDefaults(
   defineProps<{ mapTool?: MapTool; fullscreen?: boolean }>(),
@@ -52,7 +78,7 @@ let emergencyLayer: L.LayerGroup | null = null;
 let weatherStationsLayer: L.LayerGroup | null = null;
 let routeLayer: L.LayerGroup | null = null;
 let companionLayer: L.LayerGroup | null = null;
-let arubaEventsLayer: L.LayerGroup | null = null;
+let externalEventsLayer: L.LayerGroup | null = null;
 
 let rafSync = 0;
 const markerAnim = new Map<string, { from: L.LatLng; to: L.LatLng; t0: number }>();
@@ -131,7 +157,7 @@ function createEntityIcon(
   }
 
   if (opts.customSvg) {
-    svg = opts.customSvg;
+    svg = sanitizeSvg(opts.customSvg);
   }
 
   const labelHtml = opts.label
@@ -190,13 +216,13 @@ function companionLabel(c: Companion): string {
 function companionPopupHtml(c: Companion, emergencyTitle: string | null) {
   const title = c.displayLabel ?? companionLabel(c);
   const typeLine = c.typeName ?? c.kind;
-  const em = emergencyTitle ? `<p style="color:#94a3b8;margin:0">Emergencia: <b>${emergencyTitle}</b></p>` : "";
-  return `<div style="font-size:11px;min-width:180px;line-height:1.5">
-    <p style="font-weight:700;margin:0 0 2px">${title}</p>
-    <p style="color:#94a3b8;margin:0">${typeLine} · ${c.status}</p>
+  const em = emergencyTitle ? `<p style="color:var(--text-3);margin:0">Emergencia: <b>${esc(emergencyTitle)}</b></p>` : "";
+  return `<div style="font-size:11px;min-width:180px;line-height:1.5;font-variant-numeric:tabular-nums">
+    <p style="font-weight:600;margin:0 0 2px">${esc(title)}</p>
+    <p style="color:var(--text-3);margin:0">${esc(typeLine)} · ${esc(c.status)}</p>
     ${em}
-    <p style="color:#94a3b8;margin:0">Vel: ${c.speedKmh} km/h</p>
-    <p style="color:#64748b;margin:4px 0 0;font-size:10px">GPS: ${c.latitude.toFixed(5)}, ${c.longitude.toFixed(5)}</p>
+    <p style="color:var(--text-3);margin:0">Vel: ${c.speedKmh} km/h</p>
+    <p style="color:var(--text-4);margin:4px 0 0;font-size:10px">GPS: ${c.latitude.toFixed(5)}, ${c.longitude.toFixed(5)}</p>
   </div>`;
 }
 
@@ -207,34 +233,31 @@ function popupHtml(label: string, amb: Ambulance) {
   const fsm = amb.fsmState ?? "—";
   const severity = amb.patientSeverity ?? "";
   const sevBadge = severity
-    ? `<span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:600;${severity === "critical" ? "background:rgba(239,68,68,.15);color:#f87171" : severity === "moderate" ? "background:rgba(245,158,11,.15);color:#fbbf24" : "background:rgba(34,197,94,.15);color:#4ade80"}">${severity}</span>`
+    ? `<span style="display:inline-block;padding:0 5px;border-radius:2px;font-size:10px;font-weight:500;font-family:var(--font-mono);text-transform:uppercase;${severity === "critical" ? "border:1px solid var(--crit-600);color:var(--crit-300)" : severity === "moderate" ? "border:1px solid var(--warn-600);color:var(--warn-300)" : "border:1px solid var(--ok-600);color:var(--ok-300)"}">${severity}</span>`
     : "";
   // Energía dinámica según powertrain del entityType
   const types = state.value?.entityTypes;
   const info = energyOf(amb, types);
-  const pt = powertrainOf(amb, types);
   const v = info.value ?? 0;
   const energyLabel = i18nT(info.labelKey);
-  const energyColor = pt === "combustion" ? "#01a982" : pt === "unique" ? "#a855f7" : "#38bdf8";
-  const lowColor = "#ef4444";
-  const energyBar = `<div style="width:100%;height:4px;background:#334155;border-radius:2px;overflow:hidden"><div style="width:${v}%;height:100%;background:${v < 20 ? lowColor : energyColor};border-radius:2px"></div></div>`;
+  const energyBar = `<div style="width:100%;height:3px;background:var(--n-700);overflow:hidden"><div style="width:${v}%;height:100%;background:${v < 20 ? "var(--crit)" : "var(--n-300)"}"></div></div>`;
   const noPatient = i18nT("operations.no_amb_focus");
   const cost = operatingCostOf(amb, types);
   const costRow = cost.available
-    ? `<p style="color:#34d399;margin:2px 0 0;font-weight:600">💶 ${i18nT("operations.operating_cost")}: ${cost.total.toFixed(2)} €
-        <span style="color:#64748b;font-weight:400">(${cost.activeMinutes.toFixed(1)} min · ${cost.ratePerMin.toFixed(2)}€/min)</span>
+    ? `<p style="color:var(--text);margin:2px 0 0;font-family:var(--font-mono)">${i18nT("operations.operating_cost")}: ${cost.total.toFixed(2)} €
+        <span style="color:var(--text-4);font-weight:400">(${cost.activeMinutes.toFixed(1)} min · ${cost.ratePerMin.toFixed(2)}€/min)</span>
        </p>`
     : "";
 
-  return `<div style="font-size:11px;min-width:180px;line-height:1.5">
-    <p style="font-weight:700;margin:0 0 2px">${label} ${sevBadge}</p>
-    <p style="color:#94a3b8;margin:0">Estado: <b>${fsm}</b></p>
-    <p style="color:#94a3b8;margin:0">GPS: ${lat.toFixed(5)}, ${lon.toFixed(5)}</p>
-    <p style="color:#94a3b8;margin:0">${i18nT("operations.speed")}: ${tel?.positioning?.speedKmh ?? "—"} km/h</p>
-    <p style="color:#94a3b8;margin:2px 0 0">${info.icon} ${energyLabel}: ${v.toFixed(0)}%</p>
+  return `<div style="font-size:11px;min-width:180px;line-height:1.5;font-variant-numeric:tabular-nums">
+    <p style="font-weight:600;margin:0 0 2px">${esc(label)} ${sevBadge}</p>
+    <p style="color:var(--text-3);margin:0">Estado: <b>${esc(fsm)}</b></p>
+    <p style="color:var(--text-3);margin:0">GPS: ${lat.toFixed(5)}, ${lon.toFixed(5)}</p>
+    <p style="color:var(--text-3);margin:0">${i18nT("operations.speed")}: ${tel?.positioning?.speedKmh ?? "—"} km/h</p>
+    <p style="color:var(--text-3);margin:2px 0 0">${info.icon} ${energyLabel}: ${v.toFixed(0)}%</p>
     ${energyBar}
     ${costRow}
-    <p style="color:#94a3b8;margin:4px 0 0">${amb.hasPatient && tel?.medical ? `BPM ${tel.medical.heartRateBpm} · SpO₂ ${tel.medical.spo2Pct}%` : noPatient}</p>
+    <p style="color:var(--text-3);margin:4px 0 0">${amb.hasPatient && tel?.medical ? `BPM ${tel.medical.heartRateBpm} · SpO₂ ${tel.medical.spo2Pct}%` : noPatient}</p>
   </div>`;
 }
 
@@ -284,8 +307,8 @@ function createCustomVehicleIcon(
     opts.selected ? "is-selected" : "",
     opts.hasPatient ? "has-patient" : "",
   ].filter(Boolean).join(" ");
-  const svg = opts.customSvg || `<span class="map-marker-emoji">${emoji}</span>`;
-  const labelHtml = opts.label ? `<span class="map-marker-label">${opts.label}</span>` : "";
+  const svg = opts.customSvg ? sanitizeSvg(opts.customSvg) : `<span class="map-marker-emoji">${emoji}</span>`;
+  const labelHtml = opts.label ? `<span class="map-marker-label">${esc(opts.label)}</span>` : "";
   return L.divIcon({
     className: "",
     html: `<div class="${cls}" style="background:${color}">${svg}${labelHtml}</div>`,
@@ -347,16 +370,16 @@ function syncLayers() {
     if (c.items.length >= CLUSTER_THRESHOLD && !selectedInCell) {
       liveClusterKeys.add(key);
       const et = entityTypeById.get(c.typeId);
-      const color = (et?.color as string) || "#01a982";
+      const color = (et?.color as string) || palette.muted;
       const emoji = iconEmojiForType(c.typeId, et?.name);
       const lat = c.latSum / c.items.length;
       const lon = c.lonSum / c.items.length;
       const icon = createClusterIcon(emoji, c.items.length, color);
       const typeName = et?.name || c.typeId;
       const popup = `<div style="font-size:11px;line-height:1.5;min-width:180px">
-        <p style="font-weight:700;margin:0 0 2px">${typeName} — base</p>
-        <p style="color:#94a3b8;margin:0">${c.items.length} unidades agrupadas</p>
-        <p style="color:#64748b;margin:4px 0 0;font-size:10px">Acércate para verlas individualmente</p>
+        <p style="font-weight:600;margin:0 0 2px">${esc(typeName)} — base</p>
+        <p style="color:var(--text-3);margin:0">${c.items.length} unidades agrupadas</p>
+        <p style="color:var(--text-4);margin:4px 0 0;font-size:10px">Acércate para verlas individualmente</p>
       </div>`;
       const existing = clusterMarkers.get(key);
       if (existing) {
@@ -405,7 +428,7 @@ function syncLayers() {
     const builtInIcon = typeId === "ambulance" || typeId === "helicopter" || typeId === "police_patrol";
     const icon = builtInIcon
       ? createEntityIcon(typeId, { selected: sel, hasPatient: !!amb.hasPatient, label })
-      : createCustomVehicleIcon(typeId, et?.name, (et?.color as string) || "#01a982", {
+      : createCustomVehicleIcon(typeId, et?.name, (et?.color as string) || palette.muted, {
           selected: sel,
           hasPatient: !!amb.hasPatient,
           label,
@@ -490,12 +513,12 @@ function syncLayers() {
         const sel = selectedAmbulanceId.value === amb.id;
         const wf = (amb as Ambulance & { weatherFactor?: number }).weatherFactor;
         const baseColor = sel
-          ? "#fbbf24"
+          ? palette.strong
           : wf != null && wf < 0.65
-            ? "#dc2626"
+            ? palette.crit
             : wf != null && wf < 0.85
-              ? "#f59e0b"
-              : "#14b8a6";
+              ? palette.warn
+              : palette.muted;
         if (existing) {
           existing.setLatLngs(latlngs);
           routeFingerprints.set(amb.id, fp);
@@ -516,12 +539,12 @@ function syncLayers() {
       const sel = selectedAmbulanceId.value === amb.id;
       const wf = (amb as Ambulance & { weatherFactor?: number }).weatherFactor;
       const baseColor = sel
-        ? "#fbbf24"
+        ? palette.strong
         : wf != null && wf < 0.65
-          ? "#dc2626"
+          ? palette.crit
           : wf != null && wf < 0.85
-            ? "#f59e0b"
-            : "#14b8a6";
+            ? palette.warn
+            : palette.muted;
       const existing = routeLines.get(amb.id);
       const prevFp = routeFingerprints.get(amb.id);
       if (existing) {
@@ -555,7 +578,7 @@ function syncLayers() {
       const shortName = p.name.length > 8 ? `${p.name.slice(0, 7)}…` : p.name;
       const emoji = p.kind === "gas_station" ? "⛽" : p.kind === "hospital" ? "🏥" : "📍";
       const sourceTag = p.source === "aruba_api" ? " · Aruba API" : "";
-      const tipText = `${emoji} ${p.name} (${et?.name ?? p.kind})${sourceTag}`;
+      const tipText = `${emoji} ${esc(p.name)} (${esc(et?.name ?? p.kind)})${sourceTag}`;
       const sig = `${p.latitude}|${p.longitude}|${p.kind}|${shortName}|${et?.iconSvg ?? ""}|${et?.color ?? ""}|${tipText}`;
       const cached = poiMarkerCache.get(p.id);
       if (cached && cached.sig === sig) continue;
@@ -587,7 +610,7 @@ function syncLayers() {
   // Weather stations
   if (weatherStationsLayer) {
     weatherStationsLayer.clearLayers();
-    const readings = (s.arubaWeather ?? {}) as Record<string, ArubaWeatherReading>;
+    const readings = (s.weatherStations ?? {}) as Record<string, WeatherReading>;
     const stations = (s.pois as Poi[]).filter((p) => p.kind === "weather_station");
     for (const st of stations) {
       const r = readings[st.id];
@@ -595,11 +618,11 @@ function syncLayers() {
       const wind = r?.wind_speed_kmh ?? 0;
       const vis = r?.visibility_km ?? 10;
       const isAlert = precip > 5 || wind > 25 || vis < 5;
-      const color = isAlert ? "#dc2626" : "#06b6d4";
+      const color = isAlert ? palette.crit : palette.muted;
       const radius = isAlert ? 8 : 5;
       const tip = r
-        ? `${isAlert ? "⚠️ " : "📡 "}${st.name ?? "Weather"} — ${r.temperature_c}°C, precip ${precip}mm, wind ${wind}km/h, vis ${vis}km`
-        : `📡 ${st.name ?? "Weather"} (no reading)`;
+        ? `${isAlert ? "⚠️ " : "📡 "}${esc(st.name ?? "Weather")} — ${r.temperature_c}°C, precip ${precip}mm, wind ${wind}km/h, vis ${vis}km`
+        : `📡 ${esc(st.name ?? "Weather")} (no reading)`;
       L.circleMarker([st.latitude, st.longitude], {
         radius,
         color,
@@ -615,7 +638,7 @@ function syncLayers() {
     emergencyLayer.clearLayers();
     for (const e of s.emergencies as Emergency[]) {
       if (e.status === "resolved") continue;
-      const isPulse = e.source === "aruba_pulse";
+      const isPulse = e.source === "external_feed";
       const icon = createEntityIcon("emergency", {
         emergencyStatus: e.status,
         isPulseSource: isPulse,
@@ -624,7 +647,7 @@ function syncLayers() {
       const typeTag = typeLabel && typeLabel !== "medical" ? ` [${typeLabel}]` : "";
       const sourceTag = isPulse ? " 📡" : "";
       const em = L.marker([e.latitude, e.longitude], { icon, zIndexOffset: 900 })
-        .bindTooltip(`${sourceTag}🚨 ${e.title}${typeTag} (${e.status})`, { permanent: false })
+        .bindTooltip(`${sourceTag}🚨 ${esc(e.title)}${esc(typeTag)} (${esc(e.status)})`, { permanent: false })
         .addTo(emergencyLayer);
       em.on("click", () => {
         if (isDeleteMode()) emit("deleteObject", "emergency", e.id);
@@ -638,10 +661,10 @@ function syncLayers() {
     for (const j of s.jams as Jam[]) {
       const latlngs = j.polygon.map((pt) => [pt[0], pt[1]] as L.LatLngExpression);
       const jp = L.polygon(latlngs, {
-        color: "#dc2626",
-        weight: 3,
-        fillColor: "#dc2626",
-        fillOpacity: 0.22,
+        color: palette.crit,
+        weight: 1.5,
+        fillColor: palette.crit,
+        fillOpacity: 0.15,
       })
         .bindTooltip("Atasco / bloqueo", { permanent: false })
         .addTo(jamLayer);
@@ -671,7 +694,7 @@ function syncLayers() {
         const m = L.marker([c.latitude, c.longitude], { icon, zIndexOffset: 800 })
           .bindPopup(popup)
           .bindTooltip(
-            `${c.kind === "helicopter" ? "🚁" : c.kind === "police_patrol" ? "🛡️" : "🔷"} ${companionLabel(c)} · ${c.typeName ?? c.kind} (${c.status})`,
+            `${c.kind === "helicopter" ? "🚁" : c.kind === "police_patrol" ? "🛡️" : "🔷"} ${esc(companionLabel(c))} · ${esc(c.typeName ?? c.kind)} (${esc(c.status)})`,
             { permanent: false },
           );
         m.on("click", () => {
@@ -686,7 +709,7 @@ function syncLayers() {
         if (c.routeCoords && c.routeCoords.length >= 2) {
           const latlngs = c.routeCoords.map((pt: [number, number]) => [pt[0], pt[1]] as L.LatLngExpression);
           L.polyline(latlngs, {
-            color: et?.color ?? (c.kind === "helicopter" ? "#06b6d4" : "#2563eb"),
+            color: et?.color ?? palette.muted,
             weight: 3,
             opacity: 0.7,
             dashArray: "8 6",
@@ -696,11 +719,11 @@ function syncLayers() {
     }
   }
 
-  // Aruba Pulse events (aruba.events topic) — out-of-band incidents.
-  if (arubaEventsLayer) {
-    arubaEventsLayer.clearLayers();
-    const arubaEvents = (s.arubaEvents ?? []) as ArubaEventMarker[];
-    for (const ev of arubaEvents) {
+  // Eventos externos (mock local o ingesta REST) — incidentes fuera de banda.
+  if (externalEventsLayer) {
+    externalEventsLayer.clearLayers();
+    const externalEvents = (s.externalEvents ?? []) as ExternalEventMarker[];
+    for (const ev of externalEvents) {
       if (ev.resolved_at) continue;
       const lat = Number(ev.latitude);
       const lon = Number(ev.longitude);
@@ -715,21 +738,21 @@ function syncLayers() {
         weight: 2,
         fillColor: color,
         fillOpacity: 0.18,
-      }).addTo(arubaEventsLayer);
-      const tip = `${eventTypeIcon(ev.type)} ${ev.title ?? ev.type} · ${ev.severity}`;
+      }).addTo(externalEventsLayer);
+      const tip = `${eventTypeIcon(ev.type)} ${esc(ev.title ?? ev.type)} · ${esc(ev.severity)}`;
       circle.bindTooltip(tip, { permanent: false });
-      circle.bindPopup(arubaEventPopup(ev));
+      circle.bindPopup(externalEventPopup(ev));
     }
   }
 }
 
 function severityColor(severity: string | undefined): string {
   switch ((severity ?? "").toLowerCase()) {
-    case "critical": return "#7f1d1d";
-    case "high": return "#dc2626";
-    case "medium": return "#f59e0b";
+    case "critical":
+    case "high": return palette.crit;
+    case "medium": return palette.warn;
     case "low":
-    default: return "#0ea5e9";
+    default: return palette.muted;
   }
 }
 
@@ -749,17 +772,16 @@ function eventTypeIcon(type: string | undefined): string {
   }
 }
 
-function arubaEventPopup(ev: ArubaEventMarker): string {
-  const escape = (v: unknown) => String(v ?? "").replace(/[<>&]/g, (c) => `&#${c.charCodeAt(0)};`);
+function externalEventPopup(ev: ExternalEventMarker): string {
   return `
     <div style="min-width:220px;max-width:300px">
-      <div style="font-weight:600">${eventTypeIcon(ev.type)} ${escape(ev.title)}</div>
-      <div style="font-size:11px;color:#64748b;margin-bottom:4px">
-        ${escape(ev.type)} · severidad ${escape(ev.severity)}
+      <div style="font-weight:600">${eventTypeIcon(ev.type)} ${esc(ev.title)}</div>
+      <div style="font-size:11px;color:var(--text-4);margin-bottom:4px">
+        ${esc(ev.type)} · severidad ${esc(ev.severity)}
       </div>
-      <div style="font-size:12px">${escape(ev.description)}</div>
-      <div style="font-size:11px;color:#64748b;margin-top:6px">
-        ${escape(ev.started_at)}${ev.radius_m ? ` · radio ${Number(ev.radius_m).toFixed(0)} m` : ""}
+      <div style="font-size:12px">${esc(ev.description)}</div>
+      <div style="font-size:11px;color:var(--text-4);margin-top:6px">
+        ${esc(ev.started_at)}${ev.radius_m ? ` · radio ${Number(ev.radius_m).toFixed(0)} m` : ""}
       </div>
     </div>
   `;
@@ -779,9 +801,18 @@ onMounted(() => {
   const initCenter = activeRegion.value?.center ?? MAP_DEFAULT_CENTER;
   const initZoom = activeRegion.value?.zoom ?? MAP_DEFAULT_ZOOM;
   map = L.map(el, { preferCanvas: true }).setView(initCenter, initZoom);
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  L.tileLayer(TILE_URL, {
     attribution: "&copy; OpenStreetMap",
+    maxZoom: 19,
+    className: "map-tiles",
   }).addTo(map);
+
+  watch(theme, () => {
+    palette = readPalette();
+    // Fuerza a repintar rutas/polígonos con la nueva paleta.
+    routeFingerprints.clear();
+    scheduleSync();
+  });
 
   watch(
     activeRegion,
@@ -805,7 +836,7 @@ onMounted(() => {
   emergencyLayer = L.layerGroup().addTo(map);
   routeLayer = L.layerGroup().addTo(map);
   companionLayer = L.layerGroup().addTo(map);
-  arubaEventsLayer = L.layerGroup().addTo(map);
+  externalEventsLayer = L.layerGroup().addTo(map);
   weatherStationsLayer = L.layerGroup().addTo(map);
 
   watch(
@@ -877,7 +908,7 @@ onUnmounted(() => {
     <div id="ambulance-map-canvas" class="absolute inset-0 z-0 h-full w-full" />
     <p
       v-if="mapTool === 'delete'"
-      class="pointer-events-none absolute right-3 top-3 z-[400] rounded bg-rose-900/90 px-3 py-1.5 text-[11px] font-semibold leading-snug text-rose-100 shadow-lg ring-1 ring-rose-500/60"
+      class="pointer-events-none absolute right-3 top-3 z-[400] rounded border border-red-500/50 bg-slate-950 px-3 py-1.5 text-[11px] font-medium leading-snug text-red-300"
     >
       Modo borrar · clica un objeto para eliminarlo (ESC sale)
     </p>

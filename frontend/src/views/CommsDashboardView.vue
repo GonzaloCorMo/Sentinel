@@ -30,9 +30,9 @@ const activeChannelLabel = computed(() => {
 const channelHealth = computed(() => {
   const net = networkStatus.value;
   return [
-    { name: "MQTT", key: "mqtt" as const, active: net.mqtt, color: "emerald", priority: 1 },
-    { name: "P2P", key: "p2p" as const, active: net.p2p, color: "sky", priority: 2 },
-    { name: "HTTP", key: "http" as const, active: net.http, color: "amber", priority: 3 },
+    { name: "MQTT", key: "mqtt" as const, active: net.mqtt, priority: 1 },
+    { name: "P2P", key: "p2p" as const, active: net.p2p, priority: 2 },
+    { name: "HTTP", key: "http" as const, active: net.http, priority: 3 },
   ];
 });
 
@@ -78,23 +78,23 @@ async function restoreAll() {
 
     <!-- Stat cards -->
     <div class="grid gap-4 md:grid-cols-3">
-      <div class="hpe-card flex items-stretch overflow-hidden">
-        <div class="w-1 shrink-0 bg-emerald-500" />
+      <div class="panel flex items-stretch overflow-hidden">
+        <div class="w-1 shrink-0 bg-green-500" />
         <div class="p-4">
           <p class="text-[10px] font-medium uppercase tracking-wider text-slate-500">{{ t('comms.active_link') }}</p>
-          <p class="mt-1 text-xl font-mono font-semibold text-emerald-400">{{ linkState }}</p>
+          <p class="mt-1 text-xl font-mono font-semibold text-green-400">{{ linkState }}</p>
         </div>
       </div>
-      <div class="hpe-card flex items-stretch overflow-hidden">
-        <div class="w-1 shrink-0" :class="networkStatus.mqtt ? 'bg-emerald-500' : 'bg-slate-600'" />
+      <div class="panel flex items-stretch overflow-hidden">
+        <div class="w-1 shrink-0" :class="networkStatus.mqtt ? 'bg-green-500' : 'bg-slate-600'" />
         <div class="p-4">
           <p class="text-[10px] font-medium uppercase tracking-wider text-slate-500">MQTT</p>
-          <p class="mt-1 text-xl font-semibold" :class="networkStatus.mqtt ? 'text-emerald-400' : 'text-slate-500'">
+          <p class="mt-1 text-xl font-semibold" :class="networkStatus.mqtt ? 'text-green-400' : 'text-slate-500'">
             {{ networkStatus.mqtt ? t('comms.enabled') : t('comms.off') }}
           </p>
         </div>
       </div>
-      <div class="hpe-card flex items-stretch overflow-hidden">
+      <div class="panel flex items-stretch overflow-hidden">
         <div class="w-1 shrink-0" :class="networkStatus.p2p || networkStatus.http ? 'bg-amber-500' : 'bg-slate-600'" />
         <div class="p-4">
           <p class="text-[10px] font-medium uppercase tracking-wider text-slate-500">{{ t('comms.p2p_http') }}</p>
@@ -121,7 +121,7 @@ async function restoreAll() {
     </div>
 
     <!-- Controles toggle de canales -->
-    <div class="hpe-card p-4">
+    <div class="panel p-4">
       <div class="mb-3 flex items-center justify-between">
         <div>
           <p class="text-[10px] font-medium uppercase tracking-wider text-slate-500">{{ t('comms.channel_controls') }}</p>
@@ -142,13 +142,13 @@ async function restoreAll() {
           :key="ch.key"
           class="flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5"
           :class="ch.active
-            ? `border-${ch.color}-500/40 bg-${ch.color}-950/25`
+            ? 'border-slate-700 bg-slate-900'
             : 'border-slate-700/60 bg-slate-950/40'"
         >
           <div class="flex items-center gap-2">
             <span
               class="h-3 w-3 rounded-full"
-              :class="ch.active ? `bg-${ch.color}-400 shadow-sm shadow-${ch.color}-500/40` : 'bg-slate-600'"
+              :class="ch.active ? 'bg-green-400' : 'bg-slate-600'"
             />
             <div>
               <p class="text-sm font-semibold" :class="ch.active ? 'text-slate-100' : 'text-slate-400'">
@@ -161,8 +161,8 @@ async function restoreAll() {
             type="button"
             class="rounded-lg border px-3 py-1.5 text-xs font-medium transition disabled:opacity-40"
             :class="ch.active
-              ? 'border-rose-500/40 bg-rose-600/15 text-rose-300 hover:bg-rose-600/30'
-              : 'border-emerald-500/40 bg-emerald-600/15 text-emerald-300 hover:bg-emerald-600/30'"
+              ? 'border-slate-700 text-slate-300 hover:bg-slate-800'
+              : 'border-slate-700 text-slate-100 hover:bg-slate-800'"
             :disabled="busy[ch.key]"
             @click="toggleChannel(ch.key)"
           >
@@ -173,7 +173,7 @@ async function restoreAll() {
     </div>
 
     <!-- Channel health bar -->
-    <div class="hpe-card p-4">
+    <div class="panel p-4">
       <p class="mb-3 text-[10px] font-medium uppercase tracking-wider text-slate-500">{{ t('comms.channel_health') }}</p>
       <div class="flex gap-3">
         <div
@@ -181,12 +181,12 @@ async function restoreAll() {
           :key="ch.key"
           class="flex flex-1 items-center gap-2 rounded-lg border px-3 py-2"
           :class="ch.active
-            ? `border-${ch.color}-500/30 bg-${ch.color}-950/20`
+            ? 'border-slate-700 bg-slate-900'
             : 'border-slate-700/50 bg-slate-950/30'"
         >
           <span
             class="h-2.5 w-2.5 rounded-full"
-            :class="ch.active ? `bg-${ch.color}-400` : 'bg-slate-600'"
+            :class="ch.active ? 'bg-green-400' : 'bg-slate-600'"
           />
           <span class="text-xs font-medium" :class="ch.active ? 'text-slate-200' : 'text-slate-500'">
             {{ ch.name }}
@@ -194,7 +194,7 @@ async function restoreAll() {
           <span
             class="ml-auto rounded-md px-1.5 py-0.5 text-[9px] font-semibold uppercase"
             :class="ch.active
-              ? `bg-${ch.color}-600/20 text-${ch.color}-300`
+              ? 'bg-green-500/15 text-green-300'
               : 'bg-slate-800 text-slate-500'"
           >
             {{ ch.active ? 'ON' : 'OFF' }}
@@ -205,10 +205,10 @@ async function restoreAll() {
 
     <!-- Activity table -->
     <div
-      class="max-h-[min(520px,60vh)] overflow-auto rounded-xl border border-slate-700/50 bg-slate-950/80 font-mono text-xs"
+      class="max-h-[min(520px,60vh)] overflow-auto rounded-xl border border-slate-700/50 bg-slate-950 font-mono text-xs"
     >
       <table class="w-full border-collapse text-left">
-        <thead class="sticky top-0 bg-slate-900/95 text-[10px] font-semibold uppercase tracking-wider text-slate-500 backdrop-blur-sm">
+        <thead class="sticky top-0 bg-slate-900 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
           <tr>
             <th class="p-2.5">#</th>
             <th class="p-2.5">{{ t('comms.col_time') }}</th>
@@ -228,12 +228,12 @@ async function restoreAll() {
           >
             <td class="p-2.5 text-slate-600">{{ r.seq }}</td>
             <td class="p-2.5 text-slate-400">{{ r.at }}</td>
-            <td class="p-2.5 font-semibold" :class="r.ok ? 'text-emerald-400' : 'text-rose-400'">{{ r.channel }}</td>
+            <td class="p-2.5 font-semibold" :class="r.ok ? 'text-green-400' : 'text-red-400'">{{ r.channel }}</td>
             <td class="p-2.5 text-slate-300">{{ r.latencyMs }}</td>
             <td class="p-2.5 text-slate-500">{{ r.tick }}</td>
             <td class="max-w-[200px] truncate p-2.5 text-slate-400" :title="r.summary">{{ r.summary }}</td>
             <td class="p-2.5">
-              <span v-if="r.ok" class="text-emerald-400">✓</span>
+              <span v-if="r.ok" class="text-green-400">✓</span>
               <span v-else class="text-rose-400">✗</span>
             </td>
           </tr>

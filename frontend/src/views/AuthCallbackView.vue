@@ -41,17 +41,52 @@ onMounted(async () => {
 
 <template>
   <div class="wrap">
-    <p v-if="error" class="err">{{ error }}</p>
-    <p v-else>{{ t('auth_callback.verifying') }}</p>
+    <div class="box" role="status" aria-live="polite">
+      <span v-if="!error" class="spinner" aria-hidden="true" />
+      <p v-if="error" class="err">{{ error }}</p>
+      <p v-else class="msg">{{ t('auth_callback.verifying') }}</p>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .wrap {
-  padding: 2rem;
-  font-family: system-ui, sans-serif;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+}
+.box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  font-size: 13px;
+}
+.msg {
+  margin: 0;
+  color: var(--text-2);
 }
 .err {
-  color: #b91c1c;
+  margin: 0;
+  color: var(--crit);
+}
+.spinner {
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid var(--border-strong);
+  border-top-color: var(--text);
+  border-radius: 50%;
+  animation: cb-spin 0.7s linear infinite;
+}
+@keyframes cb-spin {
+  to { transform: rotate(360deg); }
 }
 </style>

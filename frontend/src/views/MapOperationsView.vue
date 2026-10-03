@@ -60,33 +60,6 @@ const { currentBuilderTool, placeEntityId } = storeToRefs(builder);
 
 const incidentCount = ref(5);
 const showIncidentGen = ref(false);
-// Modo backup: replay eventos Kafka de un día concreto.
-const showBackup = ref(false);
-const backupDate = ref<string>(new Date().toISOString().slice(0, 10));
-const backupBusy = ref(false);
-const backupShowAll = ref(true);
-const backupNaturalSpeed = ref(60);
-const backupStatus = computed<any>(() => (state.value as any)?.backupStatus ?? {});
-
-async function startBackup() {
-  if (!backupDate.value) return;
-  backupBusy.value = true;
-  try {
-    await store.startBackupReplay(backupDate.value, backupShowAll.value, backupNaturalSpeed.value);
-    toast.success(t("operations.backup_running", { events: 0, weather: 0, scanned: 0 }));
-  } catch (e) {
-    toast.error(t("operations.backup_error", { err: e instanceof Error ? e.message : String(e) }));
-  } finally {
-    backupBusy.value = false;
-  }
-}
-async function stopBackup() {
-  try {
-    await store.stopBackupReplay();
-  } catch (e) {
-    toast.error(t("operations.backup_error", { err: e instanceof Error ? e.message : String(e) }));
-  }
-}
 const aiGenTab = ref<"incidents" | "scenario">("incidents");
 const generatingScenario = ref(false);
 
@@ -721,7 +694,7 @@ async function onMapClick(lat: number, lng: number) {
               v-model="objectSearch"
               type="search"
               :placeholder="t('operations.search_palette')"
-              class="ml-auto min-w-[7rem] flex-1 rounded-lg border border-slate-700/80 bg-slate-950/80 px-2.5 py-1.5 text-xs text-slate-200 outline-none placeholder:text-slate-600 focus:border-emerald-500/40"
+              class="ml-auto min-w-[7rem] flex-1 rounded-lg border border-slate-700/80 bg-slate-950 px-2.5 py-1.5 text-xs text-slate-200 outline-none placeholder:text-slate-600 focus:border-emerald-500/40"
             />
           </div>
           <!-- Modo de colocación: 1 unidad | base N -->
@@ -751,7 +724,7 @@ async function onMapClick(lat: number, lng: number) {
               type="number"
               min="1"
               max="20"
-              class="w-14 rounded-md border border-slate-700 bg-slate-900/80 px-2 py-0.5 text-center text-xs text-slate-200 focus:border-emerald-500/40 focus:outline-none"
+              class="w-14 rounded-md border border-slate-700 bg-slate-900 px-2 py-0.5 text-center text-xs text-slate-200 focus:border-emerald-500/40 focus:outline-none"
               :title="t('operations.base_count_tooltip')"
             />
             <span v-if="placementMode === 'base'" class="text-slate-500">{{ t('controls.tools.ambulance').toLowerCase() }}</span>
@@ -788,7 +761,7 @@ async function onMapClick(lat: number, lng: number) {
               class="flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[11px] transition hover:bg-slate-800/80"
               :class="
                 isVehicleEntityActive(et.id)
-                  ? 'border-emerald-500/60 bg-emerald-950/30 text-emerald-100 shadow-sm shadow-emerald-900/40'
+                  ? 'border-emerald-500/60 bg-emerald-950/30 text-emerald-100'
                   : 'border-slate-700/80 text-slate-300'
               "
               :title="et.description ?? `Colocar unidad: ${et.name}`"
@@ -798,12 +771,12 @@ async function onMapClick(lat: number, lng: number) {
               <span class="font-medium">{{ et.name }}</span>
               <span
                 v-if="countFor(et.id) > 0"
-                class="ml-0.5 rounded-full bg-slate-800/90 px-1.5 text-[9px] font-bold text-emerald-300 ring-1 ring-emerald-700/40"
+                class="ml-0.5 rounded-sm bg-slate-800/90 px-1.5 text-[9px] font-bold text-emerald-300 ring-1 ring-emerald-700/40"
                 :title="t('operations.active_count_tooltip')"
               >{{ countFor(et.id) }}</span>
               <span
                 v-if="!et.builtIn"
-                class="ml-0.5 rounded-full bg-purple-500/15 px-1 text-[9px] font-semibold text-purple-300"
+                class="ml-0.5 rounded-sm bg-purple-500/15 px-1 text-[9px] font-semibold text-purple-300"
                 title="Tipo personalizado o generado por IA"
               >·</span>
             </button>
@@ -828,7 +801,7 @@ async function onMapClick(lat: number, lng: number) {
               <span class="font-medium text-slate-200">{{ et.name }}</span>
               <span
                 v-if="placeCountFor(et.id) > 0"
-                class="ml-1 rounded-full bg-slate-800/90 px-1.5 text-[9px] font-bold text-violet-300 ring-1 ring-violet-700/40"
+                class="ml-1 rounded-sm bg-slate-800/90 px-1.5 text-[9px] font-bold text-violet-300 ring-1 ring-violet-700/40"
                 title="Lugares activos de este tipo"
               >{{ placeCountFor(et.id) }}</span>
               <span v-if="!et.builtIn" class="ml-1 text-[9px] text-purple-400">IA</span>
@@ -846,14 +819,14 @@ async function onMapClick(lat: number, lng: number) {
             <input
               v-model="emergencyTitle"
               type="text"
-              class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-slate-200 outline-none transition focus:border-emerald-500/50"
+              class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200 outline-none transition focus:border-emerald-500/50"
             />
           </div>
           <div class="min-w-[9rem]">
             <label class="text-[11px] font-medium text-slate-400">{{ t('operations.emergency_type_label') }}</label>
             <select
               v-model="emergencyType"
-              class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-slate-200 outline-none transition focus:border-emerald-500/50"
+              class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200 outline-none transition focus:border-emerald-500/50"
             >
               <option value="medical">🏥 Medica</option>
               <option value="altercation">⚔️ Altercado</option>
@@ -866,7 +839,7 @@ async function onMapClick(lat: number, lng: number) {
               v-model="emergencyDescription"
               rows="2"
               :placeholder="t('operations.emergency_desc_placeholder')"
-              class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-slate-200 outline-none transition focus:border-emerald-500/50 resize-none"
+              class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200 outline-none transition focus:border-emerald-500/50 resize-none"
             />
           </div>
         </div>
@@ -876,7 +849,7 @@ async function onMapClick(lat: number, lng: number) {
             v-model="hospitalName"
             type="text"
             :placeholder="t('operations.hospital_name_placeholder')"
-            class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-slate-200 outline-none transition focus:border-emerald-500/50"
+            class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200 outline-none transition focus:border-emerald-500/50"
           />
         </div>
         <div v-if="currentBuilderTool === 'add_gas_station'" class="mt-3 max-w-xs">
@@ -885,7 +858,7 @@ async function onMapClick(lat: number, lng: number) {
             v-model="gasStationName"
             type="text"
             :placeholder="t('operations.gas_name_placeholder')"
-            class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-slate-200 outline-none transition focus:border-emerald-500/50"
+            class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200 outline-none transition focus:border-emerald-500/50"
           />
         </div>
         <div v-if="currentBuilderTool === 'add_place' && placeEntityId" class="mt-3 max-w-md">
@@ -894,7 +867,7 @@ async function onMapClick(lat: number, lng: number) {
             v-model="customPlaceName"
             type="text"
             :placeholder="state?.entityTypes?.find((x) => x.id === placeEntityId)?.name ?? t('operations.place_name_placeholder')"
-            class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-slate-200 outline-none transition focus:border-emerald-500/50"
+            class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200 outline-none transition focus:border-emerald-500/50"
           />
         </div>
       </div>
@@ -913,7 +886,7 @@ async function onMapClick(lat: number, lng: number) {
         <div class="relative flex min-h-0 min-w-0 flex-1 flex-col">
           <button
             type="button"
-            class="absolute right-3 top-3 z-[420] flex items-center gap-1.5 rounded-xl border border-slate-600/50 bg-slate-950/90 px-3 py-1.5 text-xs font-medium text-slate-300 shadow-lg backdrop-blur-sm transition hover:bg-slate-800 hover:text-white"
+            class="absolute right-3 top-3 z-[420] flex items-center gap-1.5 rounded-xl border border-slate-600/50 bg-slate-950 px-3 py-1.5 text-xs font-medium text-slate-300 shadow-lg transition hover:bg-slate-800 hover:text-slate-100"
             @click="toggleMapFullscreen"
           >
             <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -940,7 +913,7 @@ async function onMapClick(lat: number, lng: number) {
               v-if="filteredMatches.length || (Object.keys(uiFilters || {}).length && filterTotal)"
               class="pointer-events-none absolute bottom-4 left-1/2 z-[400] w-[min(560px,calc(100%-2rem))] -translate-x-1/2"
             >
-              <div class="pointer-events-auto rounded-2xl border border-purple-500/40 bg-slate-950/90 backdrop-blur-md shadow-2xl">
+              <div class="pointer-events-auto rounded-2xl border border-purple-500/40 bg-slate-950 shadow-2xl">
                 <div class="flex items-center justify-between gap-3 border-b border-purple-500/20 px-4 py-2">
                   <div class="flex items-center gap-2">
                     <span class="relative flex h-2.5 w-2.5">
@@ -954,7 +927,7 @@ async function onMapClick(lat: number, lng: number) {
                     </span>
                   </div>
                   <button
-                    class="text-[11px] text-purple-300/80 hover:text-white"
+                    class="text-[11px] text-purple-300/80 hover:text-slate-100"
                     @click="store.clearUiFilters()"
                   >Limpiar filtro ✕</button>
                 </div>
@@ -994,17 +967,17 @@ async function onMapClick(lat: number, lng: number) {
                de todas las unidades con powertrain catalogado. -->
           <div
             v-if="fleetCost.total > 0"
-            class="rounded-xl border border-emerald-500/30 bg-gradient-to-br from-emerald-950/40 to-slate-900 px-3 py-2.5 shadow-sm"
+            class="rounded border border-slate-800 bg-slate-950 px-3 py-2.5"
           >
             <div class="flex items-center justify-between">
-              <span class="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-400/80">
-                💶 {{ t('operations.operating_cost_fleet') }}
+              <span class="text-[10px] font-medium uppercase tracking-wider text-slate-500">
+                {{ t('operations.operating_cost_fleet') }}
               </span>
-              <span class="font-mono text-base font-bold text-emerald-300">
+              <span class="font-mono text-base font-semibold text-slate-100">
                 {{ fleetCost.total.toFixed(2) }} €
               </span>
             </div>
-            <div class="mt-1 flex items-center justify-between text-[10px] text-slate-500">
+            <div class="mt-1 flex items-center justify-between font-mono text-[10px] text-slate-500">
               <span>{{ t('operations.active_units', { n: fleetCost.activeUnits }) }}</span>
               <span>
                 {{ fleetCost.activation.toFixed(0) }}€ act · {{ fleetCost.runtime.toFixed(2) }}€ tiempo
@@ -1016,7 +989,7 @@ async function onMapClick(lat: number, lng: number) {
             <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-emerald-400/70" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
             </svg>
-            Telemetria rapida
+            Telemetría rápida
           </h3>
 
           <template v-if="state?.ambulances?.length || (state?.companions?.length ?? 0) > 0">
@@ -1025,7 +998,7 @@ async function onMapClick(lat: number, lng: number) {
                 <label class="text-[10px] font-medium text-slate-500">Ambulancia (SVB)</label>
                 <select
                   :value="selectedAmbulanceId ?? ''"
-                  class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-slate-200 outline-none"
+                  class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200 outline-none"
                   @change="onTelemetryAmbulanceChange"
                 >
                   <option value="">{{ t('operations.no_amb_focus') }}</option>
@@ -1182,7 +1155,7 @@ async function onMapClick(lat: number, lng: number) {
               <label class="text-[10px] font-medium text-slate-500">Unidad de apoyo (mapa)</label>
               <select
                 :value="selectedCompanionId ?? ''"
-                class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-slate-200 outline-none"
+                class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200 outline-none"
                 @change="onTelemetryCompanionChange"
               >
                 <option value="">{{ t('operations.no_companion_focus') }}</option>
@@ -1194,10 +1167,10 @@ async function onMapClick(lat: number, lng: number) {
                 <p class="font-mono text-sm text-emerald-200">{{ selectedCompanion.displayLabel ?? selectedCompanion.kind }}</p>
                 <p>{{ selectedCompanion.typeName ?? selectedCompanion.kind }} — {{ selectedCompanion.status }}</p>
                 <p>Velocidad: {{ selectedCompanion.speedKmh }} km/h</p>
-                <p v-if="state.emergencies.find((e) => e.id === selectedCompanion.assignedEmergencyId)">
+                <p v-if="state.emergencies.find((e) => e.id === selectedCompanion?.assignedEmergencyId)">
                   Emergencia:
                   <span class="text-slate-200">{{
-                    state.emergencies.find((e) => e.id === selectedCompanion.assignedEmergencyId)?.title
+                    state.emergencies.find((e) => e.id === selectedCompanion?.assignedEmergencyId)?.title
                   }}</span>
                 </p>
                 <p class="font-mono text-slate-500">
@@ -1212,102 +1185,16 @@ async function onMapClick(lat: number, lng: number) {
 
       <!-- Toolbar: solo acciones rápidas (colocación de objetos va en la paleta superior) -->
       <div
-        class="flex shrink-0 flex-wrap items-center justify-center gap-1.5 border-t border-slate-800/60 bg-slate-950/95 px-3 py-2.5 backdrop-blur-sm"
+        class="flex shrink-0 flex-wrap items-center justify-center gap-1.5 border-t border-slate-800/60 bg-slate-950 px-3 py-2.5"
       >
         <span class="mr-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">{{ t('operations.quick_actions') }}</span>
-
-        <!-- Modo Backup (replay Kafka día) -->
-        <div class="relative">
-          <button
-            type="button"
-            class="flex items-center gap-1.5 rounded-xl border border-amber-600/40 px-3 py-2 text-[11px] font-medium text-amber-300 transition-all hover:bg-amber-950/30"
-            :class="showBackup ? 'bg-amber-950/40 ring-1 ring-amber-500/30' : ''"
-            @click="showBackup = !showBackup"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            {{ t('operations.backup_title') }}
-          </button>
-          <div
-            v-if="showBackup"
-            class="absolute bottom-full left-0 mb-2 z-[500] w-80 rounded-xl border border-slate-700/70 bg-slate-900/95 p-4 shadow-2xl backdrop-blur-sm"
-          >
-            <h4 class="text-xs font-semibold text-amber-400 mb-1">{{ t('operations.backup_title') }}</h4>
-            <p class="text-[10px] text-slate-500 mb-3">{{ t('operations.backup_desc') }}</p>
-            <label class="block text-[10px] font-medium text-slate-400 mb-1">{{ t('operations.backup_date') }}</label>
-            <input
-              v-model="backupDate"
-              type="date"
-              min="2026-04-01"
-              class="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 focus:border-amber-500 focus:outline-none"
-            />
-            <p class="mt-1 text-[9px] text-slate-600">{{ t('operations.backup_min_date') }}</p>
-            <div class="mt-3 rounded-lg border border-slate-700/60 bg-slate-800/40 p-2.5">
-              <label class="flex items-center gap-2 cursor-pointer">
-                <input
-                  v-model="backupShowAll"
-                  type="checkbox"
-                  class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-amber-500 focus:ring-amber-500"
-                />
-                <span class="text-[11px] font-medium text-slate-200">{{ t('operations.backup_show_all_label') }}</span>
-              </label>
-              <p class="mt-1 ml-6 text-[9px] text-slate-500">
-                {{ backupShowAll ? t('operations.backup_show_all_help_on') : t('operations.backup_show_all_help_off') }}
-              </p>
-              <div v-if="!backupShowAll" class="mt-2 ml-6 flex items-center gap-2">
-                <label class="text-[9px] text-slate-400">{{ t('operations.backup_speed') }}</label>
-                <input
-                  v-model.number="backupNaturalSpeed"
-                  type="number"
-                  min="1"
-                  max="3600"
-                  step="10"
-                  class="w-20 rounded border border-slate-700 bg-slate-900 px-2 py-0.5 text-[11px] text-slate-200 focus:border-amber-500 focus:outline-none"
-                />
-                <span class="text-[9px] text-slate-500">×</span>
-              </div>
-            </div>
-            <div class="mt-3 flex gap-2">
-              <button
-                v-if="!backupStatus.running"
-                class="flex-1 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-500 disabled:opacity-50"
-                :disabled="backupBusy || !backupDate"
-                @click="startBackup"
-              >{{ t('operations.backup_start') }}</button>
-              <button
-                v-else
-                class="flex-1 rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-500"
-                @click="stopBackup"
-              >{{ t('operations.backup_stop') }}</button>
-            </div>
-            <p class="mt-2 text-[9px] text-slate-600 italic">{{ t('operations.backup_topics') }}</p>
-            <div v-if="backupStatus.running" class="mt-3 rounded-lg border border-amber-500/30 bg-amber-950/20 px-2.5 py-1.5 text-[10px] text-amber-200">
-              {{ t('operations.backup_running', {
-                events: backupStatus.ingestedEvents ?? 0,
-                weather: backupStatus.ingestedWeather ?? 0,
-                scanned: backupStatus.scanned ?? 0
-              }) }}
-            </div>
-            <div v-else-if="backupStatus.finishedAt && !backupStatus.error" class="mt-3 rounded-lg border border-emerald-500/30 bg-emerald-950/20 px-2.5 py-1.5 text-[10px] text-emerald-200">
-              {{ t('operations.backup_done', {
-                events: backupStatus.ingestedEvents ?? 0,
-                weather: backupStatus.ingestedWeather ?? 0,
-                day: backupStatus.day ?? ''
-              }) }}
-            </div>
-            <div v-else-if="backupStatus.error" class="mt-3 rounded-lg border border-rose-500/30 bg-rose-950/20 px-2.5 py-1.5 text-[10px] text-rose-200">
-              {{ t('operations.backup_error', { err: backupStatus.error }) }}
-            </div>
-          </div>
-        </div>
 
         <!-- Incident generator -->
         <div class="relative">
           <button
             type="button"
             :title="t('operations.ai_incidents_tooltip')"
-            class="flex items-center gap-1.5 rounded-xl border border-purple-600/40 px-3 py-2 text-[11px] font-medium text-purple-400 transition-all hover:bg-purple-950/30"
+            class="flex items-center gap-1.5 rounded-xl border border-purple-600/40 px-3 py-2 text-[11px] font-medium text-purple-400 transition-colors hover:bg-purple-950/30"
             :class="showIncidentGen ? 'bg-purple-950/40 ring-1 ring-purple-500/30' : ''"
             @click="showIncidentGen = !showIncidentGen"
           >
@@ -1318,7 +1205,7 @@ async function onMapClick(lat: number, lng: number) {
           </button>
           <div
             v-if="showIncidentGen"
-            class="absolute bottom-full right-0 mb-2 z-[500] w-80 rounded-xl border border-slate-700/70 bg-slate-900/95 p-4 shadow-2xl backdrop-blur-sm"
+            class="absolute bottom-full right-0 mb-2 z-[500] w-80 rounded-xl border border-slate-700/70 bg-slate-900 p-4 shadow-2xl"
           >
             <h4 class="text-xs font-semibold text-purple-400 mb-2">{{ t('controls.generate_scenario') }}</h4>
             <div class="mb-3 flex rounded-lg border border-slate-700/80 p-0.5 text-[10px] font-medium">
@@ -1350,7 +1237,7 @@ async function onMapClick(lat: number, lng: number) {
                   />
                 </div>
                 <button
-                  class="rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-purple-500 disabled:opacity-50 whitespace-nowrap"
+                  class="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-950 transition hover:bg-slate-300 disabled:opacity-50 whitespace-nowrap"
                   :disabled="entities.loading"
                   @click="generateIncidents"
                 >
@@ -1414,7 +1301,7 @@ async function onMapClick(lat: number, lng: number) {
                 Resetear escenario antes de generar
               </label>
               <button
-                class="w-full rounded-lg bg-purple-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-purple-500 disabled:opacity-50"
+                class="w-full rounded-lg bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-950 transition hover:bg-slate-300 disabled:opacity-50"
                 :disabled="generatingScenario"
                 @click="generateFullScenario"
               >

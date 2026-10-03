@@ -235,26 +235,6 @@ export const useSimulationStore = defineStore("simulation", () => {
     await fetchState();
   }
 
-  /** Backup replay: reproduce eventos Kafka de un día concreto. */
-  async function startBackupReplay(date: string, showAll = true, naturalSpeed = 60) {
-    const r = await fetch("/api/sim/backup/replay", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ date, showAll, naturalSpeed }),
-    });
-    await ensureOk(r, "Error iniciando backup");
-    return r.json();
-  }
-  async function stopBackupReplay() {
-    const r = await fetch("/api/sim/backup/stop", { method: "POST" });
-    await ensureOk(r, "Error parando backup");
-  }
-  async function fetchBackupStatus() {
-    const r = await fetch("/api/sim/backup/status");
-    if (!r.ok) return null;
-    return r.json();
-  }
-
   /** Toggle canales de comms (MQTT / P2P / HTTP). El motor degrada al
    *  siguiente canal disponible y mantiene telemetría/comandos. */
   async function setNetwork(net: { mqtt: boolean; p2p: boolean; http: boolean }) {
@@ -453,9 +433,6 @@ export const useSimulationStore = defineStore("simulation", () => {
     teardownStreams,
     postControl,
     setNetwork,
-    startBackupReplay,
-    stopBackupReplay,
-    fetchBackupStatus,
     setMotorState,
     startSimulation,
     spawnAmbulance,

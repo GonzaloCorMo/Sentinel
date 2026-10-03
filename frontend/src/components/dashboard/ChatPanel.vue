@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { marked } from "marked";
+import { sanitizeHtml } from "@/lib/sanitize";
 import { computed, nextTick, onMounted, ref } from "vue";
 import { toast } from "vue-sonner";
 import { useI18n } from "vue-i18n";
@@ -21,7 +22,7 @@ const messages = ref<ChatMessage[]>([]);
 const streaming = ref(false);
 const chatBody = ref<HTMLDivElement | null>(null);
 
-const SESSION_KEY = "hpe-sentinel-chat-session";
+const SESSION_KEY = "sentinel.chat-session";
 
 // crypto.randomUUID() requires a secure context (https/localhost). When the
 // dashboard is opened over a LAN IP without TLS the browser does not expose
@@ -53,7 +54,7 @@ function getSessionId(): string {
 }
 
 function renderMd(text: string): string {
-  return marked.parse(text, { async: false }) as string;
+  return sanitizeHtml(marked.parse(text, { async: false }) as string);
 }
 
 const hasMessages = computed(() => messages.value.length > 0);
@@ -267,7 +268,7 @@ onMounted(loadHistory);
     <!-- Collapsed bubble -->
     <button
       v-if="!expanded"
-      class="group relative flex h-12 w-12 items-center justify-center rounded-full bg-emerald-600 text-white shadow-lg shadow-emerald-900/40 transition-all hover:bg-emerald-500 hover:scale-110 hover:shadow-emerald-900/60"
+      class="group relative flex h-10 w-10 items-center justify-center rounded border border-slate-700 bg-slate-100 text-slate-950 transition-colors hover:bg-slate-300"
       :title="t('chat_panel.title')"
       @click="expanded = true"
     >
@@ -289,13 +290,13 @@ onMounted(loadHistory);
       style="max-height: min(520px, 70vh)"
     >
       <!-- Header -->
-      <div class="flex items-center justify-between border-b border-slate-800 bg-slate-950/80 px-4 py-2.5">
+      <div class="flex items-center justify-between border-b border-slate-800 bg-slate-950 px-4 py-2.5">
         <div class="flex items-center gap-2.5">
-          <div class="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-600 text-xs font-bold text-white">AI</div>
+          <div class="flex h-7 w-7 items-center justify-center rounded bg-slate-100 text-xs font-bold text-slate-950">AI</div>
           <div>
-            <span class="text-sm font-semibold text-slate-100">HPE Sentinel AI</span>
-            <span class="ml-2 inline-flex items-center gap-1 text-[10px] text-emerald-400">
-              <span class="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+            <span class="text-sm font-semibold text-slate-100">Sentinel AI</span>
+            <span class="ml-2 inline-flex items-center gap-1 text-[10px] text-green-400">
+              <span class="h-1.5 w-1.5 rounded-full bg-green-400" />
               Online
             </span>
           </div>
@@ -343,7 +344,7 @@ onMounted(loadHistory);
             class="max-w-[85%] rounded-xl px-3 py-2 text-sm leading-relaxed"
             :class="
               msg.role === 'user'
-                ? 'bg-emerald-600 text-white rounded-br-sm'
+                ? 'bg-slate-100 text-slate-950 rounded-br-sm'
                 : 'bg-slate-800 text-slate-200 rounded-bl-sm border border-slate-700/50'
             "
           >
@@ -388,7 +389,7 @@ onMounted(loadHistory);
           />
           <button
             :disabled="streaming || !input.trim()"
-            class="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-600 text-white transition hover:bg-emerald-500 disabled:opacity-30 disabled:hover:bg-emerald-600"
+            class="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-950 transition hover:bg-slate-300 disabled:opacity-30 disabled:hover:bg-slate-100"
             @click="sendMessage"
           >
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -410,11 +411,11 @@ onMounted(loadHistory);
   margin: 0.25em 0;
 }
 .chat-md :deep(pre) {
-  background: #0f172a;
-  color: #e2e8f0;
+  background: var(--bg);
+  color: var(--text);
   padding: 0.5em 0.75em;
   border-radius: 0.5rem;
-  border: 1px solid rgba(51, 65, 85, 0.5);
+  border: 1px solid var(--border);
   overflow-x: auto;
   font-size: 0.8em;
   margin: 0.5em 0;
@@ -423,6 +424,7 @@ onMounted(loadHistory);
   font-size: 0.85em;
 }
 .chat-md :deep(a) {
-  color: #01a982;
+  color: var(--text);
+  text-decoration: underline;
 }
 </style>

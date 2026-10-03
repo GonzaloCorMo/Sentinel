@@ -5,8 +5,10 @@ import { useI18n } from "vue-i18n";
 import { getSupabase, isSupabaseConfigured } from "@/lib/supabase";
 import { evaluatePassword } from "@/lib/passwordStrength";
 import { ROLE_LABELS, ROLES, currentRole, roleHome, type UserRole } from "@/lib/auth";
+import { useTheme } from "@/composables/useTheme";
 
 const { t } = useI18n();
+const { theme, toggleTheme } = useTheme();
 
 type View = "login" | "register" | "forgot";
 
@@ -59,14 +61,6 @@ function removeToast(id: number) {
     if (i > -1) toasts.value.splice(i, 1);
   }, 300);
 }
-
-const particles = Array.from({ length: 20 }, (_, i) => ({
-  id: i,
-  x: Math.random() * 100,
-  size: 2 + Math.random() * 2,
-  dur: 10 + Math.random() * 15,
-  del: Math.random() * 12,
-}));
 
 const configured = computed(() => isSupabaseConfigured());
 const redirectTo = computed(() =>
@@ -212,24 +206,7 @@ async function handleForgot() {
 </script>
 
 <template>
-  <div class="hpe-auth">
-    <!-- Fondo -->
-    <div class="bg-canvas">
-      <div class="grid-overlay" />
-      <div
-        v-for="p in particles"
-        :key="p.id"
-        class="particle"
-        :style="{
-          left: p.x + '%',
-          width: p.size + 'px',
-          height: p.size + 'px',
-          animationDuration: p.dur + 's',
-          animationDelay: p.del + 's',
-        }"
-      />
-    </div>
-
+  <div class="auth">
     <!-- Toasts -->
     <div class="toast-container">
       <div
@@ -253,13 +230,8 @@ async function handleForgot() {
       <!-- Panel izquierdo -->
       <div class="brand-panel">
         <div class="brand-logo">
-          <svg viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect width="44" height="44" rx="10" fill="rgba(1,169,130,0.12)" />
-            <rect x="8" y="14" width="8" height="16" rx="2" fill="#01A982" opacity="0.5" />
-            <rect x="18" y="10" width="8" height="24" rx="2" fill="#01A982" />
-            <rect x="28" y="16" width="8" height="12" rx="2" fill="#01A982" opacity="0.5" />
-          </svg>
-          <div class="brand-logo-text">HPE <span>Sentinel</span></div>
+          <svg viewBox="0 0 64 64" width="28" height="28" aria-hidden="true"><rect x="17" y="17" width="30" height="30" fill="none" stroke="currentColor" stroke-width="3"/><rect x="28" y="28" width="8" height="8" fill="currentColor"/></svg>
+          <div class="brand-logo-text">Sentinel</div>
         </div>
 
         <h1 class="brand-tagline" v-html="t('auth.tagline_html')" />
@@ -292,9 +264,20 @@ async function handleForgot() {
 
       <!-- Panel derecho -->
       <div class="login-panel">
-        <div class="status-badge">
-          <div class="status-dot" />
-          {{ t('auth.all_systems_ok') }}
+        <div class="panel-top">
+          <div class="status-badge">
+            <span class="status-dot" />
+            {{ t('auth.all_systems_ok') }}
+          </div>
+          <button
+            type="button"
+            class="theme-toggle"
+            :aria-label="theme === 'dark' ? 'Tema claro' : 'Tema oscuro'"
+            :title="theme === 'dark' ? 'Tema claro' : 'Tema oscuro'"
+            @click="toggleTheme"
+          >
+            <i :class="theme === 'dark' ? 'fas fa-sun' : 'fas fa-moon'" />
+          </button>
         </div>
 
         <div class="login-card">

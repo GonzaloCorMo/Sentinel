@@ -78,10 +78,7 @@ async function handleUpdate() {
 </script>
 
 <template>
-  <div class="hpe-auth">
-    <div class="bg-canvas">
-      <div class="grid-overlay" />
-    </div>
+  <div class="auth">
 
     <div class="toast-container">
       <div

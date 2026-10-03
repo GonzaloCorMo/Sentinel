@@ -43,7 +43,7 @@ const { t } = useI18n();
         </p>
         <button
           type="button"
-          class="mt-6 w-full rounded-lg bg-emerald-600 py-2 text-sm font-medium text-white hover:bg-emerald-500"
+          class="mt-6 w-full rounded-lg bg-slate-100 py-2 text-sm font-medium text-slate-950 hover:bg-slate-300"
           @click="emit('close')"
         >
           {{ t('common.close') }}

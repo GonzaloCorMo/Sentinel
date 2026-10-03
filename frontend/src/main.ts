@@ -1,3 +1,4 @@
+import "./lib/legacyStorage";
 import "./assets/main.css";
 import "vue-sonner/style.css";
 

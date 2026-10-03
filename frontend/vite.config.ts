@@ -11,6 +11,18 @@ export default defineConfig({
       "@": fileURLToPath(new URL("./src", import.meta.url)),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // Dependencias pesadas en chunks propios: se cachean entre despliegues.
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return;
+          if (id.includes("leaflet")) return "vendor-leaflet";
+          if (id.includes("@supabase")) return "vendor-supabase";
+        },
+      },
+    },
+  },
   server: {
     port: 5173,
     proxy: {

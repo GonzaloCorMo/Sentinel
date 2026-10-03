@@ -5,8 +5,15 @@ import { useI18n } from "vue-i18n";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { getSupabase } from "@/lib/supabase";
+import { cssVar, useTheme } from "@/composables/useTheme";
 
 const { t } = useI18n();
+const { theme } = useTheme();
+
+/* Color por defecto de un tipo nuevo: es un dato que se envía al backend y
+   alimenta <input type="color">, que solo acepta hex. La UI de esta vista no
+   lo pinta (estética monocroma). */
+const DEFAULT_TYPE_COLOR = "#8a8f98";
 
 type Stage = "picker" | "register" | "locating" | "registering" | "on-duty" | "error";
 
@@ -99,7 +106,7 @@ function iconForType(id: string, name?: string): string {
 // Catálogo de tipos: carga desde /api/fleet/types (incluye builtin, manual y IA).
 const VEHICLE_TYPES = ref<VehicleType[]>([]);
 
-const LS_KEY = "hpe-sentinel.vehicle";
+const LS_KEY = "sentinel.vehicle";
 
 const stage = ref<Stage>("picker");
 const errorMsg = ref<string | null>(null);
@@ -179,7 +186,7 @@ async function loadVehicleTypes() {
       id: t.id,
       name: t.name,
       icon: iconForType(t.id, t.name),
-      color: t.color || "#01a982",
+      color: t.color || DEFAULT_TYPE_COLOR,
       builtIn: Boolean(t.builtIn),
       description: t.description ?? null,
       capabilities: t.capabilities || [],
@@ -189,7 +196,7 @@ async function loadVehicleTypes() {
       form.value.vehicleType = VEHICLE_TYPES.value[0]?.id || "ambulance";
     }
   } catch {
-    VEHICLE_TYPES.value = [{ id: "ambulance", name: "Ambulancia", icon: "🚑", color: "#01a982" }];
+    VEHICLE_TYPES.value = [{ id: "ambulance", name: "Ambulancia", icon: "🚑", color: DEFAULT_TYPE_COLOR }];
   }
 }
 
@@ -205,13 +212,13 @@ const typeEditor = ref<{
   capabilitiesStr: string;
   saving: boolean;
 }>({
-  open: false, mode: "create", id: null, name: "", speedKmh: "80", color: "#01a982",
+  open: false, mode: "create", id: null, name: "", speedKmh: "80", color: DEFAULT_TYPE_COLOR,
   description: "", capabilitiesStr: "", saving: false,
 });
 
 function openTypeCreate() {
   typeEditor.value = {
-    open: true, mode: "create", id: null, name: "", speedKmh: "80", color: "#01a982",
+    open: true, mode: "create", id: null, name: "", speedKmh: "80", color: DEFAULT_TYPE_COLOR,
     description: "", capabilitiesStr: "", saving: false,
   };
 }
@@ -449,34 +456,32 @@ async function register() {
   }
 }
 
+// Teselas OSM; el monocromo por tema lo aplica `.map-tiles` en main.css.
+const TILE_URL = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+
 function initMap(centerLat: number, centerLon: number) {
   if (mapInstance) return;
   const el = document.getElementById("vehicle-map");
   if (!el) return;
   mapInstance = L.map(el, { zoomControl: false, attributionControl: false })
     .setView([centerLat, centerLon], 15);
-  L.tileLayer(
-    "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
-    { maxZoom: 19 },
-  ).addTo(mapInstance);
+  L.tileLayer(TILE_URL, { maxZoom: 19, className: "map-tiles" }).addTo(mapInstance);
   L.control.zoom({ position: "topright" }).addTo(mapInstance);
   L.control.attribution({ position: "bottomright", prefix: false })
-    .addAttribution("© OSM · CARTO · OSRM").addTo(mapInstance);
+    .addAttribution("© OpenStreetMap · OSRM").addTo(mapInstance);
 }
 
-const vehicleColor = computed(
-  () => VEHICLE_TYPES.value.find((t) => t.id === (myVehicle.value?.entityTypeId || form.value.vehicleType))?.color || "#01a982",
-);
 const vehicleIcon = computed(
   () => VEHICLE_TYPES.value.find((t) => t.id === (myVehicle.value?.entityTypeId || form.value.vehicleType))?.icon || "🚑",
 );
 
-function vehicleDivIcon(color: string, icon: string, heading: number): L.DivIcon {
+// Marcador monocromo; pasa a ámbar (estado "en ruta") con incidencia asignada.
+function vehicleDivIcon(icon: string, heading: number, assigned: boolean): L.DivIcon {
   return L.divIcon({
-    className: "vh-marker",
+    className: assigned ? "vh-marker is-assigned" : "vh-marker",
     html: `
-      <div class="vh-marker-pin" style="background:${color};box-shadow:0 0 20px ${color}">${icon}</div>
-      <div class="vh-marker-arrow" style="transform:rotate(${heading}deg);border-bottom-color:${color}"></div>
+      <div class="vh-marker-pin">${icon}</div>
+      <div class="vh-marker-arrow" style="transform:rotate(${heading}deg)"></div>
     `,
     iconSize: [40, 40],
     iconAnchor: [20, 20],
@@ -486,7 +491,7 @@ function vehicleDivIcon(color: string, icon: string, heading: number): L.DivIcon
 function emergencyDivIcon(): L.DivIcon {
   return L.divIcon({
     className: "vh-marker vh-marker-emergency",
-    html: `<div class="vh-marker-pin" style="background:#e53e3e;box-shadow:0 0 24px rgba(229,62,62,0.8)">!</div>`,
+    html: `<div class="vh-marker-pin">!</div>`,
     iconSize: [32, 32],
     iconAnchor: [16, 16],
   });
@@ -541,8 +546,8 @@ const maneuverText = computed((): { text: string; icon: string } => {
     straight:      { text: "Continúa recto",             icon: "↑" },
     uturn:         { text: "Cambia de sentido",          icon: "↺" },
   };
-  if (m.type === "depart") return { text: "Comienza la ruta", icon: "🚗" };
-  if (m.type === "arrive") return { text: "Has llegado", icon: "🏁" };
+  if (m.type === "depart") return { text: "Comienza la ruta", icon: "↑" };
+  if (m.type === "arrive") return { text: "Has llegado", icon: "◎" };
   if (m.type === "roundabout" || m.type === "rotary") return { text: "Toma la rotonda", icon: "⟳" };
   if (mod && dir[mod]) return dir[mod];
   return { text: "Continúa", icon: "↑" };
@@ -624,7 +629,7 @@ function updateMap(autoCenter = false) {
   if (!v) return;
   const vtype = VEHICLE_TYPES.value.find((t) => t.id === v.entityTypeId)
     || VEHICLE_TYPES.value[0]
-    || { id: "ambulance", name: "Ambulancia", icon: "🚑", color: "#01a982" };
+    || { id: "ambulance", name: "Ambulancia", icon: "🚑", color: DEFAULT_TYPE_COLOR };
   const vPos: [number, number] = [v.latitude, v.longitude];
 
   // Heading desde último coord → actual
@@ -635,10 +640,10 @@ function updateMap(autoCenter = false) {
   lastCoord.value = vPos;
 
   if (!myMarker) {
-    myMarker = L.marker(vPos, { icon: vehicleDivIcon(vtype.color, vtype.icon, lastHeading.value) }).addTo(mapInstance);
+    myMarker = L.marker(vPos, { icon: vehicleDivIcon(vtype.icon, lastHeading.value, !!assignedEmergency.value) }).addTo(mapInstance);
   } else {
     myMarker.setLatLng(vPos);
-    myMarker.setIcon(vehicleDivIcon(vtype.color, vtype.icon, lastHeading.value));
+    myMarker.setIcon(vehicleDivIcon(vtype.icon, lastHeading.value, !!assignedEmergency.value));
   }
 
   // Emergencia
@@ -663,11 +668,15 @@ function updateMap(autoCenter = false) {
   const routeCoords = routeFromOsrm || (v.routeCoords && v.routeCoords.length >= 2 ? v.routeCoords : null);
 
   if (routeCoords) {
-    const ROUTE_COLOR = "#22c55e"; // verde vivo para que sea obvia a dónde ir
+    // Ruta de máximo contraste con el mapa (se invierte con el tema) sobre un
+    // ribete del color de fondo para separarla de las calles.
+    const ROUTE_COLOR = cssVar("--n-100");
+    const CASING_COLOR = cssVar("--n-950");
     if (!routeLineShadow) {
-      routeLineShadow = L.polyline(routeCoords, { color: "#000", weight: 11, opacity: 0.4 }).addTo(mapInstance);
+      routeLineShadow = L.polyline(routeCoords, { color: CASING_COLOR, weight: 11, opacity: 0.9 }).addTo(mapInstance);
     } else {
       routeLineShadow.setLatLngs(routeCoords);
+      routeLineShadow.setStyle({ color: CASING_COLOR });
     }
     if (!routeLine) {
       routeLine = L.polyline(routeCoords, { color: ROUTE_COLOR, weight: 7, opacity: 1 }).addTo(mapInstance);
@@ -767,6 +776,7 @@ const currentPhaseLabel = computed(() => {
 });
 
 watch(() => myVehicle.value, () => updateMap(), { deep: true });
+watch(theme, () => updateMap());
 </script>
 
 <template>
@@ -774,13 +784,16 @@ watch(() => myVehicle.value, () => updateMap(), { deep: true });
     <!-- HEADER (se oculta en modo nav) -->
     <header v-if="!navigating" class="vh-header">
       <div class="vh-brand-wrap">
-        <div class="vh-brand-icon">🚑</div>
-        <div>
-          <div class="vh-brand">HPE Sentinel · Vehículo</div>
+        <svg class="vh-brand-mark" viewBox="0 0 64 64" width="28" height="28" aria-hidden="true"><rect x="17" y="17" width="30" height="30" fill="none" stroke="currentColor" stroke-width="3"/><rect x="28" y="28" width="8" height="8" fill="currentColor"/></svg>
+        <div class="vh-brand-text">
+          <div class="vh-brand">Sentinel <span class="vh-brand-sep">/</span> Vehículo</div>
           <div class="vh-brand-sub">{{ userEmail ?? "Sin sesión" }}</div>
         </div>
       </div>
-      <button class="vh-logout" @click="signOut">⎋ Salir</button>
+      <button class="vh-logout" @click="signOut">
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" aria-hidden="true"><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/></svg>
+        Salir
+      </button>
     </header>
 
     <!-- PICKER: unidades guardadas del usuario -->
@@ -791,7 +804,7 @@ watch(() => myVehicle.value, () => updateMap(), { deep: true });
       <div class="vh-saved-list">
         <div v-for="sv in savedVehicles" :key="sv.id" class="vh-saved-item">
           <div class="vh-saved-main" @click="activateSavedVehicle(sv)">
-            <div class="vh-saved-icon" :style="{ color: VEHICLE_TYPES.find(t => t.id === sv.entityTypeId)?.color || '#01a982' }">
+            <div class="vh-saved-icon vh-glyph">
               {{ VEHICLE_TYPES.find(t => t.id === sv.entityTypeId)?.icon || "🚑" }}
             </div>
             <div class="vh-saved-info">
@@ -828,25 +841,24 @@ watch(() => myVehicle.value, () => updateMap(), { deep: true });
             :class="['vh-type-row', { active: form.vehicleType === vt.id }]"
             @click="form.vehicleType = vt.id"
           >
-            <div class="vh-type-row-icon" :style="{ color: vt.color }">{{ vt.icon }}</div>
+            <div class="vh-type-row-icon vh-glyph">{{ vt.icon }}</div>
             <div class="vh-type-row-info">
               <div class="vh-type-row-name">
                 {{ vt.name }}
-                <span v-if="vt.speedKmh" class="vh-type-row-speed">· {{ vt.speedKmh }} km/h</span>
+                <span v-if="vt.speedKmh" class="vh-type-row-speed vh-num">{{ vt.speedKmh }} km/h</span>
               </div>
               <div v-if="vt.powertrain || vt.crewMin != null" class="vh-type-row-caps">
                 <span v-if="vt.powertrain" class="vh-cap-chip">
-                  {{ vt.powertrain === 'electric' ? '⚡' : vt.powertrain === 'unique' ? '🛸' : '⛽' }}
                   {{ t('scenario.powertrain_' + vt.powertrain) }}
                 </span>
                 <span v-if="vt.crewMin != null" class="vh-cap-chip">
-                  {{ t('scenario.crew_label') }}: {{ vt.crewMin === vt.crewMax ? vt.crewMin : `${vt.crewMin}-${vt.crewMax}` }}
+                  {{ t('scenario.crew_label') }}: <span class="vh-num">{{ vt.crewMin === vt.crewMax ? vt.crewMin : `${vt.crewMin}-${vt.crewMax}` }}</span>
                 </span>
                 <span v-if="vt.costPerMin != null" class="vh-cap-chip">
-                  {{ vt.costPerMin.toFixed(2) }} {{ t('scenario.cost_per_min_short') }}
+                  <span class="vh-num">{{ vt.costPerMin.toFixed(2) }}</span> {{ t('scenario.cost_per_min_short') }}
                 </span>
                 <span v-if="vt.activationCost != null" class="vh-cap-chip">
-                  {{ vt.activationCost.toFixed(0) }}€ {{ t('scenario.activation_cost_short') }}
+                  <span class="vh-num">{{ vt.activationCost.toFixed(0) }}€</span> {{ t('scenario.activation_cost_short') }}
                 </span>
               </div>
               <div v-if="vt.description" class="vh-type-row-desc">{{ vt.description }}</div>
@@ -878,7 +890,7 @@ watch(() => myVehicle.value, () => updateMap(), { deep: true });
             <div class="vh-field-row">
               <label class="vh-field">
                 <span>Velocidad (km/h)</span>
-                <input v-model="typeEditor.speedKmh" class="vh-input" inputmode="numeric" />
+                <input v-model="typeEditor.speedKmh" class="vh-input vh-num" inputmode="numeric" />
               </label>
               <label class="vh-field">
                 <span>Color</span>
@@ -911,18 +923,18 @@ watch(() => myVehicle.value, () => updateMap(), { deep: true });
 
       <div class="vh-card">
         <div class="vh-card-label">Identificador (opcional)</div>
-        <input v-model="form.callsign" class="vh-input" :placeholder="t('vehicle.callsign_ph')" maxlength="30" />
+        <input v-model="form.callsign" class="vh-input vh-num" :placeholder="t('vehicle.callsign_ph')" maxlength="30" />
       </div>
 
       <div class="vh-card">
         <div class="vh-card-label">{{ t('vehicle.location') }}</div>
         <div class="vh-toggle">
-          <button :class="['vh-toggle-btn', { active: form.locationSource === 'geo' }]" @click="form.locationSource = 'geo'">📍 Usar mi ubicación</button>
-          <button :class="['vh-toggle-btn', { active: form.locationSource === 'manual' }]" @click="form.locationSource = 'manual'">✏️ Manual</button>
+          <button :class="['vh-toggle-btn', { active: form.locationSource === 'geo' }]" @click="form.locationSource = 'geo'">Usar mi ubicación</button>
+          <button :class="['vh-toggle-btn', { active: form.locationSource === 'manual' }]" @click="form.locationSource = 'manual'">Manual</button>
         </div>
         <div v-if="form.locationSource === 'manual'" class="vh-latlon">
-          <input v-model="form.latInput" class="vh-input" :placeholder="t('vehicle.lat_ph')" inputmode="decimal" />
-          <input v-model="form.lonInput" class="vh-input" :placeholder="t('vehicle.lon_ph')" inputmode="decimal" />
+          <input v-model="form.latInput" class="vh-input vh-num" :placeholder="t('vehicle.lat_ph')" inputmode="decimal" />
+          <input v-model="form.lonInput" class="vh-input vh-num" :placeholder="t('vehicle.lon_ph')" inputmode="decimal" />
         </div>
         <div v-else class="vh-hint">Aceptaremos el permiso al pulsar "Entrar en servicio".</div>
       </div>
@@ -957,10 +969,14 @@ watch(() => myVehicle.value, () => updateMap(), { deep: true });
       <div v-else class="vh-overlay">
         <div class="vh-status-card" :class="{ assigned: !!assignedEmergency }">
           <div class="vh-status-row">
-            <div class="vh-status-badge" :style="{ background: vehicleColor }">
-              {{ vehicleIcon }} {{ myVehicle?.displayLabel || (myVehicleId?.slice(0, 6)) }}
+            <div class="vh-status-badge">
+              <span class="vh-glyph">{{ vehicleIcon }}</span>
+              <span class="vh-num">{{ myVehicle?.displayLabel || (myVehicleId?.slice(0, 6)) }}</span>
             </div>
-            <div class="vh-status-phase">{{ currentPhaseLabel }}</div>
+            <div class="vh-status-phase">
+              <span class="vh-phase-dot" :class="{ active: !!assignedEmergency }" />
+              {{ currentPhaseLabel }}
+            </div>
           </div>
           <div v-if="assignedEmergency" class="vh-emergency-info">
             <div class="vh-emergency-title">
@@ -971,7 +987,7 @@ watch(() => myVehicle.value, () => updateMap(), { deep: true });
             </div>
             <div class="vh-emergency-meta">
               <span v-if="assignedEmergency.emergencyType">{{ assignedEmergency.emergencyType }}</span>
-              <span v-if="assignedEmergency.severity">· severidad {{ assignedEmergency.severity }}</span>
+              <span v-if="assignedEmergency.severity">· severidad <span class="vh-num">{{ assignedEmergency.severity }}</span></span>
             </div>
             <button class="vh-btn-primary nav-start" @click="startNavigation">▶ Iniciar ruta</button>
           </div>
@@ -982,15 +998,15 @@ watch(() => myVehicle.value, () => updateMap(), { deep: true });
       <!-- MODO NAVEGACIÓN: card inferior con ETA + distancia -->
       <div v-if="navigating" class="vh-nav-bottom">
         <div class="vh-nav-metric">
-          <div class="vh-nav-metric-value">{{ fmtEta(etaSeconds) }}</div>
+          <div class="vh-nav-metric-value vh-num">{{ fmtEta(etaSeconds) }}</div>
           <div class="vh-nav-metric-label">ETA</div>
         </div>
         <div class="vh-nav-metric">
-          <div class="vh-nav-metric-value">{{ fmtDistance(distanceRemaining) }}</div>
+          <div class="vh-nav-metric-value vh-num">{{ fmtDistance(distanceRemaining) }}</div>
           <div class="vh-nav-metric-label">{{ t('vehicle.remaining') }}</div>
         </div>
         <div class="vh-nav-metric">
-          <div class="vh-nav-metric-value">{{ currentPhaseLabel }}</div>
+          <div class="vh-nav-metric-value is-text">{{ currentPhaseLabel }}</div>
           <div class="vh-nav-metric-label">{{ t('vehicle.status') }}</div>
         </div>
       </div>
@@ -1009,328 +1025,330 @@ watch(() => myVehicle.value, () => updateMap(), { deep: true });
 </template>
 
 <style scoped>
-@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap");
-
 .vh-shell {
-  --green: #01a982;
-  --green-glow: rgba(1, 169, 130, 0.25);
-  --navy: #0f1b2d;
-  --red: #e53e3e;
-  --muted: rgba(255, 255, 255, 0.55);
-  --dim: rgba(255, 255, 255, 0.3);
-  font-family: "IBM Plex Sans", sans-serif;
-  background: var(--navy);
-  color: #fff;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  background: var(--bg);
+  color: var(--text);
   min-height: 100vh; min-height: 100dvh;
   display: flex; flex-direction: column;
   -webkit-font-smoothing: antialiased;
 }
 .vh-shell * { box-sizing: border-box; }
+.vh-shell h2 { margin: 0; font-size: 15px; font-weight: 500; color: var(--text-2); }
 
+/* Datos numéricos / telemetría */
+.vh-num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+/* Los iconos de tipo son emoji: se neutralizan a escala de grises. */
+.vh-glyph { filter: grayscale(1); }
+
+/* Cabecera */
 .vh-header {
-  padding: 12px 18px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(255, 255, 255, 0.02);
-  backdrop-filter: blur(10px);
+  height: 52px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
   display: flex; justify-content: space-between; align-items: center; gap: 10px;
   position: sticky; top: 0; z-index: 1000;
 }
-.vh-brand-wrap { display: flex; align-items: center; gap: 12px; min-width: 0; }
-.vh-brand-icon {
-  width: 40px; height: 40px; border-radius: 10px;
-  background: rgba(1, 169, 130, 0.12); border: 1px solid rgba(1, 169, 130, 0.25);
-  display: flex; align-items: center; justify-content: center; font-size: 22px;
-}
-.vh-brand { font-family: "Space Grotesk"; font-weight: 700; font-size: 15px; }
+.vh-brand-wrap { display: flex; align-items: center; gap: 10px; min-width: 0; color: var(--text); }
+.vh-brand-mark { flex-shrink: 0; }
+.vh-brand-text { min-width: 0; line-height: 1.25; }
+.vh-brand { font-weight: 600; font-size: 14px; letter-spacing: -0.01em; }
+.vh-brand-sep { color: var(--text-4); font-weight: 400; margin: 0 2px; }
 .vh-brand-sub {
-  font-size: 11px; color: var(--muted);
-  max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 11px; color: var(--text-3);
+  max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .vh-logout {
-  padding: 7px 12px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  color: var(--muted); font-family: inherit; font-size: 12px; cursor: pointer;
-  transition: 0.2s;
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 28px; padding: 0 10px;
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  color: var(--text-2); font-family: inherit; font-size: 12px; cursor: pointer;
 }
-.vh-logout:hover { border-color: var(--red); color: var(--red); }
+.vh-logout:hover { color: var(--text); background: var(--surface-2); }
 
+/* Formularios (picker / registro) */
 .vh-register {
-  padding: 24px 20px 80px;
+  padding: 24px 16px 80px;
   max-width: 520px; width: 100%; margin: 0 auto;
-  display: flex; flex-direction: column; gap: 14px;
+  display: flex; flex-direction: column; gap: 12px;
 }
 .vh-title {
-  font-family: "Space Grotesk"; font-size: 24px; font-weight: 700;
-  text-align: center; letter-spacing: -0.3px; margin-top: 10px;
+  font-size: 22px; font-weight: 600;
+  text-align: center; letter-spacing: -0.02em; margin: 8px 0 0;
 }
-.vh-desc { color: var(--muted); text-align: center; font-size: 14px; margin-bottom: 10px; }
+.vh-desc { color: var(--text-3); text-align: center; font-size: 13px; margin: 0 0 8px; }
 .vh-card {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 12px;
-  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 12px 14px;
 }
 .vh-card-label {
-  font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
-  color: var(--muted); margin-bottom: 10px; font-weight: 600;
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--text-3); margin-bottom: 8px; font-weight: 500;
 }
 .vh-type-new {
-  float: right; font-size: 11px; padding: 4px 10px;
-  background: rgba(1, 169, 130, 0.1); color: var(--green);
-  border: 1px solid rgba(1, 169, 130, 0.3); border-radius: 6px;
-  cursor: pointer; font-family: inherit; letter-spacing: 0;
+  height: 24px; padding: 0 8px;
+  font-size: 11px; text-transform: none; letter-spacing: 0;
+  background: transparent; color: var(--text-2);
+  border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+  cursor: pointer; font-family: inherit;
 }
-.vh-type-new:hover { background: rgba(1, 169, 130, 0.18); }
+.vh-type-new:hover { color: var(--text); background: var(--surface-2); }
 
-.vh-type-list { display: flex; flex-direction: column; gap: 8px; }
-.vh-type-row {
-  display: flex; align-items: flex-start; gap: 12px;
-  padding: 12px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
-  cursor: pointer; transition: 0.2s;
+.vh-type-list {
+  display: flex; flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
 }
+.vh-type-row {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 12px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+.vh-type-row:last-child { border-bottom: none; }
+.vh-type-row:hover { background: var(--surface-2); }
 .vh-type-row.active {
-  background: rgba(1, 169, 130, 0.1);
-  border-color: var(--green);
-  box-shadow: 0 0 0 3px var(--green-glow);
+  background: var(--surface-2);
+  box-shadow: inset 2px 0 0 var(--n-100);
 }
 .vh-type-row-icon {
-  width: 36px; height: 36px; flex-shrink: 0;
-  background: rgba(255, 255, 255, 0.06);
-  border-radius: 8px;
+  width: 28px; height: 28px; flex-shrink: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
   display: flex; align-items: center; justify-content: center;
-  font-size: 22px;
+  font-size: 15px;
 }
 .vh-type-row-info { flex: 1; min-width: 0; }
-.vh-type-row-name { font-family: "Space Grotesk"; font-weight: 700; font-size: 14px; }
-.vh-type-row-speed { color: var(--dim); font-weight: 500; margin-left: 4px; }
+.vh-type-row-name { font-weight: 500; font-size: 13px; color: var(--text); }
+.vh-type-row-speed { color: var(--text-3); font-size: 12px; margin-left: 6px; }
 .vh-type-row-desc {
-  color: var(--muted); font-size: 12px; line-height: 1.4;
-  margin-top: 3px;
+  color: var(--text-3); font-size: 12px; line-height: 1.4;
+  margin-top: 2px;
 }
 .vh-type-row-caps { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px; }
 .vh-cap-chip {
-  font-size: 10px; padding: 2px 7px;
-  background: rgba(1, 169, 130, 0.08);
-  border: 1px solid rgba(1, 169, 130, 0.2);
-  border-radius: 10px;
-  color: #a7f3d0;
+  font-size: 11px; padding: 1px 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text-2);
 }
 .vh-type-row-actions { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
 .vh-type-act {
-  width: 26px; height: 26px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 6px; color: var(--muted);
+  width: 24px; height: 24px;
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm); color: var(--text-3);
   cursor: pointer; font-size: 11px; padding: 0;
   display: flex; align-items: center; justify-content: center;
 }
-.vh-type-act:hover { color: var(--green); border-color: var(--green); }
-.vh-type-act.danger:hover { color: var(--red); border-color: var(--red); }
+.vh-type-act:hover { color: var(--text); background: var(--surface-2); }
+.vh-type-act.danger:hover { color: var(--crit); border-color: var(--crit); }
 .vh-type-row-badge {
-  font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px;
-  color: var(--dim); align-self: center; padding: 2px 6px;
-  border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--text-4); align-self: center; padding: 1px 6px;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
 }
 
 /* Modal editor */
 .vh-modal-bg {
   position: fixed; inset: 0; z-index: 2000;
-  background: rgba(0, 0, 0, 0.75);
-  backdrop-filter: blur(4px);
+  background: color-mix(in oklab, var(--n-950) 70%, transparent);
   display: flex; align-items: center; justify-content: center;
   padding: 16px;
 }
 .vh-modal {
   width: 100%; max-width: 460px;
-  background: var(--navy);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 14px;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xl);
   overflow: hidden;
 }
 .vh-modal-head {
-  padding: 14px 18px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  height: 44px; padding: 0 14px;
+  border-bottom: 1px solid var(--border);
   display: flex; justify-content: space-between; align-items: center;
 }
-.vh-modal-title { font-family: "Space Grotesk"; font-weight: 700; font-size: 16px; }
+.vh-modal-title { font-weight: 600; font-size: 14px; }
 .vh-modal-close {
-  width: 28px; height: 28px; border: none; border-radius: 50%;
-  background: rgba(255, 255, 255, 0.05); color: var(--muted);
-  cursor: pointer; font-size: 13px;
+  width: 26px; height: 26px; border: 1px solid transparent; border-radius: var(--radius-sm);
+  background: transparent; color: var(--text-3);
+  cursor: pointer; font-size: 12px;
 }
-.vh-modal-close:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+.vh-modal-close:hover { background: var(--surface-2); color: var(--text); }
 .vh-modal-body {
-  padding: 16px 18px; display: flex; flex-direction: column; gap: 12px;
+  padding: 14px; display: flex; flex-direction: column; gap: 12px;
 }
 .vh-modal-foot {
-  padding: 14px 18px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 10px 14px;
+  border-top: 1px solid var(--border);
   display: flex; gap: 8px; justify-content: flex-end;
 }
 .vh-field { display: flex; flex-direction: column; gap: 6px; }
-.vh-field > span { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); font-weight: 600; }
-.vh-field .req { color: var(--green); }
-.vh-field-hint { text-transform: none; letter-spacing: 0; color: var(--dim); font-weight: 400; margin-left: 4px; }
+.vh-field > span { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-3); font-weight: 500; }
+.vh-field .req { color: var(--text-4); }
+.vh-field-hint { text-transform: none; letter-spacing: 0; color: var(--text-4); font-weight: 400; margin-left: 4px; }
 .vh-field-row { display: grid; grid-template-columns: 2fr 1fr; gap: 10px; }
 .vh-color-input {
-  width: 100%; height: 40px; padding: 3px; cursor: pointer;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
+  width: 100%; height: 34px; padding: 3px; cursor: pointer;
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
 }
 .vh-btn-ghost {
-  padding: 10px 16px; background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px;
-  color: var(--muted); font-family: inherit; font-size: 14px; cursor: pointer;
+  height: 32px; padding: 0 14px; background: transparent;
+  border: 1px solid var(--border-strong); border-radius: var(--radius-lg);
+  color: var(--text-2); font-family: inherit; font-size: 13px; cursor: pointer;
 }
-.vh-btn-ghost:hover { color: #fff; border-color: rgba(255, 255, 255, 0.2); }
-.vh-modal-foot .vh-btn-primary { width: auto; padding: 10px 20px; font-size: 14px; }
-
-.vh-type-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
-.vh-type-btn {
-  padding: 14px 8px; border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.02);
-  color: #fff; font-family: inherit;
-  cursor: pointer; text-align: center;
-  display: flex; flex-direction: column; align-items: center; gap: 6px;
-  transition: 0.2s; position: relative;
-}
-.vh-type-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.vh-type-btn.active {
-  background: rgba(1, 169, 130, 0.1);
-  border-color: var(--green);
-  box-shadow: 0 0 0 3px var(--green-glow);
-}
-.vh-type-icon { font-size: 30px; line-height: 1; }
-.vh-type-name { font-size: 12px; font-weight: 600; }
-.vh-type-soon { font-size: 9px; text-transform: uppercase; color: var(--dim); margin-top: 2px; }
+.vh-btn-ghost:hover { color: var(--text); background: var(--surface-2); }
+.vh-modal-foot .vh-btn-primary { width: auto; height: 32px; padding: 0 16px; font-size: 13px; }
 
 .vh-input {
-  width: 100%; padding: 11px 12px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  color: #fff; font-family: inherit; font-size: 14px;
+  width: 100%; height: 36px; padding: 0 10px;
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  color: var(--text); font-family: inherit; font-size: 13px;
   outline: none;
+  transition: border-color 0.12s ease;
 }
-.vh-input:focus { border-color: var(--green); box-shadow: 0 0 0 3px var(--green-glow); }
-.vh-toggle { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
-.vh-toggle-btn {
-  padding: 12px 8px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-  color: var(--muted); font-family: inherit; font-size: 13px; cursor: pointer;
-  transition: 0.2s;
-}
-.vh-toggle-btn.active {
-  background: rgba(1, 169, 130, 0.12);
-  border-color: var(--green);
-  color: var(--green);
-}
-.vh-latlon { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.vh-hint { font-size: 12px; color: var(--dim); }
+textarea.vh-input { height: auto; padding: 8px 10px; resize: vertical; }
+.vh-input.vh-num { font-family: var(--font-mono); }
+.vh-input::placeholder { color: var(--text-4); }
+.vh-input:focus { border-color: var(--focus); }
 
-.vh-btn-primary {
-  width: 100%; padding: 14px;
-  border: none; border-radius: 12px;
-  background: linear-gradient(135deg, var(--green), #00c9a1);
-  color: #fff; font-family: inherit;
-  font-weight: 600; font-size: 15px;
-  cursor: pointer;
-  box-shadow: 0 4px 20px var(--green-glow);
-  transition: 0.2s;
+.vh-toggle {
+  display: grid; grid-template-columns: 1fr 1fr;
+  margin-bottom: 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
 }
-.vh-btn-primary.big { padding: 18px; font-size: 16px; margin-top: 10px; }
-.vh-btn-primary.nav-start { margin-top: 12px; }
-.vh-btn-primary:active { transform: scale(0.98); }
-.vh-btn-secondary-outline {
-  padding: 14px; margin-top: 4px;
-  border-radius: 12px;
-  border: 1px dashed rgba(255, 255, 255, 0.2);
+.vh-toggle-btn {
+  height: 32px;
   background: transparent;
-  color: var(--muted);
-  font-family: inherit; font-weight: 500; font-size: 14px;
-  cursor: pointer; transition: 0.2s;
+  border: none;
+  color: var(--text-3); font-family: inherit; font-size: 13px; cursor: pointer;
+}
+.vh-toggle-btn + .vh-toggle-btn { border-left: 1px solid var(--border-strong); }
+.vh-toggle-btn:hover { color: var(--text); }
+.vh-toggle-btn.active { background: var(--surface-2); color: var(--text); font-weight: 500; }
+.vh-latlon { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.vh-hint { font-size: 12px; color: var(--text-4); }
+
+/* Botones */
+.vh-btn-primary {
+  width: 100%; height: 40px; padding: 0 16px;
+  border: 1px solid var(--n-100); border-radius: var(--radius-lg);
+  background: var(--n-100);
+  color: var(--n-950); font-family: inherit;
+  font-weight: 500; font-size: 14px;
+  cursor: pointer;
+}
+.vh-btn-primary:hover:not(:disabled) { background: var(--n-200); border-color: var(--n-200); }
+.vh-btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+.vh-btn-primary.big { height: 44px; margin-top: 8px; }
+.vh-btn-primary.nav-start { margin-top: 10px; }
+.vh-btn-secondary-outline {
+  height: 40px; margin-top: 4px;
+  border-radius: var(--radius-lg);
+  border: 1px dashed var(--border-strong);
+  background: transparent;
+  color: var(--text-2);
+  font-family: inherit; font-weight: 500; font-size: 13px;
+  cursor: pointer;
 }
 .vh-btn-secondary-outline:hover {
-  border-color: var(--green);
-  color: var(--green);
-  background: rgba(1, 169, 130, 0.04);
+  border-color: var(--n-500);
+  color: var(--text);
+  background: var(--surface-2);
 }
 
 /* Picker de unidades guardadas */
-.vh-saved-list { display: flex; flex-direction: column; gap: 8px; }
+.vh-saved-list {
+  display: flex; flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
 .vh-saved-item {
   display: flex; align-items: stretch;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
-  overflow: hidden;
-  transition: 0.2s;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  transition: background-color 0.12s ease;
 }
-.vh-saved-item:hover {
-  border-color: var(--green);
-  background: rgba(1, 169, 130, 0.06);
-  box-shadow: 0 0 0 3px var(--green-glow);
-}
+.vh-saved-item:last-child { border-bottom: none; }
+.vh-saved-item:hover { background: var(--surface-2); }
 .vh-saved-main {
   flex: 1;
-  display: flex; align-items: center; gap: 14px;
-  padding: 14px 16px;
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 14px;
   cursor: pointer;
 }
 .vh-saved-icon {
-  width: 44px; height: 44px;
-  background: rgba(255, 255, 255, 0.06);
-  border-radius: 10px;
+  width: 32px; height: 32px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
   display: flex; align-items: center; justify-content: center;
-  font-size: 24px;
+  font-size: 16px;
   flex-shrink: 0;
 }
 .vh-saved-info { flex: 1; min-width: 0; }
-.vh-saved-label { font-family: "Space Grotesk"; font-size: 15px; font-weight: 700; color: #fff; }
-.vh-saved-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
-.vh-saved-arrow { font-size: 22px; color: var(--dim); flex-shrink: 0; }
-.vh-saved-item:hover .vh-saved-arrow { color: var(--green); }
+.vh-saved-label {
+  font-family: var(--font-mono); font-variant-numeric: tabular-nums;
+  font-size: 13px; font-weight: 500; color: var(--text);
+}
+.vh-saved-sub { font-size: 12px; color: var(--text-3); margin-top: 1px; }
+.vh-saved-arrow { font-size: 16px; color: var(--text-4); flex-shrink: 0; }
+.vh-saved-item:hover .vh-saved-arrow { color: var(--text); }
 .vh-saved-del {
   background: transparent;
-  border: none; border-left: 1px solid rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.3);
+  border: none; border-left: 1px solid var(--border);
+  color: var(--text-4);
   padding: 0 14px;
-  font-size: 14px; cursor: pointer; transition: 0.2s;
+  font-size: 12px; cursor: pointer;
 }
-.vh-saved-del:hover { background: rgba(229, 62, 62, 0.15); color: var(--red); }
+.vh-saved-del:hover { color: var(--crit); }
 
+/* Estados intermedios */
 .vh-center {
   flex: 1;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 18px; padding: 40px 24px;
+  gap: 14px; padding: 40px 24px;
 }
 .vh-spinner {
-  width: 70px; height: 70px;
-  border: 6px solid rgba(255, 255, 255, 0.1);
-  border-top-color: var(--green);
+  width: 32px; height: 32px;
+  border: 2px solid var(--border-strong);
+  border-top-color: var(--text);
   border-radius: 50%;
   animation: vhspin 0.8s linear infinite;
 }
 @keyframes vhspin { to { transform: rotate(360deg); } }
 .vh-cross {
-  width: 100px; height: 100px; border-radius: 50%;
-  background: rgba(229, 62, 62, 0.15); color: var(--red);
-  border: 3px solid var(--red);
+  width: 56px; height: 56px; border-radius: var(--radius-lg);
+  background: color-mix(in oklab, var(--crit-500) 10%, transparent);
+  border: 1px solid color-mix(in oklab, var(--crit-500) 40%, transparent);
+  color: var(--crit);
   display: flex; align-items: center; justify-content: center;
-  font-size: 56px; font-weight: 700;
+  font-family: var(--font-mono); font-size: 26px; font-weight: 600;
 }
-.vh-err { color: var(--muted); font-size: 13px; text-align: center; max-width: 380px; }
+.vh-err { color: var(--text-3); font-size: 13px; text-align: center; max-width: 380px; margin: 0; }
 
+/* En servicio */
 .vh-duty {
   flex: 1; position: relative;
   display: flex; flex-direction: column; min-height: 0;
@@ -1338,153 +1356,181 @@ watch(() => myVehicle.value, () => updateMap(), { deep: true });
 .vh-map { flex: 1; min-height: 0; width: 100%; }
 
 .vh-overlay {
-  position: absolute; left: 12px; right: 12px; bottom: 84px;
+  position: absolute; left: 12px; right: 12px; bottom: 68px;
   z-index: 900; pointer-events: none;
 }
 .vh-status-card {
-  background: rgba(15, 27, 45, 0.92);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(12px);
-  border-radius: 14px;
-  padding: 14px 16px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  padding: 12px 14px;
+  box-shadow: var(--shadow-lg);
   pointer-events: auto;
 }
-.vh-status-card.assigned { border-color: var(--red); box-shadow: 0 10px 30px rgba(229, 62, 62, 0.25); }
+.vh-status-card.assigned { border-color: var(--crit); }
 .vh-status-row {
   display: flex; align-items: center; gap: 10px;
   padding-bottom: 10px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--border);
 }
 .vh-status-badge {
-  padding: 5px 10px; border-radius: 6px;
-  font-family: "Space Grotesk"; font-weight: 700; font-size: 12px;
-  color: #fff; letter-spacing: 0.5px;
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 24px; padding: 0 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font-size: 12px; font-weight: 500;
+  color: var(--text);
 }
-.vh-status-phase { color: var(--muted); font-size: 13px; flex: 1; text-align: right; }
+.vh-status-phase {
+  display: flex; align-items: center; justify-content: flex-end; gap: 6px;
+  color: var(--text-2); font-size: 12px; flex: 1;
+}
+.vh-phase-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--text-4);
+}
+.vh-phase-dot.active { background: var(--warn); }
 .vh-emergency-info { padding-top: 10px; }
 .vh-emergency-title {
-  font-family: "Space Grotesk"; font-weight: 600; font-size: 14px;
+  font-weight: 500; font-size: 14px;
   display: flex; align-items: center; gap: 8px; margin-bottom: 4px;
 }
+/* Alerta: incidencia asignada (único parpadeo permitido). */
 .vh-emergency-dot {
-  width: 10px; height: 10px; border-radius: 50%;
-  background: var(--red); box-shadow: 0 0 10px var(--red);
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  background: var(--crit);
   animation: vhblink 1s ease-in-out infinite;
 }
-@keyframes vhblink { 50% { opacity: 0.4; } }
-.vh-emergency-desc { font-size: 13px; color: var(--muted); line-height: 1.5; margin-bottom: 4px; }
-.vh-emergency-meta { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.5px; }
-.vh-idle { color: var(--muted); font-size: 13px; padding-top: 10px; }
+@keyframes vhblink { 50% { opacity: 0.35; } }
+.vh-emergency-desc { font-size: 13px; color: var(--text-3); line-height: 1.5; margin-bottom: 4px; }
+.vh-emergency-meta { font-size: 11px; color: var(--text-4); text-transform: uppercase; letter-spacing: 0.06em; }
+.vh-idle { color: var(--text-3); font-size: 13px; padding-top: 10px; }
 
 .vh-btn-float {
   position: absolute; left: 12px; right: 12px; bottom: 16px;
   z-index: 900;
-  padding: 14px; border-radius: 12px;
-  background: rgba(229, 62, 62, 0.15);
-  border: 1px solid var(--red);
-  color: #fca5a5;
-  font-family: inherit; font-weight: 600; font-size: 14px;
-  cursor: pointer; backdrop-filter: blur(12px);
+  height: 40px; border-radius: var(--radius-lg);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+  font-family: inherit; font-weight: 500; font-size: 13px;
+  cursor: pointer;
+  box-shadow: var(--shadow-md);
 }
+.vh-btn-float:hover { background: var(--surface-2); }
 
-/* ── MODO NAVEGACIÓN (estilo Google Maps) ─────────────────────────────── */
+/* ── Modo navegación ──────────────────────────────────────────────────── */
 .vh-nav-top {
   position: absolute; left: 0; right: 0; top: 0;
   z-index: 1100;
-  padding: env(safe-area-inset-top, 0) 12px 12px;
-  background: linear-gradient(to bottom, rgba(30, 80, 70, 0.98) 60%, rgba(30, 80, 70, 0));
+  padding: env(safe-area-inset-top, 0) 12px 0;
   pointer-events: none;
 }
 .vh-nav-maneuver {
-  display: flex; align-items: center; gap: 14px;
-  background: linear-gradient(135deg, #038a6b, #01a982);
-  border-radius: 14px;
-  padding: 14px 14px;
-  box-shadow: 0 8px 30px rgba(1, 169, 130, 0.4);
+  display: flex; align-items: center; gap: 12px;
+  margin-top: 12px;
+  padding: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
   pointer-events: auto;
-  margin-top: 10px;
 }
 .vh-nav-icon {
-  width: 60px; height: 60px;
-  background: rgba(255, 255, 255, 0.14);
-  border-radius: 12px;
+  width: 52px; height: 52px; flex-shrink: 0;
+  background: var(--n-100);
+  color: var(--n-950);
+  border-radius: var(--radius-lg);
   display: flex; align-items: center; justify-content: center;
-  font-size: 38px; font-weight: 700; flex-shrink: 0;
+  font-size: 30px; font-weight: 600; line-height: 1;
 }
 .vh-nav-text { flex: 1; min-width: 0; }
 .vh-nav-distance {
-  font-family: "Space Grotesk";
-  font-size: 24px; font-weight: 700; letter-spacing: -0.5px;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 24px; font-weight: 600; letter-spacing: -0.02em;
+  color: var(--text);
 }
 .vh-nav-instr {
-  font-size: 14px; color: rgba(255, 255, 255, 0.85);
+  font-size: 14px; color: var(--text-2);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  margin-top: 2px;
+  margin-top: 1px;
 }
 .vh-nav-close {
-  width: 34px; height: 34px;
-  background: rgba(255, 255, 255, 0.15);
-  border: none;
-  border-radius: 50%;
-  color: #fff; font-size: 14px; cursor: pointer;
+  width: 32px; height: 32px;
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text-2); font-size: 13px; cursor: pointer;
   flex-shrink: 0;
 }
-.vh-nav-close:hover { background: rgba(255, 255, 255, 0.25); }
+.vh-nav-close:hover { background: var(--surface-2); color: var(--text); }
 
 .vh-nav-bottom {
   position: absolute; left: 12px; right: 12px; bottom: 16px;
   z-index: 1100;
-  background: rgba(15, 27, 45, 0.95);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(12px);
-  border-radius: 14px;
-  padding: 14px 18px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-  display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  display: grid; grid-template-columns: 1fr 1fr 1fr;
   pointer-events: auto;
 }
-.vh-nav-metric { text-align: center; }
+.vh-nav-metric { text-align: center; padding: 10px 8px; }
+.vh-nav-metric + .vh-nav-metric { border-left: 1px solid var(--border); }
 .vh-nav-metric-value {
-  font-family: "Space Grotesk";
-  font-size: 20px; font-weight: 700;
-  color: #fff;
+  font-size: 18px; font-weight: 600;
+  color: var(--text);
+}
+.vh-nav-metric-value.is-text {
+  font-size: 14px; line-height: 27px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .vh-nav-metric-label {
-  font-size: 10px; text-transform: uppercase; letter-spacing: 1px;
-  color: var(--muted); margin-top: 2px;
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--text-3); margin-top: 1px;
 }
-
-.vh-shell.nav .vh-map { filter: saturate(1.1); }
 </style>
 
 <style>
-/* Markers globales */
+/* Marcadores globales (Leaflet divIcon) */
 .vh-marker { position: relative; }
 .vh-marker-pin {
   width: 100%; height: 100%;
   border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  color: #fff; font-size: 18px; font-weight: 700;
-  border: 3px solid rgba(255, 255, 255, 0.95);
+  background: var(--n-100);
+  color: var(--n-950);
+  font-size: 18px; font-weight: 700;
+  border: 2px solid var(--n-950);
+  box-shadow: 0 0 0 1px var(--n-500);
+  filter: grayscale(1);
   position: relative; z-index: 2;
 }
+.vh-marker.is-assigned .vh-marker-pin { background: var(--warn); filter: none; }
 .vh-marker-arrow {
   position: absolute;
   top: -6px; left: 50%;
+  margin-left: -7px;
   width: 0; height: 0;
   border-left: 7px solid transparent;
   border-right: 7px solid transparent;
-  border-bottom: 12px solid #01a982;
+  border-bottom: 12px solid var(--n-100);
   transform-origin: 50% calc(100% + 20px);
   transition: transform 0.4s ease;
   z-index: 1;
 }
+.vh-marker.is-assigned .vh-marker-arrow { border-bottom-color: var(--warn); }
 .vh-marker-emergency .vh-marker-pin {
+  background: var(--crit);
+  color: var(--n-950);
+  font-family: var(--font-mono);
+  border-radius: var(--radius-sm);
+  filter: none;
   animation: vh-pulse 1s ease-in-out infinite;
 }
 @keyframes vh-pulse {
   0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.15); }
+  50% { transform: scale(1.12); }
 }
 </style>

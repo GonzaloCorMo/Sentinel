@@ -1,7 +1,7 @@
 /**
  * Configuración i18n (vue-i18n) — 3 locales: es (default), gl, en.
  *
- * - Locale persistido en localStorage (`hpe.locale`).
+ * - Locale persistido en localStorage (`sentinel.locale`).
  * - Detecta `navigator.language` la primera vez si no hay preferencia guardada.
  * - Fallback siempre a español.
  *
@@ -25,7 +25,7 @@ export const SUPPORTED_LOCALES: { code: Locale; name: string; short: string }[] 
   { code: "en", name: "English", short: "EN" },
 ];
 
-const STORAGE_KEY = "hpe.locale";
+const STORAGE_KEY = "sentinel.locale";
 
 function detectInitialLocale(): Locale {
   const stored = localStorage.getItem(STORAGE_KEY);

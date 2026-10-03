@@ -9,7 +9,7 @@
     "maxWind": "Vento máx.",
     "alerts": "Alertas meteo activas",
     "allClear": "Todas as estacións OK",
-    "activeEvents": "Eventos Aruba Pulse",
+    "activeEvents": "Eventos externos",
     "active": "Activos",
     "byType": "Por tipo",
     "bySeverity": "Por severidade",
@@ -18,7 +18,7 @@
     "activeEmergencies": "Emerx. activas",
     "fuelLow": "Combustible baixo",
     "avgEta": "ETA media",
-    "pulseRate": "Ritmo Pulse",
+    "pulseRate": "Ritmo de eventos externos",
     "weatherImpact": "Impacto meteo en ETA",
     "affectedMissions": "Misións afectadas",
     "map": "Mapa da illa",
@@ -68,7 +68,7 @@
     "hours": "horas"
   },
   "header": {
-    "brand": "HPE Sentinel",
+    "brand": "Sentinel",
     "sse_connected": "SSE activo",
     "sse_connecting": "Conectando…",
     "sse_disconnected": "Desconectado",
@@ -81,14 +81,17 @@
     "ai_auto": "IA Auto",
     "ai_hitl": "IA HITL",
     "help_tooltip": "Axuda (tecla i)",
-    "logout_tooltip": "Pechar sesión"
+    "logout_tooltip": "Pechar sesión",
+    "theme_light": "Modo claro",
+    "theme_dark": "Modo escuro"
   },
   "nav": {
     "operations": "Operacións",
     "telemetry": "Telemetría",
     "comms": "Comunicacións",
     "reports": "Informes",
-    "config": "Configuración"
+    "config": "Configuración",
+    "island": "Illa"
   },
   "filters": {
     "title": "Filtros activos",
@@ -116,7 +119,7 @@
   },
   "auth": {
     "all_systems_ok": "Todos os sistemas operativos",
-    "tagline_html": "Xemelgo dixital<br />de ambulancias <span class=\"highlight\">HPE CDS</span>",
+    "tagline_html": "Xemelgo dixital<br />de ambulancias",
     "tagline_desc": "Telemetría en tempo real, motor de IA con modo HITL e autónomo, chatbot RAG sobre protocolos clínicos. Resiliencia MQTT → P2P → HTTP.",
     "feature_zero_trust_title": "Zero Trust",
     "feature_zero_trust_desc": "Autenticación Supabase + JWT, sen credenciais no navegador",
@@ -128,9 +131,9 @@
     "supabase_not_configured": "Supabase non configurado",
     "supabase_missing": "Faltan VITE_SUPABASE_URL ou VITE_SUPABASE_ANON_KEY no .env",
     "login_title": "Iniciar sesión",
-    "login_subtitle": "Accede a HPE Sentinel co teu correo",
+    "login_subtitle": "Accede a Sentinel co teu correo",
     "register_title": "Crear conta",
-    "register_subtitle": "Rexístrate en HPE Sentinel",
+    "register_subtitle": "Rexístrate en Sentinel",
     "forgot_title": "Restablecer contrasinal",
     "forgot_subtitle": "Introduce o teu correo e enviarémosche unha ligazón para restablecer o contrasinal.",
     "email": "Correo",
@@ -180,7 +183,7 @@
     "password_updated_desc": "Xa podes iniciar sesión co teu novo contrasinal"
   },
   "info": {
-    "title": "HPE Sentinel — Xemelgo dixital",
+    "title": "Sentinel — Xemelgo dixital",
     "intro": "Tres motores de telemetría por ambulancia (composición en Python): posicionamento GPS/cinemática, mecánica (combustíbel, batería, pneumáticos, sereas) e médico (BPM, PA, SpO₂, desfibrilador).",
     "network": "Resiliencia de rede: MQTT (Mosquitto) → P2P en memoria → HTTP POST a {endpoint}. O estado da ligazón amosa no dashboard e xera notificacións ao cambiar.",
     "shortcut_hint": "Atallo de teclado: {key} abre/pecha esta axuda."
@@ -643,20 +646,6 @@
     "generate_scenario": "Xerar escenario",
     "generating_scenario": "Xerando escenario…",
     "scenario_generated": "Escenario xerado",
-    "backup_title": "Modo backup",
-    "backup_desc": "Recrea o escenario completo do día: emerxencias, eventos críticos e datos meteorolóxicos desde Kafka. Mín. 1 abril 2026.",
-    "backup_date": "Día a recrear",
-    "backup_start": "▶ Reproducir día",
-    "backup_stop": "■ Deter",
-    "backup_running": "Reproducindo… {events} ev · {weather} clima ({scanned} escaneados)",
-    "backup_done": "Listo: {events} eventos + {weather} lecturas clima do {day}",
-    "backup_error": "Erro backup: {err}",
-    "backup_min_date": "Data mínima 2026-04-01",
-    "backup_topics": "Topics: aruba.events + aruba.weather",
-    "backup_show_all_label": "Mostrar todas as incidencias dunha vez",
-    "backup_show_all_help_on": "Activado: todas as incidencias do día aparecen no mapa instantaneamente.",
-    "backup_show_all_help_off": "Desactivado: as incidencias van aparecendo respectando os tempos reais acelerados.",
-    "backup_speed": "Velocidade",
     "scenario_error": "Erro xerando escenario",
     "crisis_failed": "Non se puido activar a crise",
     "crisis_error": "Erro activando crise",
