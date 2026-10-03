@@ -366,13 +366,6 @@
 
 /* Overrides de terceros (leaflet.css, vue-sonner) sin capa: deben ganar a sus hojas. */
 /* ── Leaflet: controles y popups al estilo del sistema ────────────────── */
-/* Teselas OSM en monocromo: grises en claro, invertidas en oscuro. */
-.map-tiles {
-  filter: grayscale(1) contrast(0.92) brightness(1.03);
-}
-[data-theme="dark"] .map-tiles {
-  filter: grayscale(1) invert(1) brightness(0.82) contrast(0.88);
-}
 /* leaflet.css se importa después (en el componente): se gana por especificidad. */
 #app .leaflet-container {
   background: var(--bg);

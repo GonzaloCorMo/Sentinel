@@ -6,6 +6,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { getSupabase } from "@/lib/supabase";
 import { cssVar, useTheme } from "@/composables/useTheme";
+import { addBasemap, type Basemap } from "@/lib/basemap";
 
 const { t } = useI18n();
 const { theme } = useTheme();
@@ -299,6 +300,7 @@ async function loadSavedVehicles() {
 
 onBeforeUnmount(() => {
   stopPolling();
+  basemap?.remove(); basemap = null;
   if (mapInstance) { mapInstance.remove(); mapInstance = null; }
 });
 
@@ -456,8 +458,7 @@ async function register() {
   }
 }
 
-// Teselas OSM; el monocromo por tema lo aplica `.map-tiles` en main.css.
-const TILE_URL = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+let basemap: Basemap | null = null;
 
 function initMap(centerLat: number, centerLon: number) {
   if (mapInstance) return;
@@ -465,10 +466,10 @@ function initMap(centerLat: number, centerLon: number) {
   if (!el) return;
   mapInstance = L.map(el, { zoomControl: false, attributionControl: false })
     .setView([centerLat, centerLon], 15);
-  L.tileLayer(TILE_URL, { maxZoom: 19, className: "map-tiles" }).addTo(mapInstance);
   L.control.zoom({ position: "topright" }).addTo(mapInstance);
   L.control.attribution({ position: "bottomright", prefix: false })
-    .addAttribution("© OpenStreetMap · OSRM").addTo(mapInstance);
+    .addAttribution("OSRM").addTo(mapInstance);
+  basemap = addBasemap(mapInstance, theme.value);
 }
 
 const vehicleIcon = computed(
@@ -749,6 +750,7 @@ async function unregister() {
   myVehicleId.value = null;
   myVehicle.value = null;
   assignedEmergency.value = null;
+  basemap?.remove(); basemap = null;
   if (mapInstance) { mapInstance.remove(); mapInstance = null; }
   myMarker = emergencyMarker = routeLine = routeLineShadow = null;
   await Promise.all([loadVehicleTypes(), loadSavedVehicles()]);
@@ -776,7 +778,10 @@ const currentPhaseLabel = computed(() => {
 });
 
 watch(() => myVehicle.value, () => updateMap(), { deep: true });
-watch(theme, () => updateMap());
+watch(theme, (next) => {
+  basemap?.setTheme(next);
+  updateMap();
+});
 </script>
 
 <template>

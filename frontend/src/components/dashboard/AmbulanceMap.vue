@@ -9,6 +9,7 @@ import { energyOf, operatingCostOf } from "@/lib/energyDisplay";
 import { remainingRouteCoords } from "@/lib/routePolyline";
 import { cssVar, useTheme } from "@/composables/useTheme";
 import { sanitizeSvg } from "@/lib/sanitize";
+import { addBasemap, type Basemap } from "@/lib/basemap";
 import { useRegionStore } from "@/stores/region";
 import { useSimulationStore } from "@/stores/simulation";
 
@@ -36,10 +37,8 @@ function readPalette() {
 }
 let palette = readPalette();
 
-/** Teselas OSM estándar; el monocromo por tema lo aplica `.map-tiles` en main.css
- *  (los estilos oscuros/claros de CARTO ya exigen API key). */
-const TILE_URL = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
 const { theme } = useTheme();
+let basemap: Basemap | null = null;
 
 const props = withDefaults(
   defineProps<{ mapTool?: MapTool; fullscreen?: boolean }>(),
@@ -801,13 +800,10 @@ onMounted(() => {
   const initCenter = activeRegion.value?.center ?? MAP_DEFAULT_CENTER;
   const initZoom = activeRegion.value?.zoom ?? MAP_DEFAULT_ZOOM;
   map = L.map(el, { preferCanvas: true }).setView(initCenter, initZoom);
-  L.tileLayer(TILE_URL, {
-    attribution: "&copy; OpenStreetMap",
-    maxZoom: 19,
-    className: "map-tiles",
-  }).addTo(map);
+  basemap = addBasemap(map, theme.value);
 
-  watch(theme, () => {
+  watch(theme, (next) => {
+    basemap?.setTheme(next);
     palette = readPalette();
     // Fuerza a repintar rutas/polígonos con la nueva paleta.
     routeFingerprints.clear();

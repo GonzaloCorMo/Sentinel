@@ -11,12 +11,19 @@ export default defineConfig({
       "@": fileURLToPath(new URL("./src", import.meta.url)),
     },
   },
+  // MapLibre 6: su worker es un módulo ES que importa un chunk compartido por
+  // ruta relativa; el pre-empaquetado de Vite lo rompe en desarrollo.
+  worker: { format: "es" },
+  optimizeDeps: { exclude: ["maplibre-gl"] },
   build: {
+    // MapLibre (motor del mapa vectorial) ronda 800 kB por sí solo y va en su propio chunk.
+    chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
         // Dependencias pesadas en chunks propios: se cachean entre despliegues.
         manualChunks(id) {
           if (!id.includes("node_modules")) return;
+          if (id.includes("maplibre")) return "vendor-maplibre";
           if (id.includes("leaflet")) return "vendor-leaflet";
           if (id.includes("@supabase")) return "vendor-supabase";
         },

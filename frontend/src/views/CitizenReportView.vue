@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { getSupabase } from "@/lib/supabase";
+import LocationPreviewMap from "@/components/LocationPreviewMap.vue";
 
 const { t, locale } = useI18n();
 
@@ -325,12 +326,7 @@ onBeforeUnmount(() => { stopRecognition(); });
               <span class="cr-accuracy">±{{ Math.round(coords.accuracy) }} m</span>
             </span>
           </div>
-          <iframe
-            v-if="coords"
-            class="cr-map"
-            :src="`https://www.openstreetmap.org/export/embed.html?bbox=${coords.lon-0.005}%2C${coords.lat-0.003}%2C${coords.lon+0.005}%2C${coords.lat+0.003}&layer=mapnik&marker=${coords.lat}%2C${coords.lon}`"
-            loading="lazy"
-          />
+          <LocationPreviewMap v-if="coords" :lat="coords.lat" :lon="coords.lon" />
         </div>
 
         <div class="cr-card">
@@ -609,16 +605,6 @@ onBeforeUnmount(() => { stopRecognition(); });
 .cr-card-hint { font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--text-4); }
 .cr-card-value { font-size: 13px; color: var(--text); }
 .cr-accuracy { color: var(--text-4); margin-left: 6px; font-size: 12px; }
-.cr-map {
-  display: block;
-  width: 100%; height: 180px;
-  border-radius: var(--radius-sm); border: 1px solid var(--border);
-  margin-top: 10px;
-  filter: grayscale(1);
-}
-:root[data-theme="dark"] .cr-map {
-  filter: grayscale(1) invert(0.92) contrast(0.9);
-}
 .cr-textarea {
   width: 100%;
   background: var(--bg);
