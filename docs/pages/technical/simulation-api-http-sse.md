@@ -98,11 +98,11 @@ Contrato completo en [Fuente de eventos](fuente-de-eventos.md).
 
 ## Regiones y rutas OSRM
 
-- `GET /api/regions` y `POST /api/regions/active` (`{regionId}`): listar y cambiar la región activa. Cambiar de región reinicia la simulación.
+- `GET /api/regions` y `POST /api/regions/active` (`{regionId}`): listar y cambiar la región activa (hoy solo `santiago`). Cambiar de región reinicia la simulación.
 - La URL del OSRM activo se obtiene de `regions.get_active_region().osrm_url`. Si la petición falla, se reintenta; si sigue fallando, se usa una polilínea recta entre waypoints (`roadSpeedLimitKmh` queda `null`).
 - `GET /api/osrm/{path}`: proxy para que el panel del vehículo pida indicaciones sin conocer la URL directa de OSRM.
 
-Detalle en [OSRM multirregión](osrm-local-docker.md).
+Detalle en [OSRM](osrm-local-docker.md).
 
 ## Ingesta de telemetría (fallback HTTP)
 

@@ -71,7 +71,7 @@ export default defineConfig({
           { text: 'Fuente de eventos', link: '/technical/fuente-de-eventos' },
           { text: 'Simulador y despacho', link: '/technical/simulador-global-despacho' },
           { text: 'Base de datos', link: '/technical/base-de-datos' },
-          { text: 'OSRM multirregión', link: '/technical/osrm-local-docker' },
+          { text: 'OSRM', link: '/technical/osrm-local-docker' },
           { text: 'IA: HITL y autónomo', link: '/technical/ai-hitl-autonomo' },
           { text: 'IA: chatbot RAG', link: '/technical/ai-chatbot-rag' },
           { text: 'Runbook de resiliencia', link: '/technical/runbook-resiliencia-operativa' },

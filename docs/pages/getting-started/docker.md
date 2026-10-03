@@ -51,7 +51,7 @@ docker compose logs -f
 La **primera vez** tarda ~10 min:
 
 - Descarga de imágenes Docker (~2 GB; tag `:rocm` añade ~3 GB extra solo si usas el perfil AMD).
-- Descarga de los 3 extractos OSM y compilación de los grafos OSRM (Santiago/Bogotá/CDMX). Cada par `osrm-fetcher-<region>` + `osrm-builder-<region>` se ejecuta una sola vez y sale.
+- Descarga del extracto OSM de Galicia, recorte a Santiago y compilación del grafo OSRM. `osrm-fetcher-santiago` y `osrm-builder-santiago` se ejecutan una sola vez y salen.
 - Descarga de los modelos de Ollama por `ollama-init`: chat `qwen2.5:3b` (~1,9 GB) y embeddings `nomic-embed-text` (~270 MB). Mientras no termine, el chat no responde.
 
 A partir de la segunda vez, todo arranca en <1 min (volúmenes persistidos).
@@ -67,9 +67,7 @@ A partir de la segunda vez, todo arranca en <1 min (volúmenes persistidos).
 | Supabase API (Kong) | http://localhost:54321 | 54321 |
 | Supabase Studio | http://localhost:54323 | 54323 |
 | Postgres | `localhost:54322` | 54322 |
-| OSRM Santiago de Compostela (por defecto) | http://localhost:5000 | 5000 |
-| OSRM Bogotá | http://localhost:5001 | 5001 |
-| OSRM CDMX | http://localhost:5002 | 5002 |
+| OSRM Santiago de Compostela | http://localhost:5000 | 5000 |
 | Mosquitto (MQTT) | `localhost:1883` | 1883 |
 | Ollama (chat + embeddings, red interna) | `http://ollama:11434` | — |
 
@@ -139,8 +137,8 @@ Flujo típico tras tocar Dockerfile o `requirements.txt`:
 
 ## Troubleshooting
 
-**`osrm-builder-<region>` falla con "out of memory"**
-Los extractos por defecto son ligeros (Bogotá/CDMX ~30-100 MB; Santiago se recorta del extracto de Galicia con osmium, ~110 MB de descarga y un grafo pequeño). Si cambias a un PBF mayor (`OSRM_PBF_URL_<REGION>` en `.env`), considera dar más memoria a Docker Desktop.
+**`osrm-builder-santiago` falla con "out of memory"**
+El extracto por defecto es ligero: Santiago se recorta del extracto de Galicia con osmium (~110 MB de descarga y un grafo pequeño). Si amplías el recorte (`OSRM_BBOX_SANTIAGO`) o cambias de extracto (`OSRM_PBF_URL_SANTIAGO`), considera dar más memoria a Docker Desktop.
 
 **El chat tarda mucho o no responde**
 Comprueba que `ollama-init` terminó (`docker compose logs ollama-init` debe acabar en `OK`) y que usas el perfil de GPU adecuado. Con el perfil `cpu` las respuestas pueden tardar bastante. Ver [IA local con Ollama](../technical/ai-chatbot-rag.md#ia-local-con-ollama).

@@ -52,12 +52,12 @@ Qué usamos y dónde vive cada pieza.
 - Escritura de telemetría: `simulation/app/telemetry_writer.py`
 - Escritura de eventos: `simulation/app/event_writer.py`
 
-### Enrutamiento OSRM (multirregión)
+### Enrutamiento OSRM
 
 - Cliente de routing + fallback: `simulation/app/routing.py` + `simulation/app/route_nav.py`
 - Registro de regiones: `simulation/app/regions.py`
-- Stack Docker: `docker-compose.yml` (4 tríos fetcher/builder/routed)
-- Datos persistidos: `docker/osrm-data/<region>/`
+- Stack Docker: `docker-compose.yml` (`osrm-fetcher-santiago`, `osrm-builder-santiago`, `osrm-santiago`)
+- Datos persistidos: `docker/osrm-data/santiago/`
 
 ### IA y LLM
 

@@ -34,7 +34,7 @@ cd frontend && npm run dev        # :5173, proxy /api → :8080
 cd docs && npm run dev            # :3001
 ```
 
-URLs: frontend `localhost:5173` · API `localhost:8080` (OpenAPI en `/openapi.yaml`) · docs `:3001` · Supabase `:54321` (Studio `:54323`) · OSRM Santiago `:5000`, Bogotá `:5001`, CDMX `:5002`.
+URLs: frontend `localhost:5173` · API `localhost:8080` (OpenAPI en `/openapi.yaml`) · docs `:3001` · Supabase `:54321` (Studio `:54323`) · OSRM Santiago `:5000`.
 
 Usuarios de desarrollo: `admin@sentinel.local` (rol admin) y `vehiculo@sentinel.local` (rol vehicle). Las contraseñas están en `.env` (`DEV_ADMIN_PASSWORD`, `DEV_VEHICLE_PASSWORD`). Se crean con la API admin de GoTrue y la `SUPABASE_SERVICE_ROLE_KEY`. **No pegues secretos de `.env` en el chat ni en commits.**
 

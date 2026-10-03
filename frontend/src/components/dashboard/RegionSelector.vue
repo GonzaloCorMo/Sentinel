@@ -64,7 +64,15 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="relative">
+  <!-- Con una sola región no hay nada que elegir: se muestra como etiqueta. -->
+  <div v-if="regions.length <= 1" class="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-slate-400" :title="t('region.selector_title')">
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+      <path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+    </svg>
+    <span class="max-w-[180px] truncate font-medium text-slate-300">{{ active?.name ?? t('region.loading') }}</span>
+  </div>
+  <div v-else class="relative">
     <button
       ref="buttonEl"
       type="button"

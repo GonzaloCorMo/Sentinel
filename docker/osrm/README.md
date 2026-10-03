@@ -1,38 +1,32 @@
-# OSRM local multirregión
+# OSRM local (Santiago de Compostela)
 
-El backend rutea contra el OSRM de la **región activa** (selector de la cabecera del dashboard). Cada región es un trío fetcher → builder → routed con su propio grafo en `docker/osrm-data/<region>/`:
+El backend calcula rutas contra el OSRM de Santiago de Compostela. El grafo se genera con tres contenedores (descarga → compilación → servidor) y se guarda en `docker/osrm-data/santiago/`:
 
-| Región | Servicio | Puerto host | Extracto por defecto |
+| Región | Servicio | Puerto | Extracto |
 |---|---|---|---|
-| Santiago de Compostela (por defecto) | `osrm-santiago` | 5000 | Geofabrik Galicia (~110 MB) recortado con osmium al área metropolitana |
-| Bogotá | `osrm-bogota` | 5001 | BBBike Bogota |
-| Ciudad de México | `osrm-mexico` | 5002 | BBBike MexicoCity |
-
-Cambiar de región (`POST /api/regions/active`) resetea el escenario; los tres contenedores siguen corriendo y solo el activo recibe consultas.
+| Santiago de Compostela | `osrm-santiago` | 5000 | Geofabrik Galicia (~110 MB) recortado con osmium al área metropolitana |
 
 ## Primera vez
 
-`./up.sh` (o `docker compose up -d`) arranca los tres stacks; cada `osrm-builder-<region>` compila si falta `docker/osrm-data/<region>/region.osrm`.
+`./up.sh` (o `docker compose up -d`) lo arranca. `osrm-builder-santiago` compila si falta `docker/osrm-data/santiago/region.osrm`.
 
-Para generar a mano el grafo de una región:
+Para generar el grafo a mano:
 
 ```bash
 bash docker/osrm/build-graph.sh santiago
-bash docker/osrm/build-graph.sh bogota
-bash docker/osrm/build-graph.sh mexico
 ```
 
-Variables opcionales: `PBF_URL` (otro extracto), `BBOX` (recorte de Santiago, `minLon,minLat,maxLon,maxLat`) y `FORCE=1` (regenerar).
+Variables opcionales:
+- `PBF_URL`: otro extracto;
+- `BBOX`: recorte, en formato `minLon,minLat,maxLon,maxLat`;
+- `FORCE=1`: regenerar el grafo.
 
-En compose, los equivalentes son `OSRM_PBF_URL_<REGION>` y `OSRM_BBOX_SANTIAGO` en `.env`. Si cambias el bbox, borra `docker/osrm-data/santiago/` para forzar la descarga y la compilación.
+En compose, los equivalentes son `OSRM_PBF_URL_SANTIAGO` y `OSRM_BBOX_SANTIAGO` en `.env`. Si cambias el recuadro, borra `docker/osrm-data/santiago/` para forzar la descarga y la compilación.
 
 ## Simulación sin Docker
 
 ```bash
 export OSRM_URL_SANTIAGO=http://127.0.0.1:5000
-export OSRM_URL_BOGOTA=http://127.0.0.1:5001
-export OSRM_URL_MEXICO=http://127.0.0.1:5002
-export DEFAULT_REGION=santiago
 ```
 
-Para forzar un OSRM único: `OSRM_BASE_URL=http://...`. Si OSRM no está disponible, el motor usa una **polilínea recta** entre waypoints.
+Para forzar otra URL de OSRM: `OSRM_BASE_URL=http://...`. Si OSRM no está disponible, el motor usa una **polilínea recta** entre los puntos de paso.

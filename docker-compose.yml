@@ -18,8 +18,6 @@
 #   54322 Postgres
 #   54323 Supabase Studio (vía Kong también en 54321)
 #   5000  OSRM Santiago de Compostela
-#   5001  OSRM Bogotá
-#   5002  OSRM Ciudad de México
 #   1883  Mosquitto (MQTT)
 
 name: sentinel-digital-twin
@@ -108,126 +106,6 @@ services:
       - "5000:5000"
     volumes:
       - ./docker/osrm-data/santiago:/data:ro
-    command: osrm-routed --algorithm mld /data/region.osrm
-
-  osrm-fetcher-bogota:
-    image: alpine:3.19
-    restart: "no"
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        set -eu
-        cd /data
-        if [ -f region.osrm ] || [ -f map.osm.pbf ]; then
-          echo "[osrm-fetcher-bogota] datos ya existen, saltando descarga"
-          exit 0
-        fi
-        apk add --no-cache curl >/dev/null
-        echo "[osrm-fetcher-bogota] descargando Bogotá PBF..."
-        curl -L --fail -o map.osm.pbf.part "$$PBF_URL"
-        mv map.osm.pbf.part map.osm.pbf
-        echo "[osrm-fetcher-bogota] OK"
-    environment:
-      PBF_URL: ${OSRM_PBF_URL_BOGOTA:-https://download.bbbike.org/osm/bbbike/Bogota/Bogota.osm.pbf}
-    volumes:
-      - ./docker/osrm-data/bogota:/data
-
-  osrm-builder-bogota:
-    image: osrm/osrm-backend:latest
-    restart: "no"
-    depends_on:
-      osrm-fetcher-bogota:
-        condition: service_completed_successfully
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        set -eu
-        cd /data
-        if [ -f region.osrm ]; then
-          echo "[osrm-builder-bogota] grafo ya existe, saltando"
-          exit 0
-        fi
-        echo "[osrm-builder-bogota] osrm-extract..."
-        osrm-extract -p /opt/car.lua map.osm.pbf
-        echo "[osrm-builder-bogota] osrm-partition..."
-        osrm-partition map.osrm
-        echo "[osrm-builder-bogota] osrm-customize..."
-        osrm-customize map.osrm
-        for f in map.osrm*; do mv "$$f" "region.$${f#map.}"; done
-        echo "[osrm-builder-bogota] grafo listo"
-    volumes:
-      - ./docker/osrm-data/bogota:/data
-
-  osrm-bogota:
-    image: osrm/osrm-backend:latest
-    restart: unless-stopped
-    depends_on:
-      osrm-builder-bogota:
-        condition: service_completed_successfully
-    ports:
-      - "5001:5000"
-    volumes:
-      - ./docker/osrm-data/bogota:/data:ro
-    command: osrm-routed --algorithm mld /data/region.osrm
-
-  osrm-fetcher-mexico:
-    image: alpine:3.19
-    restart: "no"
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        set -eu
-        cd /data
-        if [ -f region.osrm ] || [ -f map.osm.pbf ]; then
-          echo "[osrm-fetcher-mexico] datos ya existen, saltando descarga"
-          exit 0
-        fi
-        apk add --no-cache curl >/dev/null
-        echo "[osrm-fetcher-mexico] descargando Ciudad de México PBF..."
-        curl -L --fail -o map.osm.pbf.part "$$PBF_URL"
-        mv map.osm.pbf.part map.osm.pbf
-        echo "[osrm-fetcher-mexico] OK"
-    environment:
-      PBF_URL: ${OSRM_PBF_URL_MEXICO:-https://download.bbbike.org/osm/bbbike/MexicoCity/MexicoCity.osm.pbf}
-    volumes:
-      - ./docker/osrm-data/mexico:/data
-
-  osrm-builder-mexico:
-    image: osrm/osrm-backend:latest
-    restart: "no"
-    depends_on:
-      osrm-fetcher-mexico:
-        condition: service_completed_successfully
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        set -eu
-        cd /data
-        if [ -f region.osrm ]; then
-          echo "[osrm-builder-mexico] grafo ya existe, saltando"
-          exit 0
-        fi
-        echo "[osrm-builder-mexico] osrm-extract..."
-        osrm-extract -p /opt/car.lua map.osm.pbf
-        echo "[osrm-builder-mexico] osrm-partition..."
-        osrm-partition map.osrm
-        echo "[osrm-builder-mexico] osrm-customize..."
-        osrm-customize map.osrm
-        for f in map.osrm*; do mv "$$f" "region.$${f#map.}"; done
-        echo "[osrm-builder-mexico] grafo listo"
-    volumes:
-      - ./docker/osrm-data/mexico:/data
-
-  osrm-mexico:
-    image: osrm/osrm-backend:latest
-    restart: unless-stopped
-    depends_on:
-      osrm-builder-mexico:
-        condition: service_completed_successfully
-    ports:
-      - "5002:5000"
-    volumes:
-      - ./docker/osrm-data/mexico:/data:ro
     command: osrm-routed --algorithm mld /data/region.osrm
 
   # ────────────────────────────────────────── Supabase stack ───
@@ -589,8 +467,6 @@ services:
       # OSRM por región (selector de mapa). El backend usa la URL de la región
       # activa; las demás quedan idle pero conectadas.
       OSRM_URL_SANTIAGO: http://osrm-santiago:5000
-      OSRM_URL_BOGOTA: http://osrm-bogota:5000
-      OSRM_URL_MEXICO: http://osrm-mexico:5000
       DEFAULT_REGION: ${DEFAULT_REGION:-santiago}
       # Fuente de eventos externos: mock local o ingesta REST (/api/events/ingest)
       EVENT_SOURCE: ${EVENT_SOURCE:-mock}

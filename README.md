@@ -1,6 +1,6 @@
 # Sentinel — Digital Twin
 
-Gemelo digital de una flota de emergencias: dashboard de operaciones con telemetría en tiempo real, PWA ciudadana para reportar incidentes, panel de vehículo para la tripulación y un motor de IA con modos HITL / autónomo. Multi-región (Santiago de Compostela · Bogotá · CDMX), routing OSRM, IA 100 % local con Ollama, chat RAG y pipeline ML de detección de anomalías.
+Gemelo digital de una flota de emergencias: dashboard de operaciones con telemetría en tiempo real, PWA ciudadana para reportar incidentes, panel de vehículo para la tripulación y un motor de IA con modos HITL / autónomo. Simulación sobre las calles reales de Santiago de Compostela con routing OSRM, IA 100 % local con Ollama, chat RAG y pipeline ML de detección de anomalías.
 
 ## Stack
 
@@ -12,7 +12,7 @@ Gemelo digital de una flota de emergencias: dashboard de operaciones con telemet
 | Eventos externos | Fuente mock local + ingesta REST (`/api/events/ingest`, `/api/weather/ingest`) |
 | Base de datos + Auth | Supabase (Postgres + pgvector + GoTrue + Storage) |
 | LLM | Ollama local en Docker: chat `qwen2.5:3b` · embeddings `nomic-embed-text` (API compatible con OpenAI) |
-| Routing | OSRM multi-región, un grafo por región |
+| Routing | OSRM con el grafo de Santiago de Compostela |
 | Comunicaciones | MQTT (Mosquitto) con fallback P2P + HTTP |
 | Servicio ML | FastAPI · ONNX Runtime · IsolationForest (`fleet_anomaly`) |
 | Documentación | VitePress |
@@ -41,7 +41,7 @@ Levanta el stack completo con Docker Compose. La primera vez tarda ~10 min (desc
 | Documentación (VitePress) | http://localhost:3001 |
 | Supabase API (Kong) · Studio | http://localhost:54321 · http://localhost:54323 |
 | Mosquitto (MQTT) | mqtt://localhost:1883 |
-| OSRM Santiago · Bogotá · CDMX | http://localhost:5000 · :5001 · :5002 |
+| OSRM Santiago de Compostela | http://localhost:5000 |
 
 ## Estructura
 
@@ -56,7 +56,7 @@ Levanta el stack completo con Docker Compose. La primera vez tarda ~10 min (desc
 │       ├── engines/              Motores de telemetría (posición/mecánica/médica/entorno/red)
 │       ├── ai_decision_engine.py Propuestas HITL / autónomo
 │       ├── chat_service.py       Chat RAG sobre protocolos
-│       ├── routing.py            OSRM multi-región + fallback en línea recta
+│       ├── routing.py            OSRM (rutas, calle más cercana, tabla) + línea recta si cae
 │       ├── channels.py           MQTT + P2P + HTTP fallback
 │       └── main.py               API HTTP + SSE
 ├── ml-service/           ONNX Runtime: IsolationForest fleet_anomaly
@@ -127,7 +127,7 @@ Un único `.env` en la raíz (plantilla: [`.env.example`](.env.example)); Docker
 
 | Variable | Uso |
 |---|---|
-| `DEFAULT_REGION` | Región inicial (`santiago` por defecto, `bogota`, `mexico`) |
+| `DEFAULT_REGION` | Región de la simulación (`santiago`, la única disponible) |
 | `OLLAMA_CHAT_MODEL` | Modelo de chat que descarga `ollama-init` (`qwen2.5:3b`) |
 | `LLM_FLASH_BASE_URL` · `LLM_FLAGSHIP_BASE_URL` | Endpoint compatible con OpenAI (por defecto `http://ollama:11434/v1`; vale vLLM, LM Studio…) |
 | `LLM_FLASH_MODEL` · `LLM_FLAGSHIP_MODEL` | Modelos de chat e informes (`qwen2.5:3b`) |

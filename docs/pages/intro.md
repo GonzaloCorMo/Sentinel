@@ -1,6 +1,6 @@
 # Introducción
 
-**Sentinel** es un gemelo digital de una flota de ambulancias. Simula la operación real en distintas regiones (Santiago de Compostela por defecto; también Bogotá y Ciudad de México): despacho de emergencias, telemetría vehicular, clínica, ambiental y de red, resiliencia de comunicaciones, IA que detecta anomalías y propone o ejecuta acciones, ingesta de eventos externos (incidentes y meteorología) y exposición de datos para análisis masivo y ML.
+**Sentinel** es un gemelo digital de una flota de ambulancias. Simula la operación real en Santiago de Compostela, sobre sus calles, hospitales y gasolineras reales: despacho de emergencias, telemetría vehicular, clínica, ambiental y de red, resiliencia de comunicaciones, IA que detecta anomalías y propone o ejecuta acciones, ingesta de eventos externos (incidentes y meteorología) y exposición de datos para análisis masivo y ML.
 
 ## Componentes
 
@@ -12,7 +12,7 @@
 - **IA observer** (`simulation/app/ai_decision_engine.py`): anomalías + RAG + propuestas HITL o ejecución autónoma.
 - **Proveedor LLM** (`simulation/app/llm_provider.py`): cliente compatible con OpenAI que habla con Ollama dentro del stack (chat `qwen2.5:3b` y embeddings `nomic-embed-text`). Ver [IA local con Ollama](technical/ai-chatbot-rag.md#ia-local-con-ollama).
 - **Servicio ML** (`ml-service/`): ONNX Runtime + IsolationForest, modelo `fleet_anomaly`.
-- **OSRM multirregión** (`docker/osrm-data/`): tres grafos en paralelo; cambiar de región reinicia la simulación.
+- **OSRM** (`docker/osrm-data/santiago/`): grafo de calles de Santiago de Compostela, recortado del extracto de Galicia.
 - **Supabase**: Postgres + pgvector + GoTrue + Storage.
 
 ## Stack
@@ -24,7 +24,7 @@
 | Base de datos y auth | Supabase (Postgres + pgvector + GoTrue + Storage) |
 | LLM (chat, comandos, informes) | Ollama local, API compatible con OpenAI (`qwen2.5:3b` por defecto) |
 | Embeddings | Ollama local (`nomic-embed-text`); perfiles compose `gpu-nvidia` / `gpu-amd` / `cpu` |
-| Routing | OSRM multirregión: 3 grafos en paralelo (Santiago / Bogotá / CDMX) |
+| Routing | OSRM con el grafo de Santiago de Compostela (rutas, calle más cercana y tabla de tiempos) |
 | Mensajería | Mosquitto (MQTT) + fallback P2P + fallback HTTP |
 | Eventos externos | Generador mock local + ingesta REST (`/api/events/ingest`, `/api/weather/ingest`) |
 | Servicio ML | FastAPI + ONNX Runtime + IsolationForest (`fleet_anomaly`) |

@@ -40,9 +40,9 @@ El menú principal tiene seis secciones:
 
 El mapa sigue el tema de la aplicación: Alidade Smooth en tema claro y Alidade Smooth Dark en oscuro (Stadia Maps con MapLibre GL). En local no necesita clave; en un dominio público hay que registrar el dominio en Stadia Maps o definir `STADIA_API_KEY` en `.env`.
 
-## 5) Selector de región
+## 5) Región
 
-En la cabecera del dashboard hay un `RegionSelector` con 3 opciones: Santiago de Compostela (por defecto), Bogotá y Ciudad de México. Cambiar de región **resetea la simulación** (POIs y flota se borran porque sus coordenadas no son válidas en el nuevo grafo OSRM). El backend conmuta el contenedor OSRM activo automáticamente; los demás quedan idle.
+La simulación se desarrolla en Santiago de Compostela; la cabecera muestra la región activa. Hospitales, gasolineras y bases son los reales de la ciudad.
 
 ## 6) Mapa (`/map`)
 

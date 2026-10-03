@@ -6,8 +6,8 @@ flota / POIs / emergencias automaticas. La región activa es estado global del
 proceso: cambiarla resetea la simulación (`engine.reset_simulation`) porque las
 coordenadas de POIs/ambulancias previas no son válidas en el nuevo grafo.
 
-Cada OSRM corre en su propio contenedor docker (osrm-santiago, osrm-bogota, ...);
-solo el de la región activa recibe queries — los demás quedan idle.
+Hoy solo está Santiago de Compostela (contenedor osrm-santiago); la
+estructura admite más regiones si se añaden aquí y en docker-compose.yml.
 """
 from __future__ import annotations
 
@@ -134,36 +134,6 @@ REGIONS: dict[str, RegionConfig] = {
             ("Hospital HM Rosaleda", 42.87186, -8.54633),
         ),
     ),
-    "bogota": RegionConfig(
-        id="bogota",
-        name="Bogotá",
-        country="Colombia",
-        timezone="America/Bogota",
-        center_lat=4.6286,
-        center_lon=-74.0653,
-        zoom=14,
-        spawn_lat=4.6295,
-        spawn_lon=-74.0656,
-        pbf_url="https://download.bbbike.org/osm/bbbike/Bogota/Bogota.osm.pbf",
-        osrm_url=_osrm_url("bogota", "osrm-bogota", 5000),
-        probe_lon_a=-74.0653, probe_lat_a=4.6286,
-        probe_lon_b=-74.0670, probe_lat_b=4.6310,
-    ),
-    "mexico": RegionConfig(
-        id="mexico",
-        name="Ciudad de México",
-        country="México",
-        timezone="America/Mexico_City",
-        center_lat=19.4326,
-        center_lon=-99.1332,
-        zoom=14,
-        spawn_lat=19.4335,
-        spawn_lon=-99.1335,
-        pbf_url="https://download.bbbike.org/osm/bbbike/MexicoCity/MexicoCity.osm.pbf",
-        osrm_url=_osrm_url("mexico", "osrm-mexico", 5000),
-        probe_lon_a=-99.1332, probe_lat_a=19.4326,
-        probe_lon_b=-99.1300, probe_lat_b=19.4350,
-    ),
 }
 
 DEFAULT_REGION_ID = (os.environ.get("DEFAULT_REGION") or "santiago").strip().lower()
@@ -175,7 +145,7 @@ _active_region_id: str = DEFAULT_REGION_ID
 
 
 def list_regions() -> list[RegionConfig]:
-    """Lista de regiones disponibles (orden estable: santiago, bogota, mexico)."""
+    """Lista de regiones disponibles (hoy solo santiago)."""
     return list(REGIONS.values())
 
 

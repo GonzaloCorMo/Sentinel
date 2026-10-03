@@ -17,7 +17,7 @@ Todo lo que genera el simulador cae sobre la red viaria real del grafo OSRM de l
 | Cortes de tráfico | Son un tramo de la calle real: se traza la ruta entre dos puntos de la misma vía y se ensancha 12 m a cada lado. Vale igual para los cortes que pone el operador con un clic y para los que generan las incidencias externas (accidente, obras, corte de carril, vertido). |
 | Incidencias externas simuladas | En calles con nombre del área metropolitana; las de tráfico, en vías principales. |
 
-`region_data/<región>.json` se extrae del mismo `.osm.pbf` que usa OSRM. Para Santiago se sacaron con `osmium tags-filter` los objetos `amenity=fuel`, `emergency=ambulance_station`, `amenity=fire_station` y `amenity=police`, descartando los duplicados a menos de 80 m. Bogotá y Ciudad de México aún no tienen ese archivo: allí se usan puntos en calles reales cerca del centro.
+`region_data/<región>.json` se extrae del mismo `.osm.pbf` que usa OSRM. Para Santiago se sacaron con `osmium tags-filter` los objetos `amenity=fuel`, `emergency=ambulance_station`, `amenity=fire_station` y `amenity=police`, descartando los duplicados a menos de 80 m.
 
 ## Emergencias
 
