@@ -698,12 +698,15 @@ services:
     build:
       context: ./docs
       dockerfile: Dockerfile
+      target: dev
     restart: unless-stopped
     ports:
       - "3001:3001"
+    # Solo se montan fuentes: montar ./docs entero taparía el node_modules de la imagen.
     volumes:
       - ./docs/pages:/docs/pages
-      - ./docs/mkdocs.yml:/docs/mkdocs.yml
+      - ./docs/.vitepress/config.mts:/docs/.vitepress/config.mts
+      - ./docs/.vitepress/theme:/docs/.vitepress/theme
 
 volumes:
   supabase-db-data:

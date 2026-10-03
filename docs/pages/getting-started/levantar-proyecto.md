@@ -10,7 +10,7 @@ python3 scripts/generate-supabase-keys.py   # pega el output en .env
 ./up.sh
 ```
 
-Banner con todas las URLs al final. Primera vez tarda ~15 min (descarga imágenes + grafo OSRM + modelos Ollama). Siguientes arranques <2 s.
+Al terminar muestra un banner con todas las URLs. La primera vez tarda ~10–15 min (descarga de imágenes, grafos OSRM y modelo de embeddings); los siguientes arranques, segundos.
 
 Guía detallada: [Arranque con Docker](docker.md).
 
@@ -40,7 +40,7 @@ npm install
 npm run dev    # http://localhost:5173
 ```
 
-Exige tener el backend (`simulation`) y Supabase en marcha vía Docker. El Vite dev server inyecta `VITE_SUPABASE_URL` y `DEV_PROXY_API_TARGET` desde env.
+Exige tener el backend (`simulation`) y Supabase en marcha vía Docker. El servidor de Vite lee `VITE_SUPABASE_URL`, `DEV_PROXY_API_TARGET` y `DEV_PROXY_SB_TARGET` del entorno.
 
 ### Backend
 
@@ -52,6 +52,16 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 Requiere Postgres + pgvector + OSRM + Ollama accesibles. Lo más cómodo: levantar stack completo (`./up.sh`) y ejecutar solo el backend nativo aparte (detener el container `simulation` con `docker compose stop simulation`).
+
+### Documentación
+
+```bash
+cd docs
+npm install
+npm run dev
+```
+
+Ver `docs/README.md` para más opciones (build estático, Docker).
 
 ## Variables de entorno
 

@@ -1,41 +1,52 @@
-# Website
+# Sentinel — documentación
 
-This website is built using [Docusaurus](https://docusaurus.io/), a modern static website generator.
+Sitio de documentación técnica y operativa de Sentinel, construido con [VitePress](https://vitepress.dev/).
 
-## Installation
+## Estructura
 
-```bash
-yarn
+```
+docs/
+├── .vitepress/
+│   ├── config.mts        # título, sidebar, búsqueda local, opciones del sitio
+│   └── theme/            # tema: DefaultTheme + custom.css
+├── pages/                # contenido Markdown (srcDir)
+│   ├── index.md          # portada (layout home)
+│   ├── getting-started/  auth/  arquitectura/
+│   ├── technical/  ml/  guia-usuario/
+├── Dockerfile
+└── package.json
 ```
 
-## Local Development
+Para añadir una página, crea el `.md` en `pages/` y enlázala en el `sidebar` de `.vitepress/config.mts`. Los enlaces internos se escriben relativos con extensión `.md` (p. ej. `[API](../technical/simulation-api-http-sse.md)`); el build falla si hay enlaces muertos.
+
+Bloques destacados: `::: info`, `::: tip`, `::: warning`, `::: danger` y `::: details` (cerrados con `:::`).
+
+## Desarrollo local
+
+Requiere Node.js 20 o superior.
 
 ```bash
-yarn start
+cd docs
+npm install
+npm run dev        # servidor con recarga en caliente
 ```
 
-This command starts a local development server and opens up a browser window. Most changes are reflected live without having to restart the server.
-
-## Build
+## Build estático
 
 ```bash
-yarn build
+npm run build      # genera .vitepress/dist
+npm run preview    # sirve el build en http://localhost:3001
 ```
 
-This command generates static content into the `build` directory and can be served using any static contents hosting service.
+## Docker
 
-## Deployment
+Con el stack completo (`./up.sh` o `docker compose up -d`) la documentación se sirve en `http://localhost:3001`. El servicio monta `pages/` y `.vitepress/` como volúmenes, así que los cambios se reflejan sin reconstruir la imagen.
 
-Using SSH:
+Imagen aislada:
 
 ```bash
-USE_SSH=true yarn deploy
+docker build -t sentinel-docs ./docs
+docker run --rm -p 3001:3001 sentinel-docs
 ```
 
-Not using SSH:
-
-```bash
-GIT_USER=<Your GitHub username> yarn deploy
-```
-
-If you are using GitHub pages for hosting, this command is a convenient way to build the website and push to the `gh-pages` branch.
+Para obtener solo el sitio estático: `docker build --target build -t sentinel-docs-build ./docs` (el resultado queda en `/docs/.vitepress/dist`).

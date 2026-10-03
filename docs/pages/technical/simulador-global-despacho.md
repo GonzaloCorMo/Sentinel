@@ -1,29 +1,50 @@
-# Simulador global y despacho (motor Python)
+# Simulador y despacho
 
-Comportamiento implementado en `simulation/app/engine.py` y contrato HTTP en `simulation/app/main.py`.
+Comportamiento implementado en `simulation/app/engine.py`, con el scoring en `simulation/app/dispatch_scoring.py` y las reglas de recursos en `simulation/app/ambulance_fsm.py`. El contrato HTTP está en [API de simulación](simulation-api-http-sse.md).
 
-## Reloj global de simulación
+## Reloj global
 
-- `speed_multiplier` es **único** para todo el motor: se propaga a cada ambulancia al llamar a `update_speed_multiplier`.
-- `POST /api/control/speed` acepta `multiplier` en **float**, rango **0.5–8** (alineado con el dashboard Next.js).
-- `POST /api/control/toggle` pausa o reanuda la simulación para **toda** la flota (`is_simulating`).
+- `speedMultiplier` es **único** para todo el motor (rango 0,1–20) y se cambia con `POST /api/sim/control`.
+- `dt_sim = dt_real * speed_multiplier`: los motores de telemetría y el avance por ruta usan `dt_sim`; el stream SSE mantiene su cadencia fija.
+- `action: "pause"` / `"play"` congela o reanuda la simulación para **toda** la flota. El motor arranca en pausa.
 
 ## Despacho de emergencias
 
-- Las emergencias en estado `INITIATED` se ordenan por **gravedad** (CRITICAL antes que HIGH, etc.).
-- En cada ciclo del bucle de despacho se llama a `evaluate_fleet_assignments()` para no dejar pendientes sin reasignar cuando cambia disponibilidad o combustible.
-- Solo se **asigna** una unidad si el **combustible actual** cubre la misión estimada: distancia hasta la emergencia + distancia de la emergencia al hospital más cercano, con consumo ~`0.15` % por km (coherente con `telemetry/mechanical.py`) más un **margen** (`MISSION_FUEL_MARGIN_PCT`).
-- Si hay candidatos con buena puntuación pero **sin combustible suficiente**, el mejor pasa a **repostaje prioritario** (`route_to_nearest("GAS_STATION")`) antes de poder cubrir la urgencia.
+Para cada emergencia `pending`, el motor:
 
-## Repostaje y ocio
+1. Toma como candidatas las unidades en estado `IDLE` sin ruta activa.
+2. Las puntúa con un **registro de factores ponderados** (`ScoringRegistry`). Mayor puntuación = mejor candidata:
 
-- **Repostaje proactivo**: unidades libres con combustible por debajo de `PROACTIVE_REFUEL_THRESHOLD_PCT` (60%) van a la gasolinera más cercana antes de quedar disponibles para ocio largo.
-- **Ocio en hospital**: solo si combustible **≥ 60%** (`IDLE_HOSPITAL_MIN_FUEL_PCT`); se elige hospital con **menos ambulancias repostando cerca** (heurística por radio km) y luego carga en ruta y distancia.
+   | Factor | Peso | Efecto |
+   |---|---|---|
+   | `distance` | −1,0 | Penaliza la distancia Haversine (km) a la emergencia. |
+   | `severity` | +5,0 | Prioriza según la gravedad de la emergencia. |
+   | `weather` | +3,0 | Tiene en cuenta la meteorología de las estaciones cercanas. |
+   | `jam_crossing` | −2,0 | Penaliza rutas que cruzan atascos (manuales o derivados de eventos externos). |
+
+3. Recorre las candidatas en orden y asigna la primera que **puede aceptar la misión** (`can_accept_mission`): el combustible debe cubrir ida y vuelta más una reserva del 8 %, y la batería secundaria debe estar por encima del 18 %.
+4. Si ninguna candidata tiene recursos suficientes, la mejor va primero a **repostar** (`to_refuel`) y queda con la emergencia pendiente para retomarla al terminar.
+
+El desglose del scoring se guarda por misión (`dispatch_score_breakdown`) para que las decisiones sean explicables y alimenten el dataset de ranking ML.
+
+Con `dispatchRequiresApproval=true`, las nuevas emergencias pasan antes por el flujo HITL (ver [IA: HITL y autónomo](ai-hitl-autonomo.md)). En modo autónomo el motor deja de autoasignar y decide la IA.
+
+## Repostaje
+
+- Las unidades eléctricas van a estaciones de carga y las de combustión a gasolineras (según el `powertrain` de su tipo).
+- **Repostaje en reposo**: una unidad libre con energía por debajo del 20 % va al punto de repostaje más cercano (con un enfriamiento entre intentos).
+- **Repostaje de supervivencia**: cuando una unidad es la mejor opción pero no llega, reposta y retoma la emergencia.
+
+## Eventos externos
+
+Los eventos de la [fuente de eventos](fuente-de-eventos.md) intervienen en el despacho de dos formas: los viales crean atascos que penalizan el scoring y que el routing evita, y los de emergencia generan nuevas emergencias que entran en este mismo flujo.
 
 ## Referencias
 
 | Concepto | Archivo |
 |----------|---------|
-| Motor | `simulation/app/engine.py` |
+| Motor y bucle de despacho | `simulation/app/engine.py` |
+| Scoring de candidatas | `simulation/app/dispatch_scoring.py` |
+| Reglas de recursos y FSM | `simulation/app/ambulance_fsm.py` |
 | API FastAPI | `simulation/app/main.py` |
-| Dashboard | `proyecto_hpe/src/components/dashboard/dashboard-client.tsx` |
+| Mapa de operaciones | `frontend/src/views/MapOperationsView.vue` |

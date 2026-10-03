@@ -5,7 +5,7 @@ Cómo pasar de `models/eta_xgb.json` (artefacto del proyecto paralelo) a que el 
 ## Flujo de deploy end-to-end
 
 ```
-hpe-ml-training/                             HPE-Ambulancia-Digital-Twin/
+hpe-ml-training/                             gemelo digital (este repo)
  ─────────────────                            ──────────────────────────
   entrenar modelo                              FastAPI simulation
        ↓                                             ↑ predict_eta()
@@ -66,24 +66,27 @@ Para el anomaly detector el export es automático (script `anomaly.py` ya lo hac
 
 ## Paso 3 — Sube al volumen del ml-service
 
-El gemelo usa un volumen Docker llamado `hpe-ambulancia-digital-twin_ml-models` montado en `/models` dentro del contenedor `ml-service`.
+El gemelo usa un volumen Docker `<proyecto>_ml-models` (el prefijo es el nombre del proyecto compose; compruébalo con `docker volume ls | grep ml-models`) montado en `/models` dentro del contenedor `ml-service`. En los comandos siguientes, `ML` es el id del contenedor:
+
+```bash
+ML=$(docker ps -qf name=ml-service)
+```
 
 ### Método A: `docker cp` (rápido, ad-hoc)
 
 ```bash
 # Desde hpe-ml-training/
-docker cp models/eta_xgb.onnx \
-  hpe-ambulancia-digital-twin-ml-service-1:/models/eta_xgb.onnx
+docker cp models/eta_xgb.onnx "$ML":/models/eta_xgb.onnx
 
 # Verifica
-docker exec hpe-ambulancia-digital-twin-ml-service-1 ls -lh /models/
+docker exec "$ML" ls -lh /models/
 ```
 
 ### Método B: copia al mountpoint del volumen (persiste entre recreate)
 
 ```bash
 # Averigua dónde vive el volumen
-VOL=$(docker volume inspect hpe-ambulancia-digital-twin_ml-models -f '{{ .Mountpoint }}')
+VOL=$(docker volume inspect <proyecto>_ml-models -f '{{ .Mountpoint }}')
 sudo cp models/eta_xgb.onnx "$VOL/eta_xgb.onnx"
 sudo chown 1000:1000 "$VOL/eta_xgb.onnx"   # uid del usuario del container
 ```
@@ -122,14 +125,19 @@ def predict_eta(body: EtaInput):
 
 Reinicia el servicio:
 ```bash
-# Si tenés bind mount sobre ml-service/ (recomendado en docker-compose.yml):
-docker restart hpe-ambulancia-digital-twin-ml-service-1
+# Si tienes bind mount sobre ml-service/ (recomendado en docker-compose.yml):
+docker restart "$ML"
 
 # Si no, rebuild:
 ./build.sh ml-service && docker compose up -d ml-service
 ```
 
 Verifica:
+
+::: tip Puerto 9100
+En el `docker-compose.yml` por defecto, `ml-service` solo escucha en la red interna (`http://ml-service:9100`). Para lanzar estas peticiones desde el host, publica el puerto `9100:9100` en el servicio o ejecútalas desde otro contenedor de la red.
+:::
+
 ```bash
 curl http://localhost:9100/models
 curl -X POST http://localhost:9100/predict/eta \
@@ -245,8 +253,8 @@ Si el modelo nuevo degrada outcomes:
 
 ```bash
 # Copia el modelo anterior de vuelta
-docker cp models/eta_xgb.v1.onnx hpe-ambulancia-digital-twin-ml-service-1:/models/eta_xgb.onnx
-docker restart hpe-ambulancia-digital-twin-ml-service-1
+docker cp models/eta_xgb.v1.onnx "$ML":/models/eta_xgb.onnx
+docker restart "$ML"
 ```
 
 O directo: borra el fichero y el fallback en `predict_eta` devuelve `None` → el motor vuelve al ETA heurístico OSRM.
@@ -273,15 +281,16 @@ python -m hpe_ml.models.eta_regressor --data data/ml_mission_training.parquet
 python scripts/export_eta_onnx.py
 
 # Deploy
-docker cp models/eta_xgb.onnx hpe-ambulancia-digital-twin-ml-service-1:/models/
-docker restart hpe-ambulancia-digital-twin-ml-service-1
+ML=$(docker ps -qf name=ml-service)
+docker cp models/eta_xgb.onnx "$ML":/models/
+docker restart "$ML"
 
 # Verificar
 curl http://localhost:9100/models
 curl -X POST http://localhost:9100/predict/eta -d '{"features":[2.5,1,0,3,1,0,0,1,0,0]}' -H "Content-Type: application/json"
 
 # Monitorizar A/B
-docker exec hpe-ambulancia-digital-twin-supabase-db-1 psql -U postgres -c \
+docker exec "$(docker ps -qf name=supabase-db)" psql -U postgres -c \
   "select avg(abs(eta_error_s)) from mission_outcomes where created_at > now() - interval '1 hour';"
 ```
 

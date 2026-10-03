@@ -2,13 +2,13 @@
 
 Todo el proyecto corre como un único stack de Docker Compose. No hace falta instalar Node, Python ni Supabase CLI en la máquina: solo Docker.
 
-El **chat LLM** se delega al endpoint HPE-vLLM externo (Gemma flash + Qwen flagship, API OpenAI-compat); no se descarga ningún modelo de chat al host. **Embeddings** (RAG / pgvector) sí corren en local vía Ollama con `nomic-embed-text`.
+El **chat LLM** se delega a un endpoint vLLM externo (Gemma flash + Qwen flagship, API OpenAI-compat); no se descarga ningún modelo de chat al host. **Embeddings** (RAG / pgvector) sí corren en local vía Ollama con `nomic-embed-text`.
 
-## Producción
+## Despliegue de referencia
 
-- **Servidor**: `10.10.48.25` — todos los puertos siguientes están publicados ahí.
-- **HPE-vLLM**: `10.10.48.10:8000` (flash) · `10.10.48.10:8001` (flagship).
-- **Kafka**: `10.10.48.30:9092` — topic publish `aruba.team.tres-dias-de-gracia`, topics consume `aruba.events`, `aruba.weather`.
+- **Servidor**: `10.10.48.25`; todos los puertos siguientes están publicados ahí.
+- **Endpoint vLLM externo**: `10.10.48.10:8000` (flash) · `10.10.48.10:8001` (flagship). Configurable con `LLM_FLASH_BASE_URL` / `LLM_FLAGSHIP_BASE_URL`.
+- **Eventos externos**: no requieren infraestructura; el backend incluye un generador mock y endpoints de ingesta REST. Ver [Fuente de eventos](../technical/fuente-de-eventos.md).
 
 ## Requisitos
 
@@ -21,9 +21,9 @@ El **chat LLM** se delega al endpoint HPE-vLLM externo (Gemma flash + Qwen flags
   - NVIDIA → driver + [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html).
   - AMD (MI300X / MI250 / RX 7000) → kernel con módulo `amdgpu` + acceso a `/dev/kfd` y `/dev/dri`. El contenedor `ollama/ollama:rocm` trae ROCm dentro.
   - Sin GPU → perfil `cpu` (más lento, válido para desarrollo).
-- Conectividad L3 con HPE-vLLM (`10.10.48.10:8000/8001`) y Kafka (`10.10.48.30:9092`).
+- Conectividad con el endpoint vLLM externo (`10.10.48.10:8000/8001` por defecto) para el chat.
 
-Que tu usuario pueda ejecutar `docker` sin `sudo`:
+Para que tu usuario pueda ejecutar `docker` sin `sudo`:
 ```bash
 sudo usermod -aG docker $USER     # re-login después
 ```
@@ -33,7 +33,7 @@ sudo usermod -aG docker $USER     # re-login después
 ```bash
 # 1. Clonar
 git clone <url-del-repo>
-cd FINAL-HPE
+cd <directorio-del-repo>
 
 # 2. Configurar .env
 cp .env.example .env
@@ -42,7 +42,7 @@ python3 scripts/generate-supabase-keys.py   # imprime secretos frescos
 
 # 3. Levantar todo (elige perfil GPU del host para Ollama embeddings)
 docker compose --profile gpu-nvidia up -d   # CUDA
-docker compose --profile gpu-amd    up -d   # ROCm (MI300X · entorno HPE Cray)
+docker compose --profile gpu-amd    up -d   # ROCm (MI300X / MI250)
 docker compose --profile cpu        up -d   # sin GPU
 
 # 4. Ver logs
@@ -54,7 +54,7 @@ La **primera vez** tarda ~10 min:
 - Descarga de imágenes Docker (~2 GB; tag `:rocm` añade ~3 GB extra solo si usas el perfil AMD).
 - Descarga de los 4 extractos OSM y compilación de los grafos OSRM (Aruba/Madrid/Bogotá/CDMX). Cada par `osrm-fetcher-<region>` + `osrm-builder-<region>` se ejecuta una sola vez y sale.
 - Descarga del modelo de embeddings `nomic-embed-text` (~270 MB) por `ollama-init`.
-- El chat LLM **no** descarga nada: se sirve desde el endpoint HPE-vLLM externo.
+- El chat LLM **no** descarga nada: se sirve desde el endpoint vLLM externo.
 
 A partir de la segunda vez, todo arranca en <1 min (volúmenes persistidos).
 
@@ -65,7 +65,7 @@ A partir de la segunda vez, todo arranca en <1 min (volúmenes persistidos).
 | Frontend (Vue) | http://localhost:5173 | http://10.10.48.25:5173 | 5173 |
 | API simulación (FastAPI) | http://localhost:8080 | http://10.10.48.25:8080 | 8080 |
 | OpenAPI YAML | `/openapi.yaml` | `/openapi.yaml` | 8080 |
-| MkDocs | http://localhost:3001 | http://10.10.48.25:3001 | 3001 |
+| Documentación (VitePress) | http://localhost:3001 | http://10.10.48.25:3001 | 3001 |
 | Supabase API (Kong) | http://localhost:54321 | http://10.10.48.25:54321 | 54321 |
 | Supabase Studio | http://localhost:54323 | http://10.10.48.25:54323 | 54323 |
 | Postgres | `localhost:54322` | `10.10.48.25:54322` | 54322 |
@@ -75,8 +75,8 @@ A partir de la segunda vez, todo arranca en <1 min (volúmenes persistidos).
 | OSRM CDMX | http://localhost:5002 | http://10.10.48.25:5002 | 5002 |
 | Mosquitto (MQTT) | `localhost:1883` | `10.10.48.25:1883` | 1883 |
 | Ollama (embeddings, red interna) | `http://ollama:11434` | n/a | — |
-| HPE-vLLM Flash (chat) | n/a | `http://10.10.48.10:8000/v1` | 8000 |
-| HPE-vLLM Flagship (chat) | n/a | `http://10.10.48.10:8001/v1` | 8001 |
+| vLLM externo flash (chat) | n/a | `http://10.10.48.10:8000/v1` | 8000 |
+| vLLM externo flagship (chat) | n/a | `http://10.10.48.10:8001/v1` | 8001 |
 
 Abre: http://10.10.48.25:5173/login (o `http://localhost:5173/login` en local).
 
@@ -109,8 +109,8 @@ docker compose exec supabase-db psql -U postgres
 docker compose exec simulation python -c "from app.knowledge_seeder import seed_knowledge_force; seed_knowledge_force()"
 
 # Probar API simulación
-curl http://10.10.48.25:8080/health
-curl http://10.10.48.25:8080/api/sim/state | jq
+curl http://localhost:8080/health
+curl http://localhost:8080/api/sim/state | jq
 ```
 
 ### build.sh — script de construcción
@@ -156,8 +156,8 @@ Falta `.env` en la raíz. No basta con `.env.example`; hay que copiarlo y rellen
 **Las llamadas a `/api/...` dan 502**
 El servicio `simulation` no ha arrancado. Mira `docker compose logs simulation`. Suele ser por migraciones fallidas en `supabase-db`.
 
-**Kafka no consume eventos Aruba Pulse**
-Revisa que `KAFKA_BOOTSTRAP_SERVERS` apunte a `10.10.48.30:9092`, `KAFKA_EVENTS_ENABLED=true`, y que la red permita la conexión TCP. Healthcheck: `GET /api/aruba/events/status`.
+**No aparecen eventos externos ni meteorología en el mapa**
+Comprueba que `EVENT_SOURCE=mock` (valor por defecto) y revisa el estado de la fuente con `GET /api/events/status`. Con `EVENT_SOURCE=off` solo llegan datos por `POST /api/events/ingest` y `POST /api/weather/ingest`.
 
 **`docker compose build` falla con error TLS / certificado inválido**
 Mensaje tipo `tls: failed to verify certificate` apuntando a `docker-images-prod.*.r2.cloudflarestorage.com`. Significa que la red local intercepta TLS (proxy corporativo, firewall educativo, filtro ISP). Comprobar con:
@@ -181,7 +181,8 @@ Si el subject/issuer no es Cloudflare, hay MITM. Soluciones:
 **Quiero resetear la BD pero conservar los grafos OSRM**
 ```bash
 docker compose down
-docker volume rm hpe-ambulancia-digital-twin_supabase-db-data
+docker volume ls | grep supabase-db-data   # el prefijo es el nombre del proyecto compose
+docker volume rm <proyecto>_supabase-db-data
 docker compose up -d
 ```
 

@@ -98,7 +98,7 @@ El modelo mejora más con variedad de escenarios (jams frecuentes, múltiples ti
 **Día 1 (1–2h)** — Sanity check:
 ```bash
 # Arrancar con rate bajo para validar que todo escribe
-curl -X POST http://localhost:8000/api/sim/training-mode -d '{"enabled":true,"ratePerMin":5}' -H "Content-Type: application/json"
+curl -X POST http://localhost:8080/api/sim/training-mode -d '{"enabled":true,"ratePerMin":5}' -H "Content-Type: application/json"
 # Dejar 30 min
 # Verificar en Supabase que hay rows en las 4 tablas
 ```

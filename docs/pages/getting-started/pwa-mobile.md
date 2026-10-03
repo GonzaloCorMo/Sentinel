@@ -2,9 +2,10 @@
 
 Guía paso a paso para probar la app ciudadana (`/m`) desde un móvil Android en la misma red WiFi que el PC de desarrollo.
 
-> **Arquitectura en dev:** el frontend (Vite, puerto 5173) actúa de único punto de entrada. Las llamadas a `/api/*` van al motor FastAPI y las de `/sb/*` van a Supabase (Kong) vía proxy interno. El móvil **solo necesita el puerto 5173** alcanzable.
+::: info Arquitectura en dev
+El frontend (Vite, puerto 5173) actúa de único punto de entrada. Las llamadas a `/api/*` van al motor FastAPI y las de `/sb/*` van a Supabase (Kong) vía proxy interno. El móvil **solo necesita el puerto 5173** alcanzable.
+:::
 
----
 
 ## Requisitos
 
@@ -18,7 +19,6 @@ Chrome bloquea `navigator.geolocation` y `SpeechRecognition` en orígenes **no s
 
 **Tres soluciones.** Elige una.
 
----
 
 ## Opción A — Flag de Chrome (30s, ideal para probar rápido)
 
@@ -32,7 +32,6 @@ Ese origen se trata como seguro → geo + voz funcionan.
 
 **Solo dev.** No lo uses para demos públicas.
 
----
 
 ## Opción B — ngrok (un único túnel HTTPS, más limpio)
 
@@ -51,7 +50,6 @@ ngrok http 5173
 
 Imprime algo como `https://abc123.ngrok-free.app`. Abre esa URL en el móvil → HTTPS → geo + voz sin flags. El ancho de banda del plan gratis sobra para demos.
 
----
 
 ## Opción C — Vite HTTPS con `mkcert` (self-signed permanente)
 
@@ -88,7 +86,6 @@ docker compose restart frontend
 
 En el móvil la 1ª vez verás un warning de certificado — instala el CA root de mkcert copiándolo al teléfono (está en `$(mkcert -CAROOT)/rootCA.pem`) y trust en Ajustes → Seguridad.
 
----
 
 ## Flujo de prueba (tras elegir A, B o C)
 
@@ -133,9 +130,8 @@ Deberías ver la pantalla SOS.
 
 ### 5. Instalar como app (PWA)
 
-Chrome Android con `/m` abierta → menú **⋮** → **Añadir a pantalla de inicio**. Se instala con icono HPE+112 apuntando directo a `/m` y sin barra de navegador.
+Chrome Android con `/m` abierta → menú **⋮** → **Añadir a pantalla de inicio**. Se instala con el icono de la app apuntando directo a `/m` y sin barra de navegador.
 
----
 
 ## Troubleshooting
 
@@ -152,5 +148,5 @@ Chrome Android con `/m` abierta → menú **⋮** → **Añadir a pantalla de in
 ## Detalles técnicos
 
 - `vite.config.ts` define 2 proxies: `/api` → simulation, `/sb` → supabase-kong (con rewrite que elimina `/sb`).
-- `src/lib/supabase.ts` ahora usa `window.location.origin + "/sb"` como base URL → mismo origen que el frontend → cero CORS / mixed-content / Supabase-URL-mal-configurada.
+- `src/lib/supabase.ts` usa `window.location.origin + "/sb"` como base URL → mismo origen que el frontend → cero CORS / mixed-content / Supabase-URL-mal-configurada.
 - El `.env` sigue con `VITE_SUPABASE_URL` (se ignora en browser, se usa solo como fallback para SSR/tests).

@@ -1,11 +1,11 @@
-# Motor de IA — HITL y Modo Autonomo
+# Motor de IA: HITL y modo autónomo
 
 ## Resumen
 
-El motor de IA de HPE Sentinel monitorea continuamente la simulacion para detectar anomalias y proponer acciones correctivas. Opera en dos modos:
+El motor de IA de Sentinel monitoriza continuamente la simulación para detectar anomalías y proponer acciones correctivas. Opera en dos modos:
 
 - **HITL (Human-in-the-Loop)**: la IA propone acciones que el operador debe aprobar o rechazar.
-- **Autonomo**: la IA ejecuta acciones directamente sin intervencion humana.
+- **Autónomo**: la IA ejecuta acciones directamente sin intervención humana.
 
 ## Arquitectura
 
@@ -28,85 +28,88 @@ simulation/app/ai_decision_engine.py
             └─ Modo Autonomo → estado "auto_approved", ejecucion inmediata
 ```
 
-## Deteccion de anomalias
+## Detección de anomalías
 
 El motor analiza el estado de cada ambulancia en cada tick:
 
 ### Combustible bajo (`low_fuel`)
 
 - **Trigger**: fuel_level < 15%
-- **Accion**: redirigir a la gasolinera mas cercana
+- **Acción**: redirigir a la gasolinera más cercana
 - **Cooldown**: 60 segundos entre propuestas para la misma ambulancia
 
-### Vitales criticas (`vitals_critical`)
+### Vitales críticas (`vitals_critical`)
 
 - **Trigger**: SpO2 < 85% o frecuencia cardiaca > 140 bpm
-- **Accion**: redirigir al hospital mas cercano
+- **Acción**: redirigir al hospital más cercano
 - **Cooldown**: 60 segundos
 
 ### Emergencia desatendida (`unattended_emergency`)
 
 - **Trigger**: emergencia pendiente sin ambulancia asignada durante > 30 segundos
-- **Accion**: auto-despachar la ambulancia disponible mas cercana
+- **Acción**: auto-despachar la ambulancia disponible más cercana
 - **Cooldown**: 90 segundos
 
-## Pipeline de decision
+## Pipeline de decisión
 
-1. **Detectar anomalia** en los datos de telemetria.
-2. **Generar embedding** de la descripcion de la anomalia.
-3. **Buscar protocolos** relevantes en `protocols_knowledge` via `match_protocols()`.
-4. **Solicitar razonamiento** al LLM con el contexto del protocolo y los datos de telemetria.
-5. **Crear propuesta** con la anomalia, protocolo sugerido y razonamiento del LLM.
+1. **Detectar anomalía** en los datos de telemetría.
+2. **Generar embedding** de la descripción de la anomalía.
+3. **Buscar protocolos** relevantes en `protocols_knowledge` vía `match_protocols()`.
+4. **Solicitar razonamiento** al LLM con el contexto del protocolo y los datos de telemetría.
+5. **Crear propuesta** con la anomalía, protocolo sugerido y razonamiento del LLM.
 
-## Modos de operacion
+## Modos de operación
 
 ### HITL (Human-in-the-Loop)
 
 - La propuesta se crea con estado `pending`.
-- Se envia al frontend via SSE (`/api/sim/stream`) y se lista en `GET /api/ai/proposals`.
+- Se envía al frontend vía SSE (`/api/sim/stream`) y se lista en `GET /api/ai/proposals`.
 - El operador ve la propuesta en el `AIProposalPanel`.
-- Puede **aprobar** (la accion se ejecuta) o **rechazar** (se descarta).
+- Puede **aprobar** (la acción se ejecuta) o **rechazar** (se descarta).
 - Endpoint: `POST /api/ai/proposals/{proposal_id}/resolve` con `{ action: "approved" | "rejected" }`.
 
-### Autonomo
+### Autónomo
 
 - La propuesta se crea con estado `auto_approved`.
-- La accion se ejecuta inmediatamente sin esperar aprobacion.
+- La acción se ejecuta inmediatamente sin esperar aprobación.
 - El operador ve el log de acciones ejecutadas en el panel IA.
-- Configurable en tiempo real via `POST /api/ai/mode` con `{ mode: "autonomous" }`.
-- **Importante**: al pasar a autónomo, las propuestas pendientes que estaban en HITL se auto-resuelven (`approved`) inmediatamente. El motor deja de auto-asignar ambulancias a emergencias — solo la IA controla el despacho.
+- Configurable en tiempo real vía `POST /api/ai/mode` con `{ mode: "autonomous" }`.
+
+::: warning Cambio a modo autónomo
+Al pasar a autónomo, las propuestas pendientes que estaban en HITL se auto-resuelven (`approved`) inmediatamente. El motor deja de auto-asignar ambulancias a emergencias — solo la IA controla el despacho.
+:::
 
 ## Perfiles de severidad de pacientes
 
 Cuando una ambulancia recoge a un paciente, se le asigna aleatoriamente una severidad:
 
-| Severidad | Probabilidad | Efecto en telemetria |
+| Severidad | Probabilidad | Efecto en telemetría |
 |-----------|-------------|----------------------|
-| **Stable** | 50% | Vitales normales, fluctuaciones minimas |
+| **Stable** | 50% | Vitales normales, fluctuaciones mínimas |
 | **Moderate** | 30% | Vitales alteradas (HR elevada, SpO2 reducida, PA alta) |
 | **Critical** | 20% | Vitales extremas (taquicardia, hipoxia, hipertension severa) |
 
-Los perfiles afectan a: frecuencia cardiaca, presion arterial, SpO2, GCS, EtCO2, glucosa, temperatura, frecuencia respiratoria y ritmo ECG.
+Los perfiles afectan a: frecuencia cardíaca, presión arterial, SpO2, GCS, EtCO2, glucosa, temperatura, frecuencia respiratoria y ritmo ECG.
 
 ## Persistencia
 
 ### Tabla `ai_hitl_proposals`
 
-| Columna | Tipo | Descripcion |
+| Columna | Tipo | Descripción |
 |---------|------|-------------|
 | `id` | uuid | PK |
 | `ambulance_id` | text | Ambulancia afectada |
-| `anomaly_type` | text | Tipo de anomalia |
-| `description` | text | Descripcion legible |
+| `anomaly_type` | text | Tipo de anomalía |
+| `description` | text | Descripción legible |
 | `protocol_snippet` | text | Protocolo sugerido |
 | `llm_reasoning` | text | Razonamiento del LLM |
 | `status` | text | pending/approved/rejected/auto_approved |
-| `created_at` | timestamptz | Creacion |
-| `resolved_at` | timestamptz | Resolucion |
+| `created_at` | timestamptz | Creación |
+| `resolved_at` | timestamptz | Resolución |
 
 ## Endpoints
 
-| Metodo | Ruta | Descripcion |
+| Método | Ruta | Descripción |
 |--------|------|-------------|
 | GET | `/api/ai/mode` | Consultar modo actual |
 | POST | `/api/ai/mode` | Cambiar modo (`hitl` / `autonomous`) |

@@ -2,13 +2,13 @@
 
 ## Alcance
 
-Manual operativo para ejecutar y usar HPE Sentinel — Gemelo Digital de Ambulancias.
+Manual operativo para ejecutar y usar Sentinel, el gemelo digital de la flota de ambulancias.
 
 ## 1) Arranque del entorno
 
 1. Inicia servicios con `./up.sh` desde la raíz del repo.
 2. Verifica que la app responde en `http://10.10.48.25:5173` (producción) o `http://localhost:5173` (local).
-3. Verifica documentación en `http://10.10.48.25:3001`.
+3. Verifica la documentación en `http://10.10.48.25:3001` (o `http://localhost:3001`).
 4. Healthcheck rápido del backend: `curl http://10.10.48.25:8080/health`.
 
 ## 2) Acceso y autenticación
@@ -32,7 +32,7 @@ En la cabecera del dashboard hay un `RegionSelector` con 4 opciones: Aruba (defa
 
 Vista principal del gemelo digital con mapa interactivo:
 
-- **Mapa Leaflet** con ambulancias, emergencias, hospitales, gasolineras, estaciones de carga, estaciones meteorológicas, eventos Aruba Pulse y atascos en tiempo real.
+- **Mapa Leaflet** con ambulancias, emergencias, hospitales, gasolineras, estaciones de carga, estaciones meteorológicas, eventos externos y atascos en tiempo real.
 - **Barra de herramientas** (lateral izquierda): crear emergencias, ambulancias, hospitales, gasolineras, charging stations, atascos.
 - **Paleta de tipos de unidad**: arrastra desde la paleta para spawn de un tipo concreto (combustion / electric / hybrid). El catálogo viene de `fleet_entity_types`.
 - **Panel telemetría** (lateral derecha): vitales paciente, mecánica, GPS, environmental, network de la unidad seleccionada.
@@ -65,12 +65,12 @@ Tarjetas de todas las unidades con indicadores de:
 
 Click en una tarjeta para detalles ampliados.
 
-## 7) Vista global de la isla (`/island`)
+## 7) Vista global (`/island`)
 
-Dashboard agregado de Aruba (data viene de `GET /api/island/summary`):
+Dashboard agregado de la región activa (datos de `GET /api/island/summary`):
 
 - Agregados meteorológicos (avg temp, max precip, max viento, min visibilidad).
-- Eventos Aruba Pulse activos por tipo y severidad.
+- Eventos externos activos por tipo y severidad (ver [Fuente de eventos](../technical/fuente-de-eventos.md)).
 - KPIs de flota (total, emergencias activas, fuel low, ETA media, pulse rate).
 - Weather impact: `worstFactor`, `avgFactor`, `affectedMissions`.
 - Bucketing por cuadrantes (NW/NE/SW/SE).
@@ -83,7 +83,6 @@ Monitorización de los canales:
 - Métricas: mensajes enviados/recibidos, latencia.
 - Tabla de actividad por unidad.
 - Indicador del canal activo.
-- Botón para activar **modo backup replay** (Kafka histórico de un día).
 
 ## 9) Panel de IA (HITL / autónomo)
 
@@ -109,7 +108,7 @@ Esquina inferior derecha:
 Chat flotante (esquina inferior izquierda) con dos modos:
 
 - **Pregunta libre** (RAG sobre protocolos): ej. "¿Cuál es el protocolo de IAM?".
-- **Comando estructurado** (tool-calling): ej. "muéstrame las ambulancias con combustible bajo", "centra el mapa en AMB-003", "pasa la IA a modo autónomo". Usa regex fast-path + LLM HPE-vLLM Gemma como fallback.
+- **Comando estructurado** (tool-calling): ej. "muéstrame las ambulancias con combustible bajo", "centra el mapa en AMB-003", "pasa la IA a modo autónomo". Usa un fast-path por regex y el LLM (Gemma) como fallback.
 
 Detalles en [Chatbot IA](chatbot-ia.md).
 
@@ -134,7 +133,7 @@ Generador LLM de informe operativo:
 - Backend caído → la UI muestra aviso de desconexión y cae a polling `/api/sim/state` cada 2 s.
 - Sin persistencia → revisar `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`.
 - OSRM no responde → ambulancias usan ruta recta como fallback (badge OSRM en rojo).
-- Aruba Pulse Kafka caído → `engine.aruba_weather` deja de actualizarse pero la simulación local sigue. Healthcheck: `GET /api/aruba/events/status`.
+- Sin eventos externos ni meteorología → revisar `EVENT_SOURCE` y el estado en `GET /api/events/status`; la simulación local sigue funcionando.
 - Recuperación de contraseña Supabase → revisar redirect URLs en Supabase Auth y abrir el enlace en el mismo navegador.
 
 ## Referencias

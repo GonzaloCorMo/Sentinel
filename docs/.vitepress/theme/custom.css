@@ -1,0 +1,247 @@
+/*
+ * Sentinel — tema de documentación.
+ * Estética sobria tipo Linear/Palantir: neutros puros, sin degradados,
+ * acento = color de texto principal, radios ≤ 4px.
+ */
+
+/* ── Tipografía ─────────────────────────────────────────────────── */
+:root {
+  --vp-font-family-base: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --vp-font-family-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+}
+
+/* ── Modo claro ─────────────────────────────────────────────────── */
+:root {
+  --vp-c-bg: #ffffff;
+  --vp-c-bg-alt: #f7f7f8;
+  --vp-c-bg-elv: #ffffff;
+  --vp-c-bg-soft: #f7f7f8;
+
+  --vp-c-border: #e4e4e7;
+  --vp-c-divider: #e4e4e7;
+  --vp-c-gutter: #e4e4e7;
+
+  --vp-c-text-1: #0b0c0e;
+  --vp-c-text-2: #52525b;
+  --vp-c-text-3: #8a8a93;
+
+  --vp-c-default-1: #e4e4e7;
+  --vp-c-default-2: #ececee;
+  --vp-c-default-3: #f2f2f3;
+  --vp-c-default-soft: #f2f2f3;
+
+  /* Acento neutro: el "brand" es el propio color de texto */
+  --vp-c-brand-1: #0b0c0e;
+  --vp-c-brand-2: #27272a;
+  --vp-c-brand-3: #18181b;
+  --vp-c-brand-soft: rgba(11, 12, 14, 0.06);
+
+  --vp-c-tip-1: var(--vp-c-text-1);
+  --vp-c-tip-2: var(--vp-c-text-2);
+  --vp-c-tip-3: var(--vp-c-text-1);
+  --vp-c-tip-soft: #f7f7f8;
+
+  --vp-c-note-1: var(--vp-c-text-1);
+  --vp-c-note-soft: #f7f7f8;
+}
+
+/* ── Modo oscuro (por defecto) ──────────────────────────────────── */
+.dark {
+  --vp-c-bg: #0b0c0e;
+  --vp-c-bg-alt: #141518;
+  --vp-c-bg-elv: #1b1c20;
+  --vp-c-bg-soft: #141518;
+
+  --vp-c-border: #26282d;
+  --vp-c-divider: #26282d;
+  --vp-c-gutter: #0b0c0e;
+
+  --vp-c-text-1: #ededef;
+  --vp-c-text-2: #a1a1aa;
+  --vp-c-text-3: #6b6b74;
+
+  --vp-c-default-1: #2e3035;
+  --vp-c-default-2: #26282d;
+  --vp-c-default-3: #1b1c20;
+  --vp-c-default-soft: #1b1c20;
+
+  --vp-c-brand-1: #ededef;
+  --vp-c-brand-2: #d4d4d8;
+  --vp-c-brand-3: #e4e4e7;
+  --vp-c-brand-soft: rgba(237, 237, 239, 0.08);
+
+  --vp-c-tip-1: var(--vp-c-text-1);
+  --vp-c-tip-2: var(--vp-c-text-2);
+  --vp-c-tip-3: var(--vp-c-text-1);
+  --vp-c-tip-soft: #141518;
+
+  --vp-c-note-1: var(--vp-c-text-1);
+  --vp-c-note-soft: #141518;
+
+  --vp-code-block-bg: #141518;
+  --vp-code-copy-code-bg: #1b1c20;
+  --vp-code-copy-code-hover-bg: #26282d;
+}
+
+/* ── Sin degradados en la home ──────────────────────────────────── */
+:root {
+  --vp-home-hero-name-color: var(--vp-c-text-1);
+  --vp-home-hero-name-background: var(--vp-c-text-1);
+  --vp-home-hero-image-background-image: none;
+  --vp-home-hero-image-filter: none;
+}
+
+/* ── Botones: primario = texto invertido, sin color ─────────────── */
+:root {
+  --vp-button-brand-border: transparent;
+  --vp-button-brand-text: var(--vp-c-bg);
+  --vp-button-brand-bg: var(--vp-c-text-1);
+  --vp-button-brand-hover-border: transparent;
+  --vp-button-brand-hover-text: var(--vp-c-bg);
+  --vp-button-brand-hover-bg: var(--vp-c-brand-2);
+  --vp-button-brand-active-border: transparent;
+  --vp-button-brand-active-text: var(--vp-c-bg);
+  --vp-button-brand-active-bg: var(--vp-c-brand-3);
+
+  --vp-button-alt-border: var(--vp-c-border);
+  --vp-button-alt-bg: transparent;
+  --vp-button-alt-hover-border: var(--vp-c-text-3);
+  --vp-button-alt-hover-bg: var(--vp-c-default-soft);
+}
+
+/* ── Badges y contenedores custom ───────────────────────────────── */
+:root {
+  --vp-badge-tip-border: var(--vp-c-border);
+  --vp-badge-tip-text: var(--vp-c-text-1);
+  --vp-badge-tip-bg: var(--vp-c-default-soft);
+  --vp-custom-block-tip-border: var(--vp-c-border);
+  --vp-custom-block-tip-text: var(--vp-c-text-1);
+  --vp-custom-block-tip-bg: var(--vp-c-bg-soft);
+  --vp-custom-block-info-border: var(--vp-c-border);
+  --vp-custom-block-info-bg: var(--vp-c-bg-soft);
+  --vp-custom-block-details-border: var(--vp-c-border);
+  --vp-custom-block-details-bg: var(--vp-c-bg-soft);
+}
+
+/* ── Radios: 4px máximo en todo el sitio ────────────────────────── */
+.VPButton,
+.VPFeature,
+.VPLocalSearchBox .shell,
+.VPLocalSearchBox .result,
+.DocSearch-Button,
+.VPNavBarSearchButton,
+.custom-block,
+.vp-doc div[class*='language-'],
+.vp-doc .custom-block div[class*='language-'],
+.vp-doc table,
+.vp-doc :not(pre) > code,
+.vp-code-group .tabs,
+.VPSidebarItem .item,
+.VPMenu,
+.VPFlyout .menu,
+.vp-doc [class*='language-'] > button.copy,
+.VPTeamMembersItem,
+.VPDocAsideOutline,
+kbd {
+  border-radius: 4px !important;
+}
+
+.VPButton.medium,
+.VPButton.big {
+  border-radius: 4px !important;
+}
+
+/* ── Detalles visuales ──────────────────────────────────────────── */
+.VPNav,
+.VPNavBar,
+.VPNavBar.has-sidebar .content,
+.VPLocalNav {
+  backdrop-filter: none !important;
+}
+
+.VPNavBar:not(.home.top) .divider-line,
+.VPNavBar.has-sidebar .divider-line {
+  background-color: var(--vp-c-divider);
+}
+
+.VPFeature {
+  border: 1px solid var(--vp-c-border) !important;
+  background-color: var(--vp-c-bg-soft) !important;
+  transition: border-color 0.15s ease;
+}
+
+.VPFeature:hover {
+  border-color: var(--vp-c-text-3) !important;
+}
+
+.VPHero .name,
+.VPHero .text {
+  letter-spacing: -0.02em;
+  font-weight: 600;
+}
+
+.VPHero .tagline {
+  color: var(--vp-c-text-2);
+}
+
+.vp-doc h1,
+.vp-doc h2,
+.vp-doc h3 {
+  letter-spacing: -0.01em;
+  font-weight: 600;
+}
+
+.vp-doc h2 {
+  border-top-color: var(--vp-c-divider);
+}
+
+.vp-doc a {
+  text-decoration: underline;
+  text-decoration-color: var(--vp-c-text-3);
+  text-underline-offset: 3px;
+  font-weight: 500;
+}
+
+.vp-doc a:hover {
+  text-decoration-color: var(--vp-c-text-1);
+}
+
+.vp-doc table {
+  display: table;
+  width: 100%;
+  border-collapse: collapse;
+  overflow: hidden;
+}
+
+.vp-doc tr:nth-child(2n) {
+  background-color: transparent;
+}
+
+.vp-doc th {
+  background-color: var(--vp-c-bg-soft);
+  font-weight: 600;
+  font-size: 13px;
+  text-transform: none;
+}
+
+.vp-doc :not(pre) > code {
+  border: 1px solid var(--vp-c-border);
+  background-color: var(--vp-c-bg-soft);
+  color: var(--vp-c-text-1);
+}
+
+.vp-doc div[class*='language-'] {
+  border: 1px solid var(--vp-c-border);
+}
+
+.VPSidebarItem.is-active > .item .link > .text {
+  color: var(--vp-c-text-1);
+  font-weight: 600;
+}
+
+.VPSidebarItem.level-0 > .item .text {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 11px;
+  color: var(--vp-c-text-3);
+}

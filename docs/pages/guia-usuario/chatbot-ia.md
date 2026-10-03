@@ -1,45 +1,45 @@
-# Chatbot IA — Guia de uso
+# Chatbot IA: guía de uso
 
-## Que es el chatbot
+## Qué es el chatbot
 
-El chatbot de HPE Sentinel es un asistente inteligente que responde preguntas sobre el proyecto, la tecnologia utilizada y los protocolos operativos. Usa **RAG (Retrieval-Augmented Generation)** para buscar informacion relevante en una base de conocimiento y generar respuestas precisas.
+El chatbot de Sentinel es un asistente inteligente que responde preguntas sobre el proyecto, la tecnología utilizada y los protocolos operativos. Usa **RAG (Retrieval-Augmented Generation)** para buscar información relevante en una base de conocimiento y generar respuestas precisas.
 
-## Como acceder
+## Cómo acceder
 
-El chatbot aparece como un **panel flotante** en la esquina inferior izquierda de la aplicacion. Esta disponible en todas las vistas (mapa, flota, comunicaciones).
+El chatbot aparece como un **panel flotante** en la esquina inferior izquierda de la aplicación. Está disponible en todas las vistas (mapa, flota, comunicaciones).
 
-- **Abrir**: haz clic en el boton circular verde con el icono de chat.
-- **Cerrar**: haz clic en la "X" del panel o en el boton circular de nuevo.
+- **Abrir**: haz clic en el botón circular con el icono de chat.
+- **Cerrar**: haz clic en la "X" del panel o en el botón circular de nuevo.
 
-## Como usarlo
+## Cómo usarlo
 
 1. Escribe tu pregunta en el campo de texto del panel.
-2. Pulsa Enter o haz clic en el boton de enviar.
-3. La respuesta aparecera progresivamente en tiempo real (streaming).
-4. El historial de la conversacion se mantiene entre recargas de pagina.
+2. Pulsa Enter o haz clic en el botón de enviar.
+3. La respuesta aparecerá progresivamente en tiempo real (streaming).
+4. El historial de la conversación se mantiene entre recargas de página.
 
 ## Ejemplos de preguntas
 
-### Sobre la tecnologia
+### Sobre la tecnología
 
-- "¿Que tecnologias usa el frontend?"
-- "¿Como funciona la comunicacion en tiempo real?"
-- "¿Que base de datos se usa y como esta estructurada?"
-- "¿Como se integra el motor de IA?"
+- "¿Qué tecnologías usa el frontend?"
+- "¿Cómo funciona la comunicación en tiempo real?"
+- "¿Qué base de datos se usa y cómo está estructurada?"
+- "¿Cómo se integra el motor de IA?"
 
 ### Sobre el funcionamiento
 
-- "¿Como funciona la maquina de estados de las ambulancias?"
-- "¿Que pasa cuando una ambulancia se queda sin combustible?"
-- "¿Como se detectan las anomalias?"
-- "¿Que es el modo HITL?"
+- "¿Cómo funciona la máquina de estados de las ambulancias?"
+- "¿Qué pasa cuando una ambulancia se queda sin combustible?"
+- "¿Cómo se detectan las anomalías?"
+- "¿Qué es el modo HITL?"
 
 ### Sobre la arquitectura
 
-- "¿Como se comunican Vue y FastAPI?"
-- "¿Que es SSE y para que se usa?"
-- "¿Como funciona el enrutamiento OSRM?"
-- "¿Que hace Supabase en el proyecto?"
+- "¿Cómo se comunican Vue y FastAPI?"
+- "¿Qué es SSE y para qué se usa?"
+- "¿Cómo funciona el enrutamiento OSRM?"
+- "¿Qué hace Supabase en el proyecto?"
 
 ## Capacidades y limitaciones
 
@@ -59,7 +59,7 @@ El chatbot aparece como un **panel flotante** en la esquina inferior izquierda d
 | `reset_filters` | "limpia los filtros" |
 | `explain` | (cualquier pregunta libre — pasa a RAG) |
 
-Detrás del comando hay un fast-path regex (latencia <50 ms) y un fallback al LLM HPE-vLLM Gemma para casos ambiguos. El endpoint subyacente es `POST /api/ai/command` o `GET /ask?q=...`.
+Detrás del comando hay un fast-path regex (latencia <50 ms) y un fallback al LLM (Gemma, endpoint vLLM externo) para casos ambiguos. El endpoint subyacente es `POST /api/ai/command` o `GET /ask?q=...`.
 
 ### Lo que no puede hacer
 
@@ -70,15 +70,12 @@ Detrás del comando hay un fast-path regex (latencia <50 ms) y un fallback al LL
 
 | Componente | Proveedor | Endpoint default |
 |---|---|---|
-| Chat + tool-calling | HPE-vLLM Gemma (flash) | `http://10.10.48.10:8000/v1` (`google/gemma-4-31b-it`) |
-| Razonamiento extenso (informes) | HPE-vLLM Qwen (flagship) | `http://10.10.48.10:8001/v1` (`Qwen/Qwen3-235B-A22B`) |
+| Chat + tool-calling | vLLM externo, Gemma (flash) | `http://10.10.48.10:8000/v1` (`google/gemma-4-31b-it`) |
+| Razonamiento extenso (informes) | vLLM externo, Qwen (flagship) | `http://10.10.48.10:8001/v1` (`Qwen/Qwen3-235B-A22B`) |
 | Embeddings | Ollama local | `http://ollama:11434/v1` (`nomic-embed-text`) |
 
-Solo Ollama corre en el host (perfiles compose `gpu-nvidia`, `gpu-amd`, `cpu`). El chat va siempre al endpoint HPE-vLLM externo, no requiere GPU local.
+Solo Ollama corre en el host (perfiles compose `gpu-nvidia`, `gpu-amd`, `cpu`). El chat va siempre al endpoint vLLM externo y no requiere GPU local.
 
-## Datos tecnicos
+## Datos técnicos
 
-- Las respuestas se generan mediante un pipeline RAG que combina busqueda vectorial (pgvector en Supabase) con generacion de texto (LLM).
-- La base de conocimiento se siembra automaticamente al arrancar el servidor con 18+ fragmentos de informacion sobre el proyecto.
-- Las conversaciones se persisten en la tabla `chat_messages` de Supabase.
-- Cada sesion tiene un ID unico almacenado en `localStorage`.
+Pipeline, tablas y variables de entorno en [Chatbot RAG](../technical/ai-chatbot-rag.md).

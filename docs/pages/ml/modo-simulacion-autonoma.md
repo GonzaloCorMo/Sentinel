@@ -15,7 +15,7 @@ Cuando `trainingMode=true` el motor, cada tick:
 ## Activar
 
 ```bash
-curl -X POST http://localhost:8000/api/sim/training-mode \
+curl -X POST http://localhost:8080/api/sim/training-mode \
   -H "Content-Type: application/json" \
   -d '{"enabled":true,"ratePerMin":20}'
 ```
@@ -33,7 +33,7 @@ Respuesta:
 ## Desactivar
 
 ```bash
-curl -X POST http://localhost:8000/api/sim/training-mode \
+curl -X POST http://localhost:8080/api/sim/training-mode \
   -H "Content-Type: application/json" \
   -d '{"enabled":false}'
 ```
@@ -74,7 +74,7 @@ order by 1 desc;
 
 ```bash
 # 1. Desactivar generador
-curl -X POST http://localhost:8000/api/sim/training-mode -d '{"enabled":false}' -H "Content-Type: application/json"
+curl -X POST http://localhost:8080/api/sim/training-mode -d '{"enabled":false}' -H "Content-Type: application/json"
 
 # 2. Flush final (o esperar al próximo tick)
 #    cierra sesión automáticamente al apagar el motor:

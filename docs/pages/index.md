@@ -1,42 +1,45 @@
-# HPE Ambulancia Digital Twin — Documentación
+---
+layout: home
+title: Inicio
 
-Gemelo digital de flota sanitaria con dashboard de operaciones, PWA ciudadana, panel de vehículo, motor de IA (HITL + autónomo) y pipeline ML. Multi-región (Aruba · Madrid · Bogotá · CDMX), integración Aruba Pulse vía Kafka, LLM HPE-vLLM y i18n (es/en/gl).
+hero:
+  name: Sentinel
+  text: Gemelo digital de flota sanitaria
+  tagline: Simulación de ambulancias en tiempo real, IA con supervisión humana o autónoma, fuente de eventos externos y pipeline ML. Documentación técnica y operativa.
+  actions:
+    - theme: brand
+      text: Levantar el proyecto
+      link: /getting-started/levantar-proyecto
+    - theme: alt
+      text: Introducción
+      link: /intro
+    - theme: alt
+      text: API HTTP + SSE
+      link: /technical/simulation-api-http-sse
 
-## Producción
-
-- **Servidor**: `10.10.48.25`
-- Dashboard / PWA: `http://10.10.48.25:5173`
-- API simulación: `http://10.10.48.25:8080` (OpenAPI: `/openapi.yaml`)
-- MkDocs: `http://10.10.48.25:3001`
-- Supabase: `http://10.10.48.25:54321` (Studio `:54323`)
-
-## Stack
-
-| Área | Tecnología |
-|---|---|
-| Frontend dashboard + PWA + panel vehículo | Vue 3 + Vite + TS + Tailwind + Leaflet + ECharts + Pinia + vue-i18n (es/en/gl) |
-| Backend simulación | FastAPI + asyncio + aiomqtt + aiokafka + httpx |
-| Base de datos + Auth | Supabase (Postgres + pgvector + GoTrue + Storage) |
-| LLM chat | HPE-vLLM externo (Gemma flash · Qwen flagship) — `10.10.48.10:8000/8001` |
-| Embeddings | Ollama local (`nomic-embed-text`) — perfiles compose `gpu-nvidia/gpu-amd/cpu` |
-| Routing | OSRM multi-región — 4 grafos en paralelo (Aruba/Madrid/Bogotá/CDMX) |
-| Mensajería | Mosquitto (MQTT) + fallback P2P + HTTP + replay backup Kafka |
-| Eventos externos | Kafka Aruba Pulse (`aruba.events`, `aruba.weather`) + producer AsyncAPI |
-| Servicio ML | FastAPI + ONNX Runtime + IsolationForest (`fleet_anomaly`) |
-
-## Secciones
-
-- **Getting Started** — levantar el stack, probar la PWA móvil
-- **Arquitectura** — contratos operativos frontend ↔ backend
-- **Auth** — Supabase Auth, roles (admin / vehicle / citizen)
-- **Technical** — BD, OSRM multi-región, API SSE, IA HITL/autónomo, chatbot RAG, Aruba Pulse Kafka, telemetría v2.0
-- **ML Training** — pipeline entrenamiento, modo simulación autónoma
-- **Guía de usuario** — manual operador, chatbot comando, operación en tiempo real
-
-## Arranque rápido
-
-```bash
-./up.sh
-```
-
-Más detalles: [Arranque con Docker](getting-started/docker.md).
+features:
+  - title: Motor de simulación
+    details: FastAPI + asyncio. Cinco motores de telemetría por unidad, ETA dinámica, scoring de asignación y rutas OSRM multirregión (Aruba, Madrid, Bogotá, CDMX).
+    link: /technical/simulador-global-despacho
+    linkText: Simulador y despacho
+  - title: IA HITL y autónoma
+    details: Detección de anomalías, protocolos vía RAG (pgvector) y propuestas que aprueba el operador o ejecuta la IA directamente.
+    link: /technical/ai-hitl-autonomo
+    linkText: Motor de IA
+  - title: Fuente de eventos
+    details: Generador mock de incidentes y meteorología, más ingesta REST validada con Pydantic para fuentes reales.
+    link: /technical/fuente-de-eventos
+    linkText: Diseño de la fuente
+  - title: Tiempo real por SSE
+    details: El dashboard Vue 3 recibe el snapshot completo de la simulación a ~2,5 Hz por Server-Sent Events.
+    link: /technical/simulation-api-http-sse
+    linkText: Contrato de la API
+  - title: Pipeline ML
+    details: Captura de decisiones y outcomes, modo de entrenamiento autónomo y modelos ONNX servidos por ml-service.
+    link: /ml/pipeline-entrenamiento
+    linkText: Pipeline de entrenamiento
+  - title: Operación
+    details: Manual del operador, chatbot con comandos estructurados, panel del vehículo y PWA ciudadana.
+    link: /guia-usuario/manual-de-uso
+    linkText: Manual de uso
+---

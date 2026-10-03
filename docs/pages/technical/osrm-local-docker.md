@@ -1,6 +1,6 @@
-# OSRM multi-región (Aruba · Madrid · Bogotá · CDMX)
+# OSRM multirregión (Aruba · Madrid · Bogotá · CDMX)
 
-El motor FastAPI calcula rutas con [`fetch_route`](../../../simulation/app/routing.py): consulta el OSRM de la **región activa**, gestionada por [`regions.py`](../../../simulation/app/regions.py). Si la petición HTTP falla, el motor reintenta y, si sigue fallando, usa una polilínea recta entre waypoints como fallback.
+El motor FastAPI calcula rutas con `fetch_route` (`simulation/app/routing.py`): consulta el OSRM de la **región activa**, gestionada por `simulation/app/regions.py`. Si la petición HTTP falla, el motor reintenta y, si sigue fallando, usa una polilínea recta entre waypoints como fallback.
 
 ## Regiones soportadas
 
@@ -23,10 +23,10 @@ Los datos persisten en `docker/osrm-data/<region>/`. Solo el contenedor de la re
 
 ```bash
 # Listar regiones
-curl http://10.10.48.25:8080/api/regions
+curl http://localhost:8080/api/regions
 
 # Cambiar a Madrid
-curl -X POST http://10.10.48.25:8080/api/regions/active \
+curl -X POST http://localhost:8080/api/regions/active \
   -H "Content-Type: application/json" -d '{"regionId":"madrid"}'
 ```
 
@@ -52,10 +52,6 @@ El panel del vehículo (`VehicleHomeView`) pide steps turn-by-turn vía `GET /ap
 ## Probe / health
 
 El motor publica un task de fondo `_osrm_probe_loop` que ataca el endpoint `route/v1/driving/<probe_lon_a>,<probe_lat_a>;<probe_lon_b>,<probe_lat_b>` cada 30s para validar el grafo activo. El estado se refleja en el header del dashboard como badge `OSRM`.
-
-## Simulación en pausa hasta Play
-
-El motor arranca con `paused=true` hasta que el cliente envía `POST /api/sim/control` con `action: "play"`. Así no hay telemetría ni avance de ruta hasta que el operador lo indica.
 
 ## Fallback offline
 

@@ -1,14 +1,14 @@
-# Proyecto paralelo `hpe-ml-training`
+# Proyecto paralelo de entrenamiento ML
 
-Repositorio hermano al gemelo digital que consume sus datos y entrena modelos propios. Pensado para funcionar de forma independiente: si el gemelo está apagado, basta con que Supabase siga accesible.
+Repositorio hermano al gemelo digital (`hpe-ml-training`, nombre histórico del repositorio) que consume sus datos y entrena modelos propios. Pensado para funcionar de forma independiente: si el gemelo está apagado, basta con que Supabase siga accesible.
 
 ## Ubicación
 
 Por convención al mismo nivel:
 ```
-~/Escritorio/hpe/
-├── HPE-Ambulancia-Digital-Twin/   ← gemelo (este repo)
-└── hpe-ml-training/               ← proyecto ML paralelo
+<carpeta-de-trabajo>/
+├── <repo-del-gemelo>/   ← gemelo (este repo)
+└── hpe-ml-training/     ← proyecto ML paralelo
 ```
 
 ## Estructura
@@ -43,7 +43,7 @@ hpe-ml-training/
 
 ```bash
 # 1. Activa training mode en el gemelo y déjalo generar datos
-curl -X POST http://localhost:8000/api/sim/training-mode \
+curl -X POST http://localhost:8080/api/sim/training-mode \
   -H "Content-Type: application/json" -d '{"enabled":true,"ratePerMin":20}'
 
 # 2. Setup del proyecto paralelo
@@ -109,8 +109,8 @@ Refino del IsolationForest que viene con el gemelo (ml-service). Entrena con dat
 
 1. Entrena en `hpe-ml-training`.
 2. Exporta a `.onnx`.
-3. `docker cp` al contenedor `ml-service` del gemelo.
-4. `docker restart` del servicio.
+3. `docker compose cp` al servicio `ml-service` del gemelo.
+4. `docker compose restart ml-service`.
 5. El `simulation` backend vuelve a consumirlo automáticamente.
 
 Detalle: [`docs/deploy.md`](https://github.com/GonzaCm/hpe-ml-training/blob/main/docs/deploy.md) del proyecto paralelo.

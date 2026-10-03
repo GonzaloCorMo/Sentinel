@@ -73,11 +73,11 @@ Nuevo endpoint `/api/sim/training-mode` (ver [API HTTP SSE](../technical/simulat
 **Rate + speed multiplier**: combinar `speedMultiplier=10` con `ratePerMin=20` da ~200 missions/hora real.
 
 ```bash
-curl -X POST http://localhost:8000/api/sim/training-mode \
+curl -X POST http://localhost:8080/api/sim/training-mode \
   -H "Content-Type: application/json" \
   -d '{"enabled":true,"ratePerMin":20}'
 
-curl -X POST http://localhost:8000/api/sim/control \
+curl -X POST http://localhost:8080/api/sim/control \
   -H "Content-Type: application/json" \
   -d '{"speedMultiplier":15}'
 ```

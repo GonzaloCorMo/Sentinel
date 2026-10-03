@@ -1,4 +1,4 @@
-# Operacion real de despacho
+# Operación de despacho
 
 ## Flujo recomendado
 
@@ -11,10 +11,10 @@
 ## Mapa operacional (Leaflet)
 
 - **Mapa (Leaflet + OpenStreetMap)**: vista principal para despacho; aquí se colocan ambulancias, emergencias, hospitales, gasolineras y atascos haciendo clic en el mapa con el modo de colocación activo.
-- **Sin datos en flota**: el mapa se muestra igual (centrado por defecto en Aruba Island) para poder colocar elementos o revisar la zona; no depende de que ya existan coordenadas en la simulación.
+- **Sin datos en flota**: el mapa se muestra igual (centrado en la región activa; Aruba por defecto) para poder colocar elementos o revisar la zona; no depende de que ya existan coordenadas en la simulación.
 - Si el mapa aparece en gris o sin teselas, recarga la página o usa **Maximizar mapa** para forzar el redibujado.
 
-## Buenas practicas
+## Buenas prácticas
 
 - Priorizar emergencias `high`.
 - Evitar asignar unidades con combustible bajo.
@@ -27,8 +27,8 @@
 - `E`: crear emergencia demo.
 - `R`, `H`, `M`, `B`: comandos rápidos para ambulancia seleccionada.
 
-## Resolucion de incidencias
+## Resolución de incidencias
 
 - Si no puedes asignar: valida selección de ambulancia + emergencia.
-- Si no hay ruta visible: comprobar OSRM local y endpoint de ruta.
+- Si no hay ruta visible: comprobar el badge OSRM de la cabecera (ver [Runbook de resiliencia](../technical/runbook-resiliencia-operativa.md)).
 - Si hay cortes de red: revisar broker activo y failover MQTT.

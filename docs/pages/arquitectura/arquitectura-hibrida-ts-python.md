@@ -1,73 +1,61 @@
-# Arquitectura hibrida Vue + Python
+# Arquitectura híbrida Vue + Python
 
-## Decision
+## Decisión
 
-Se mantiene arquitectura hibrida:
+Se mantiene una arquitectura híbrida:
 
 - `frontend/` (Vue 3 + Vite + TypeScript + Supabase): UI, auth, rutas protegidas y capa web.
-- `simulation/` (FastAPI + asyncio): motores de simulacion, IA, RAG y telemetria.
+- `simulation/` (FastAPI + asyncio): motores de simulación, IA, RAG, telemetría y fuente de eventos.
 
 ## Motivo
 
-- Reducir riesgo de migrar motores maduros de Python a TypeScript.
-- Acelerar entrega de producto web con Vue 3 y Supabase como backend de auth/datos.
+- Reducir el riesgo de migrar motores maduros de Python a TypeScript.
+- Acelerar la entrega del producto web con Vue 3 y Supabase como backend de auth y datos.
 - Evolucionar por contrato SSE/HTTP entre frontend y backend.
 
-## Integracion
+## Integración
 
 ```
-┌──────────────┐    SSE / HTTP    ┌──────────────────┐
+┌──────────────┐    SSE / HTTP    ┌───────────────────┐
 │  Vue 3       │ ◄──────────────► │  FastAPI          │
-│  (Vite proxy)│   /api/*         │  (simulation/)    │
-└──────┬───────┘                  └────────┬─────────┘
+│  (proxy Vite)│   /api/*         │  (simulation/)    │
+└──────┬───────┘                  └────────┬──────────┘
        │                                   │
-       │ VITE_SUPABASE_*                   │ SUPABASE_SERVICE_ROLE_KEY
+       │ /sb/* → Kong                      │ SUPABASE_SERVICE_ROLE_KEY
        ▼                                   ▼
 ┌──────────────────────────────────────────────────┐
-│              Supabase (PostgreSQL + pgvector)     │
+│          Supabase (PostgreSQL + pgvector)        │
 └──────────────────────────────────────────────────┘
 ```
 
-- Vite proxea `/api/*` a `http://127.0.0.1:8000` (FastAPI).
-- El frontend usa la clave anonima de Supabase para auth.
-- El backend Python usa la clave service role para escritura de telemetria e IA.
+- Vite hace de punto de entrada único: proxea `/api/*` al motor FastAPI y `/sb/*` a Supabase (Kong). Ver [Probar la PWA en móvil](../getting-started/pwa-mobile.md#detalles-tecnicos).
+- El frontend usa la clave anónima de Supabase para auth.
+- El backend Python usa la clave service role para escribir telemetría, eventos e IA.
 
-## Comunicacion en tiempo real
+## Comunicación en tiempo real
 
-El motor FastAPI expone un endpoint SSE (`GET /api/stream`) que emite el estado completo de la simulacion cada tick:
+El motor expone `GET /api/sim/stream` (SSE) y emite el snapshot completo de la simulación a ~2,5 Hz:
 
-- Ambulancias (posicion, estado FSM, telemetria, severidad del paciente)
-- Emergencias (activas, asignadas, resueltas)
-- POIs (hospitales, gasolineras), atascos
-- Propuestas IA pendientes y log de actividad
-- Estado de comunicaciones (canal activo, metricas)
+- Ambulancias (posición, estado FSM, telemetría, severidad del paciente).
+- Emergencias (activas, asignadas, resueltas).
+- POIs (hospitales, gasolineras, estaciones de carga y meteorológicas) y atascos.
+- Propuestas IA pendientes y log de actividad.
+- Estado de comunicaciones (canal activo, métricas).
+- Eventos externos y meteorología de la [fuente de eventos](../technical/fuente-de-eventos.md).
 
-El frontend se suscribe con `EventSource` y actualiza el store de Pinia.
+El frontend se suscribe con `EventSource` y actualiza el store de Pinia (`frontend/src/stores/simulation.ts`). Si el stream cae, recurre a polling de `GET /api/sim/state`.
 
-## Endpoints principales (FastAPI directo)
-
-| Metodo | Ruta | Descripcion |
-|--------|------|-------------|
-| GET | `/api/stream` | SSE con estado en tiempo real |
-| GET | `/api/state` | Estado completo (polling fallback) |
-| POST | `/api/control/toggle` | Play/Pause |
-| POST | `/api/control/speed` | Cambiar velocidad |
-| POST | `/api/spawn` | Crear ambulancia o emergencia |
-| POST | `/api/delete` | Eliminar entidad |
-| POST | `/api/network` | Activar/desactivar canal de red |
-| POST | `/api/chat` | Chatbot RAG (streaming) |
-| GET | `/api/ai/mode` | Consultar modo IA |
-| POST | `/api/ai/mode` | Cambiar modo IA (HITL/autonomo) |
-| POST | `/api/hitl/respond` | Aprobar/rechazar propuesta IA |
+Contrato detallado de endpoints: [API de simulación (HTTP + SSE)](../technical/simulation-api-http-sse.md).
 
 ## Persistencia en Supabase
 
-Las tablas clave son:
+Tablas clave:
 
-- `telemetry_logs` — logs de telemetria por tick (relacional, bigint ID)
-- `ai_hitl_proposals` — propuestas de la IA con estado (pending/approved/rejected/auto_approved)
-- `protocols_knowledge` — protocolos con embeddings para RAG
-- `ai_knowledge_chunks` — base de conocimiento del chatbot con embeddings
-- `chat_messages` — historial de conversaciones del chatbot
+- `telemetry_logs`: telemetría por tick (relacional, ID bigint).
+- `ai_hitl_proposals`: propuestas de la IA con estado (`pending` / `approved` / `rejected` / `auto_approved`).
+- `protocols_knowledge`: protocolos con embeddings para RAG.
+- `ai_knowledge_chunks`: base de conocimiento del chatbot con embeddings.
+- `chat_messages`: historial de conversaciones del chatbot.
+- `weather_readings`: lecturas meteorológicas ingeridas.
 
-Consulta [Base de datos](../technical/base-de-datos.md) para el esquema completo.
+Esquema completo en [Base de datos](../technical/base-de-datos.md).
