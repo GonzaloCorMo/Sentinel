@@ -1029,12 +1029,12 @@ async def weather_override(req: WeatherOverrideRequest) -> dict[str, Any]:
 async def island_summary() -> dict[str, Any]:
     """Aggregated island-wide situational awareness for the global monitor.
 
-    Combines weather aggregates, active Aruba events grouped by type/severity,
+    Combines weather aggregates, active external events grouped by type/severity,
     fleet KPIs, dispatch ETA averages, weather impact, and a per-zone
     breakdown bucketing assets into the four Aruba quadrants by centroid.
     """
     weather = engine.weather_by_station
-    stations_meta = _weather_station_rows()
+    stations_meta = await _weather_station_rows()
     coord_by_id = {s["id"]: (s.get("latitude"), s.get("longitude")) for s in stations_meta}
     temps: list[float] = []
     precips: list[float] = []

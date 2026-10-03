@@ -152,8 +152,8 @@ class SimulationEngine:
         self.entity_types: list[dict[str, Any]] = [
             {"id": "police_combustion", "kind": "vehicle", "name": "Policía Combustión", "speedKmh": 80, "color": "#2563eb", "iconSvg": None, "builtIn": True, "powertrain": "combustion", "crewMin": 2, "crewMax": 2, "costPerMin": 1.20, "activationCost": 15},
             {"id": "police_electric", "kind": "vehicle", "name": "Policía Eléctrico", "speedKmh": 80, "color": "#2563eb", "iconSvg": None, "builtIn": True, "powertrain": "electric", "crewMin": 2, "crewMax": 2, "costPerMin": 0.80, "activationCost": 18},
-            {"id": "ambulance_combustion", "kind": "vehicle", "name": "Ambulancia Combustión", "speedKmh": 80, "color": "#01a982", "iconSvg": None, "builtIn": True, "powertrain": "combustion", "crewMin": 2, "crewMax": 3, "costPerMin": 2.50, "activationCost": 25},
-            {"id": "ambulance_electric", "kind": "vehicle", "name": "Ambulancia Eléctrico", "speedKmh": 80, "color": "#01a982", "iconSvg": None, "builtIn": True, "powertrain": "electric", "crewMin": 2, "crewMax": 3, "costPerMin": 1.80, "activationCost": 30},
+            {"id": "ambulance_combustion", "kind": "vehicle", "name": "Ambulancia Combustión", "speedKmh": 80, "color": "#8a8f98", "iconSvg": None, "builtIn": True, "powertrain": "combustion", "crewMin": 2, "crewMax": 3, "costPerMin": 2.50, "activationCost": 25},
+            {"id": "ambulance_electric", "kind": "vehicle", "name": "Ambulancia Eléctrico", "speedKmh": 80, "color": "#8a8f98", "iconSvg": None, "builtIn": True, "powertrain": "electric", "crewMin": 2, "crewMax": 3, "costPerMin": 1.80, "activationCost": 30},
             {"id": "firetruck_combustion", "kind": "vehicle", "name": "Bomberos Combustión", "speedKmh": 70, "color": "#dc2626", "iconSvg": None, "builtIn": True, "powertrain": "combustion", "crewMin": 4, "crewMax": 6, "costPerMin": 4.00, "activationCost": 50},
             {"id": "firetruck_electric", "kind": "vehicle", "name": "Bomberos Eléctrico", "speedKmh": 70, "color": "#dc2626", "iconSvg": None, "builtIn": True, "powertrain": "electric", "crewMin": 4, "crewMax": 6, "costPerMin": 3.00, "activationCost": 60},
             {"id": "civil_protection_combustion", "kind": "vehicle", "name": "Protección Civil Combustión", "speedKmh": 70, "color": "#f59e0b", "iconSvg": None, "builtIn": True, "powertrain": "combustion", "crewMin": 1, "crewMax": 2, "costPerMin": 0.80, "activationCost": 10},
@@ -587,6 +587,7 @@ class SimulationEngine:
                 "activeEmergencies": sum(1 for e in self.emergencies if e.get("status") != "resolved"),
                 "resolvedEmergencies": self._resolved_emergencies,
                 "simulationSpeed": self.speed_multiplier,
+                "tickCount": self.tick,
             },
             "osrmRouting": dict(self.osrm_routing),
             "entityTypes": [t.copy() for t in self.entity_types],
