@@ -2,12 +2,12 @@
 
 Todo el proyecto corre como un único stack de Docker Compose. No hace falta instalar Node, Python ni Supabase CLI en la máquina: solo Docker.
 
-El **chat LLM** se delega a un endpoint vLLM externo (Gemma flash + Qwen flagship, API OpenAI-compat); no se descarga ningún modelo de chat al host. **Embeddings** (RAG / pgvector) sí corren en local vía Ollama con `nomic-embed-text`.
+La **IA es 100 % local**: el chat, los comandos, los informes de turno y el razonamiento de la IA observadora corren en **Ollama** dentro del propio stack (modelo de chat `qwen2.5:3b` por defecto y embeddings `nomic-embed-text`). No hace falta ningún servicio externo de IA. Detalle en [IA local con Ollama](../technical/ai-chatbot-rag.md#ia-local-con-ollama).
 
-## Despliegue de referencia
+## Qué incluye el stack
 
-- **Servidor**: `10.10.48.25`; todos los puertos siguientes están publicados ahí.
-- **Endpoint vLLM externo**: `10.10.48.10:8000` (flash) · `10.10.48.10:8001` (flagship). Configurable con `LLM_FLASH_BASE_URL` / `LLM_FLAGSHIP_BASE_URL`.
+- **Todo en `localhost`**: los puertos de la tabla de abajo se publican en tu máquina.
+- **Ollama**: un contenedor por perfil (`ollama-nvidia`, `ollama-amd` u `ollama-cpu`), accesible en la red interna como `ollama`. Si prefieres otro servidor compatible con OpenAI (vLLM, LM Studio…), cambia `LLM_FLASH_BASE_URL` / `LLM_FLAGSHIP_BASE_URL` en `.env`.
 - **Eventos externos**: no requieren infraestructura; el backend incluye un generador mock y endpoints de ingesta REST. Ver [Fuente de eventos](../technical/fuente-de-eventos.md).
 
 ## Requisitos
@@ -16,12 +16,11 @@ El **chat LLM** se delega a un endpoint vLLM externo (Gemma flash + Qwen flagshi
   - Ubuntu/Debian: `sudo apt install docker-compose-plugin`
   - Fedora: `sudo dnf install docker-compose-plugin`
   - Mac/Windows: incluido en Docker Desktop.
-- **~7 GB libres** (imágenes + 4 grafos OSRM + modelo embeddings).
-- **GPU del host (opcional, recomendado para embeddings)**:
+- **~9 GB libres** (imágenes + 3 grafos OSRM + modelos de Ollama, ~2,2 GB).
+- **GPU del host (opcional, muy recomendada para el chat)**:
   - NVIDIA → driver + [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html).
   - AMD (MI300X / MI250 / RX 7000) → kernel con módulo `amdgpu` + acceso a `/dev/kfd` y `/dev/dri`. El contenedor `ollama/ollama:rocm` trae ROCm dentro.
-  - Sin GPU → perfil `cpu` (más lento, válido para desarrollo).
-- Conectividad con el endpoint vLLM externo (`10.10.48.10:8000/8001` por defecto) para el chat.
+  - Sin GPU → perfil `cpu` (funciona, pero las respuestas del chat tardan bastante más).
 
 Para que tu usuario pueda ejecutar `docker` sin `sudo`:
 ```bash
@@ -40,7 +39,7 @@ cp .env.example .env
 python3 scripts/generate-supabase-keys.py   # imprime secretos frescos
 # → copia el output dentro de .env (sustituye los valores REPLACE_WITH_…)
 
-# 3. Levantar todo (elige perfil GPU del host para Ollama embeddings)
+# 3. Levantar todo (elige el perfil según la GPU del host; lo usa Ollama)
 docker compose --profile gpu-nvidia up -d   # CUDA
 docker compose --profile gpu-amd    up -d   # ROCm (MI300X / MI250)
 docker compose --profile cpu        up -d   # sin GPU
@@ -52,33 +51,29 @@ docker compose logs -f
 La **primera vez** tarda ~10 min:
 
 - Descarga de imágenes Docker (~2 GB; tag `:rocm` añade ~3 GB extra solo si usas el perfil AMD).
-- Descarga de los 4 extractos OSM y compilación de los grafos OSRM (Aruba/Santiago/Bogotá/CDMX). Cada par `osrm-fetcher-<region>` + `osrm-builder-<region>` se ejecuta una sola vez y sale.
-- Descarga del modelo de embeddings `nomic-embed-text` (~270 MB) por `ollama-init`.
-- El chat LLM **no** descarga nada: se sirve desde el endpoint vLLM externo.
+- Descarga de los 3 extractos OSM y compilación de los grafos OSRM (Santiago/Bogotá/CDMX). Cada par `osrm-fetcher-<region>` + `osrm-builder-<region>` se ejecuta una sola vez y sale.
+- Descarga de los modelos de Ollama por `ollama-init`: chat `qwen2.5:3b` (~1,9 GB) y embeddings `nomic-embed-text` (~270 MB). Mientras no termine, el chat no responde.
 
 A partir de la segunda vez, todo arranca en <1 min (volúmenes persistidos).
 
 ## Puertos expuestos
 
-| Servicio | URL local | URL producción | Puerto |
-|---|---|---|---|
-| Frontend (Vue) | http://localhost:5173 | http://10.10.48.25:5173 | 5173 |
-| API simulación (FastAPI) | http://localhost:8080 | http://10.10.48.25:8080 | 8080 |
-| OpenAPI YAML | `/openapi.yaml` | `/openapi.yaml` | 8080 |
-| Documentación (VitePress) | http://localhost:3001 | http://10.10.48.25:3001 | 3001 |
-| Supabase API (Kong) | http://localhost:54321 | http://10.10.48.25:54321 | 54321 |
-| Supabase Studio | http://localhost:54323 | http://10.10.48.25:54323 | 54323 |
-| Postgres | `localhost:54322` | `10.10.48.25:54322` | 54322 |
-| OSRM Aruba (default) | http://localhost:5003 | http://10.10.48.25:5003 | 5003 |
-| OSRM Santiago de Compostela | http://localhost:5000 | http://10.10.48.25:5000 | 5000 |
-| OSRM Bogotá | http://localhost:5001 | http://10.10.48.25:5001 | 5001 |
-| OSRM CDMX | http://localhost:5002 | http://10.10.48.25:5002 | 5002 |
-| Mosquitto (MQTT) | `localhost:1883` | `10.10.48.25:1883` | 1883 |
-| Ollama (embeddings, red interna) | `http://ollama:11434` | n/a | — |
-| vLLM externo flash (chat) | n/a | `http://10.10.48.10:8000/v1` | 8000 |
-| vLLM externo flagship (chat) | n/a | `http://10.10.48.10:8001/v1` | 8001 |
+| Servicio | URL local | Puerto |
+|---|---|---|
+| Frontend (Vue) | http://localhost:5173 | 5173 |
+| API simulación (FastAPI) | http://localhost:8080 | 8080 |
+| OpenAPI YAML | http://localhost:8080/openapi.yaml | 8080 |
+| Documentación (VitePress) | http://localhost:3001 | 3001 |
+| Supabase API (Kong) | http://localhost:54321 | 54321 |
+| Supabase Studio | http://localhost:54323 | 54323 |
+| Postgres | `localhost:54322` | 54322 |
+| OSRM Santiago de Compostela (por defecto) | http://localhost:5000 | 5000 |
+| OSRM Bogotá | http://localhost:5001 | 5001 |
+| OSRM CDMX | http://localhost:5002 | 5002 |
+| Mosquitto (MQTT) | `localhost:1883` | 1883 |
+| Ollama (chat + embeddings, red interna) | `http://ollama:11434` | — |
 
-Abre: http://10.10.48.25:5173/login (o `http://localhost:5173/login` en local).
+Abre: http://localhost:5173/login.
 
 ## Operaciones habituales
 
@@ -86,7 +81,7 @@ Abre: http://10.10.48.25:5173/login (o `http://localhost:5173/login` en local).
 # Parar (conserva datos)
 docker compose down
 
-# Parar Y borrar DB + grafos OSRM + modelo embeddings Ollama
+# Parar Y borrar DB + grafos OSRM + modelos de Ollama
 docker compose down -v
 rm -rf docker/osrm-data/*/region.osrm* docker/osrm-data/*/map.osm.pbf
 
@@ -145,7 +140,10 @@ Flujo típico tras tocar Dockerfile o `requirements.txt`:
 ## Troubleshooting
 
 **`osrm-builder-<region>` falla con "out of memory"**
-Los extractos por defecto son ligeros (Aruba ~3 MB, Bogotá/CDMX ~30-100 MB; Santiago se recorta de Galicia, ~110 MB de descarga y un grafo pequeño). Si cambias a un PBF mayor (`OSRM_PBF_URL_<REGION>` en `.env`), considera dar más memoria a Docker Desktop.
+Los extractos por defecto son ligeros (Bogotá/CDMX ~30-100 MB; Santiago se recorta del extracto de Galicia con osmium, ~110 MB de descarga y un grafo pequeño). Si cambias a un PBF mayor (`OSRM_PBF_URL_<REGION>` en `.env`), considera dar más memoria a Docker Desktop.
+
+**El chat tarda mucho o no responde**
+Comprueba que `ollama-init` terminó (`docker compose logs ollama-init` debe acabar en `OK`) y que usas el perfil de GPU adecuado. Con el perfil `cpu` las respuestas pueden tardar bastante. Ver [IA local con Ollama](../technical/ai-chatbot-rag.md#ia-local-con-ollama).
 
 **Supabase Studio pide login y no entra**
 Usuario y password están en tu `.env` (`DASHBOARD_USERNAME` / `DASHBOARD_PASSWORD`).

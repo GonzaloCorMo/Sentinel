@@ -1,6 +1,6 @@
 # Cuánto tiempo simular para tener un modelo útil
 
-Guía numérica de cuánto tiempo necesita el gemelo estar en modo autónomo para que cada modelo pase de "baseline entrenado" a "decente" a "production-feeling". Todas las estimaciones asumen el escenario default (Aruba Island, flota auto-bootstrap de 3 unidades, distribución de tipos `medical/altercation/mass_casualty = 60/20/20`).
+Guía numérica de cuánto tiempo necesita el gemelo estar en modo autónomo para que cada modelo pase de "baseline entrenado" a "decente" a "production-feeling". Todas las estimaciones asumen el escenario default (Santiago de Compostela, flota auto-bootstrap de 3 unidades, distribución de tipos `medical/altercation/mass_casualty = 60/20/20`).
 
 ## Cómo se calcula
 
@@ -108,7 +108,7 @@ curl -X POST http://localhost:8080/api/sim/training-mode -d '{"enabled":true,"ra
 # rate=20 speed=10 → 200/h → 2400 missions en 12h continuas
 # o 1 noche de 10h a rate=30 speed=15 → 450·10 = 4500 missions
 ```
-Entrena con `python -m hpe_ml.models.eta_regressor`. Espera **MAE ~40s**.
+Entrena con `python -m <paquete_ml>.models.eta_regressor` (en el [proyecto de entrenamiento](proyecto-paralelo-ml-training.md), repositorio externo). Espera **MAE ~40s**.
 
 **Semana 2** — Aumenta flota a 10 + dispatch ranker:
 ```bash

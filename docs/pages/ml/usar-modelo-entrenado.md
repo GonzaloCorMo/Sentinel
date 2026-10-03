@@ -2,10 +2,12 @@
 
 Cómo pasar de `models/eta_xgb.json` (artefacto del proyecto paralelo) a que el gemelo digital esté usando ese modelo en decisiones reales de despacho.
 
+> Repositorio de entrenamiento externo; ajusta la ruta y el nombre del paquete a tu copia. En los comandos, `../ml-training` es la carpeta del repositorio y `<paquete_ml>` su paquete Python.
+
 ## Flujo de deploy end-to-end
 
 ```
-hpe-ml-training/                             gemelo digital (este repo)
+ml-training/                                 gemelo digital (este repo)
  ─────────────────                            ──────────────────────────
   entrenar modelo                              FastAPI simulation
        ↓                                             ↑ predict_eta()
@@ -18,10 +20,10 @@ hpe-ml-training/                             gemelo digital (este repo)
 ## Paso 1 — Entrena
 
 ```bash
-cd ../hpe-ml-training
+cd ../ml-training
 source .venv/bin/activate
-python -m hpe_ml.export --out data/
-python -m hpe_ml.models.eta_regressor \
+python -m <paquete_ml>.export --out data/
+python -m <paquete_ml>.models.eta_regressor \
   --data data/ml_mission_training.parquet \
   --out models/eta_xgb.json
 ```
@@ -75,7 +77,7 @@ ML=$(docker ps -qf name=ml-service)
 ### Método A: `docker cp` (rápido, ad-hoc)
 
 ```bash
-# Desde hpe-ml-training/
+# Desde ml-training/
 docker cp models/eta_xgb.onnx "$ML":/models/eta_xgb.onnx
 
 # Verifica
@@ -182,7 +184,7 @@ Y añade el feature builder coherente con el del proyecto paralelo:
 
 ```python
 def _build_eta_features(self, em, amb, trip_m):
-    # Orden IDÉNTICO al del entrenamiento (hpe_ml/features.py::build_eta_features)
+    # Orden IDÉNTICO al del entrenamiento (<paquete_ml>/features.py::build_eta_features)
     et = em.get("emergencyType", "medical")
     sev = amb.get("patientSeverity", "stable")
     return [
@@ -200,7 +202,7 @@ def _build_eta_features(self, em, amb, trip_m):
     ]
 ```
 
-**CRÍTICO**: el orden de los features tiene que coincidir exactamente entre entrenamiento (`hpe_ml/features.py`) e inferencia (`engine.py`). Cualquier desalineación → predicciones sin sentido.
+**CRÍTICO**: el orden de los features tiene que coincidir exactamente entre entrenamiento (`<paquete_ml>/features.py`) e inferencia (`engine.py`). Cualquier desalineación → predicciones sin sentido.
 
 ## Paso 6 — A/B en producción
 
@@ -273,9 +275,9 @@ Volumen para que valga la pena: ≥15k decisions con ≥3 candidatas (ver [Tiemp
 
 ```bash
 # Entrenar
-cd ../hpe-ml-training && source .venv/bin/activate
-python -m hpe_ml.export --out data/
-python -m hpe_ml.models.eta_regressor --data data/ml_mission_training.parquet
+cd ../ml-training && source .venv/bin/activate
+python -m <paquete_ml>.export --out data/
+python -m <paquete_ml>.models.eta_regressor --data data/ml_mission_training.parquet
 
 # Exportar ONNX
 python scripts/export_eta_onnx.py

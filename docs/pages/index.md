@@ -19,11 +19,11 @@ hero:
 
 features:
   - title: Motor de simulación
-    details: FastAPI + asyncio. Cinco motores de telemetría por unidad, ETA dinámica, scoring de asignación y rutas OSRM multirregión (Aruba, Santiago de Compostela, Bogotá, CDMX).
+    details: FastAPI + asyncio. Cinco motores de telemetría por unidad, ETA dinámica, scoring de asignación y rutas OSRM multirregión (Santiago de Compostela, Bogotá, CDMX).
     link: /technical/simulador-global-despacho
     linkText: Simulador y despacho
   - title: IA HITL y autónoma
-    details: Detección de anomalías, protocolos vía RAG (pgvector) y propuestas que aprueba el operador o ejecuta la IA directamente.
+    details: Detección de anomalías, protocolos vía RAG (pgvector) y propuestas que aprueba el operador o ejecuta la IA directamente. IA 100 % local con Ollama.
     link: /technical/ai-hitl-autonomo
     linkText: Motor de IA
   - title: Fuente de eventos

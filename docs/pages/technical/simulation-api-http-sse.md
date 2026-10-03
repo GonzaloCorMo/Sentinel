@@ -2,7 +2,7 @@
 
 Motor FastAPI en `simulation/app/main.py`. El frontend Vue consume el estado y los eventos casi en tiempo real.
 
-- **Base URL**: `http://localhost:8080` en local (`http://10.10.48.25:8080` en el despliegue de referencia).
+- **Base URL**: `http://localhost:8080`.
 - **OpenAPI**: `GET /openapi.yaml` (especificación completa generada automáticamente).
 - **Healthcheck**: `GET /health`.
 
@@ -92,7 +92,7 @@ Detalle en [Modo simulación autónoma](../ml/modo-simulacion-autonoma.md).
 
 Eventos operativos y lecturas meteorológicas llegan desde el generador mock o por ingesta REST (`POST /api/events/ingest`, `POST /api/weather/ingest`). Lectura en `GET /api/events`, `GET /api/events/status`, `GET /api/weather`, `GET /api/weather/{station_id}/history`; override para demos en `POST /api/weather/override`.
 
-`GET /api/island/summary` ofrece la vista global agregada: clima, eventos por tipo y severidad, KPIs de flota, ETA media, impacto meteorológico y reparto por cuadrantes (NW/NE/SW/SE).
+`GET /api/region/summary` ofrece el resumen agregado de la región activa: la región (`region: {id, name}`), clima, eventos por tipo y severidad, KPIs de flota, ETA media, impacto meteorológico y reparto por cuadrantes (NW/NE/SW/SE) alrededor del centro de la región.
 
 Contrato completo en [Fuente de eventos](fuente-de-eventos.md).
 

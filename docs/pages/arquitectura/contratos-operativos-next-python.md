@@ -63,9 +63,9 @@ Un único `.env` en la raíz; Docker Compose inyecta cada variable en su servici
 | `DEV_PROXY_API_TARGET` | Frontend (proxy Vite `/api`) | `http://simulation:8080` |
 | `DEV_PROXY_SB_TARGET` | Frontend (proxy Vite `/sb`) | `http://supabase-kong:8000` |
 | `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | Backend | `http://supabase-kong:8000` |
-| `OSRM_URL_<REGION>` / `DEFAULT_REGION` | Backend | `http://osrm-aruba:5000` / `aruba` |
+| `OSRM_URL_<REGION>` / `DEFAULT_REGION` | Backend | `http://osrm-santiago:5000` / `santiago` |
 | `EVENT_SOURCE` y `MOCK_*` | Backend | `mock` (ver [Fuente de eventos](../technical/fuente-de-eventos.md)) |
-| `LLM_FLASH_BASE_URL` / `LLM_FLAGSHIP_BASE_URL` | Backend | endpoint vLLM externo |
+| `LLM_FLASH_BASE_URL` / `LLM_FLAGSHIP_BASE_URL` | Backend | `http://ollama:11434/v1` (Ollama local) |
 | `OLLAMA_BASE_URL` | Backend | `http://ollama:11434/v1` |
 
 ## Persistencia operativa en Supabase

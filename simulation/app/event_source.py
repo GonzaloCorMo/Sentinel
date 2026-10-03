@@ -51,6 +51,20 @@ _EVENT_CATALOG: list[tuple[str, tuple[str, ...], int, tuple[str, ...]]] = [
     ("storm", ("medium",), 1, ("Tormenta local",)),
 ]
 
+# Descripción breve por tipo (lo que vería un operador en el aviso).
+_DESCRIPTIONS: dict[str, str] = {
+    "accident": "Aviso ciudadano de colisión con posibles heridos.",
+    "medical_emergency": "Llamada al 112 por persona que necesita atención urgente.",
+    "lane_closure": "Carril cortado; tráfico desviado.",
+    "construction": "Obras con ocupación parcial de la calzada.",
+    "fire": "Humo visible y aviso de vecinos.",
+    "power_outage": "Corte de suministro eléctrico en la zona.",
+    "flood": "Acumulación de agua que dificulta el paso.",
+    "hazmat_spill": "Vertido de sustancia desconocida en la vía.",
+    "public_event": "Gran afluencia de público en la zona.",
+    "storm": "Tormenta con rachas fuertes de viento.",
+}
+
 # Radio por defecto (m) para los tipos viales: el motor los convierte en atascos que el routing evita.
 _ROAD_RADIUS_M = {"accident": 150.0, "lane_closure": 120.0, "construction": 200.0, "hazmat_spill": 250.0}
 
@@ -97,7 +111,7 @@ def build_mock_event(rng: random.Random) -> dict[str, Any]:
         type=ev_type,  # type: ignore[arg-type]
         severity=rng.choice(severities),  # type: ignore[arg-type]
         title=rng.choice(titles),
-        description="Evento generado por la fuente mock local.",
+        description=_DESCRIPTIONS.get(ev_type, "Aviso recibido de la red de incidencias."),
         latitude=round(lat0 + rng.uniform(-_SPREAD_DEG, _SPREAD_DEG), 6),
         longitude=round(lon0 + rng.uniform(-_SPREAD_DEG, _SPREAD_DEG), 6),
         radius_m=_ROAD_RADIUS_M.get(ev_type),

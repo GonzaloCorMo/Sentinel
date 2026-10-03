@@ -25,7 +25,7 @@ Qué usamos y dónde vive cada pieza.
 ### Operación y simulación
 
 - Mapa de operaciones: `frontend/src/views/MapOperationsView.vue`
-- Vista global: `frontend/src/views/IslandMonitorView.vue`
+- Situación de la región: `frontend/src/views/RegionOverviewView.vue`
 - Telemetría de flota: `frontend/src/views/FleetTelemetryView.vue`
 - Comunicaciones: `frontend/src/views/CommsDashboardView.vue`
 - Configuración de escenario: `frontend/src/views/ScenarioConfigView.vue`
@@ -62,7 +62,7 @@ Qué usamos y dónde vive cada pieza.
 ### IA y LLM
 
 - Motor de decisiones (HITL / autónomo): `simulation/app/ai_decision_engine.py`
-- Proveedor LLM (vLLM externo + Ollama): `simulation/app/llm_provider.py`
+- Proveedor LLM (Ollama local, API compatible con OpenAI): `simulation/app/llm_provider.py`
 - Chat RAG: `simulation/app/chat_service.py`
 - Comandos (lenguaje natural → tool-calling): `simulation/app/command_service.py`
 - Informes de turno (LLM flagship): `simulation/app/shift_report_service.py`

@@ -7,8 +7,9 @@ import "leaflet/dist/leaflet.css";
 import { getSupabase } from "@/lib/supabase";
 import { cssVar, useTheme } from "@/composables/useTheme";
 import { addBasemap, type Basemap } from "@/lib/basemap";
+import { DEFAULT_SPAWN_LAT, DEFAULT_SPAWN_LON } from "@/lib/mapDefaults";
 
-const { t } = useI18n();
+const { t, te } = useI18n();
 const { theme } = useTheme();
 
 /* Color por defecto de un tipo nuevo: es un dato que se envía al backend y
@@ -118,8 +119,8 @@ const savedVehicles = ref<SavedVehicle[]>([]);
 const form = ref({
   vehicleType: "ambulance",
   locationSource: "geo" as "geo" | "manual",
-  latInput: "40.4924",
-  lonInput: "-3.8736",
+  latInput: String(DEFAULT_SPAWN_LAT),
+  lonInput: String(DEFAULT_SPAWN_LON),
   callsign: "",
 });
 const myCoords = ref<{ lat: number; lon: number } | null>(null);
@@ -161,7 +162,7 @@ onMounted(async () => {
         myVehicleId.value = obj.vehicleId;
         stage.value = "on-duty";
         await nextTick();
-        initMap(obj.lastLat || 40.48, obj.lastLon || -3.69);
+        initMap(obj.lastLat || DEFAULT_SPAWN_LAT, obj.lastLon || DEFAULT_SPAWN_LON);
         startPolling();
         return;
       }
@@ -875,7 +876,7 @@ watch(theme, (next) => {
               <button class="vh-type-act" :title="t('vehicle.edit')" @click="openTypeEdit(vt)">✎</button>
               <button class="vh-type-act danger" :title="t('vehicle.delete')" @click="deleteType(vt)">✕</button>
             </div>
-            <div v-else class="vh-type-row-badge">Built-in</div>
+            <div v-else class="vh-type-row-badge">{{ t('scenario.builtin') }}</div>
           </div>
         </div>
       </div>
@@ -991,8 +992,8 @@ watch(theme, (next) => {
               {{ assignedEmergency.description }}
             </div>
             <div class="vh-emergency-meta">
-              <span v-if="assignedEmergency.emergencyType">{{ assignedEmergency.emergencyType }}</span>
-              <span v-if="assignedEmergency.severity">· severidad <span class="vh-num">{{ assignedEmergency.severity }}</span></span>
+              <span v-if="assignedEmergency.emergencyType">{{ te(`emergency_type.${assignedEmergency.emergencyType}`) ? t(`emergency_type.${assignedEmergency.emergencyType}`) : assignedEmergency.emergencyType }}</span>
+              <span v-if="assignedEmergency.severity">· {{ t('map.severity') }} {{ te(`events.severity.${assignedEmergency.severity}`) ? t(`events.severity.${assignedEmergency.severity}`) : assignedEmergency.severity }}</span>
             </div>
             <button class="vh-btn-primary nav-start" @click="startNavigation">▶ Iniciar ruta</button>
           </div>

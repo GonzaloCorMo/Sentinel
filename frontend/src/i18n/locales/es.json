@@ -217,23 +217,6 @@
     "osrm_warn": "El servicio de rutas aún no responde: las unidades irán en línea recta hasta que esté listo.",
     "mode_change_error": "No se pudo cambiar el modo"
   },
-  "scenario_panel": {
-    "title": "Escenario · POI y eventos",
-    "desc": "Emergencias y atascos se sincronizan por SSE. Rutas por calles con OSRM.",
-    "emergency_title_label": "Título emergencia",
-    "emergency_demo_default": "Emergencia demo",
-    "add_emergency": "+ Emergencia",
-    "add_emergency_tooltip": "Crear punto de emergencia",
-    "emergency_created": "Emergencia creada",
-    "add_jam": "+ Atasco (demo)",
-    "add_jam_tooltip": "Polígono de atasco de demostración",
-    "jam_added": "Atasco añadido (zona roja)",
-    "assign_label": "Asignar emergencia → ambulancia activa",
-    "select_emergency": "— Emergencia —",
-    "calc_assign": "Calcular ruta y asignar",
-    "select_amb_em": "Selecciona ambulancia y emergencia",
-    "route_assigned": "Ruta asignada al gemelo"
-  },
   "controls": {
     "play": "Reproducir",
     "pause": "Pausar",
@@ -598,8 +581,8 @@
     "cancel": "Cancelar",
     "callsign_ph": "Ej. AMB-042, UNID-07…",
     "location": "Ubicación",
-    "lat_ph": "Latitud (40.4168)",
-    "lon_ph": "Longitud (-3.7038)",
+    "lat_ph": "Latitud (42.8782)",
+    "lon_ph": "Longitud (-8.5448)",
     "enter_service": "Entrar en servicio",
     "remaining": "Restante",
     "status": "Estado",
@@ -796,5 +779,14 @@
       "high": "Alta",
       "critical": "Crítica"
     }
+  },
+  "emergency_type": {
+    "medical": "Médica",
+    "trauma": "Traumatismo",
+    "fire": "Incendio",
+    "hazmat": "Materiales peligrosos",
+    "flood": "Inundación",
+    "altercation": "Altercado",
+    "mass_casualty": "Múltiples víctimas"
   }
 }

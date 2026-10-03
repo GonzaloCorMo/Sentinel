@@ -81,8 +81,9 @@ curl -X POST http://localhost:8080/api/sim/training-mode -d '{"enabled":false}' 
 docker compose stop simulation && docker compose start simulation
 
 # 3. Exportar dataset desde el proyecto paralelo
-cd ../hpe-ml-training
-python -m hpe_ml.export --out data/
+#    (repositorio externo: ajusta la ruta y el nombre del paquete a tu copia)
+cd ../ml-training
+python -m <paquete_ml>.export --out data/
 ```
 
 ## Avisos

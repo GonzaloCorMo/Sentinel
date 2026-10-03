@@ -1,6 +1,8 @@
 # Proyecto paralelo de entrenamiento ML
 
-Repositorio hermano al gemelo digital (`hpe-ml-training`, nombre histórico del repositorio) que consume sus datos y entrena modelos propios. Pensado para funcionar de forma independiente: si el gemelo está apagado, basta con que Supabase siga accesible.
+Repositorio hermano al gemelo digital (`ml-training` en estos ejemplos) que consume sus datos y entrena modelos propios. Pensado para funcionar de forma independiente: si el gemelo está apagado, basta con que Supabase siga accesible.
+
+> Repositorio de entrenamiento externo; ajusta la ruta y el nombre del paquete a tu copia. En los comandos, `<paquete_ml>` es el nombre del paquete Python de ese repositorio.
 
 ## Ubicación
 
@@ -8,18 +10,18 @@ Por convención al mismo nivel:
 ```
 <carpeta-de-trabajo>/
 ├── <repo-del-gemelo>/   ← gemelo (este repo)
-└── hpe-ml-training/     ← proyecto ML paralelo
+└── ml-training/         ← proyecto ML paralelo (externo)
 ```
 
 ## Estructura
 
 ```
-hpe-ml-training/
+ml-training/
 ├── README.md
 ├── requirements.txt
 ├── .env.example
 ├── .gitignore
-├── src/hpe_ml/
+├── src/<paquete_ml>/
 │   ├── __init__.py
 │   ├── db.py                     ← conexión psycopg
 │   ├── export.py                 ← SQL → Parquet
@@ -47,15 +49,15 @@ curl -X POST http://localhost:8080/api/sim/training-mode \
   -H "Content-Type: application/json" -d '{"enabled":true,"ratePerMin":20}'
 
 # 2. Setup del proyecto paralelo
-cd ../hpe-ml-training
+cd ../ml-training
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
 # edita .env: POSTGRES_URL=postgresql://postgres:<PASSWORD>@localhost:54322/postgres
 
 # 3. Cuando tengas ≥2k missions (ver SQL abajo) exporta y entrena
-python -m hpe_ml.export --out data/
-python -m hpe_ml.models.eta_regressor --data data/ml_mission_training.parquet
+python -m <paquete_ml>.export --out data/
+python -m <paquete_ml>.models.eta_regressor --data data/ml_mission_training.parquet
 ```
 
 ### Comprobar volumen actual
@@ -79,7 +81,7 @@ select count(*), avg(candidate_count) from route_decisions;
 
 ## Modelos incluidos
 
-### ETA regressor (`src/hpe_ml/models/eta_regressor.py`)
+### ETA regressor (`src/<paquete_ml>/models/eta_regressor.py`)
 
 Predice `response_time_s` a partir de:
 - Distancia en km al lugar del incidente.
@@ -92,7 +94,7 @@ Modelo: `XGBoostRegressor` (400 árboles, lr=0.05, depth=6).
 
 Métrica típica con 5k missions: **MAE ~32s** contra baseline mean (~86s).
 
-### Dispatch ranker (`src/hpe_ml/models/dispatch_ranker.py`)
+### Dispatch ranker (`src/<paquete_ml>/models/dispatch_ranker.py`)
 
 Input: una fila por ambulancia candidata (features: distancia, fuel, battery, on_route).
 Output: score que ordena candidatas por "probabilidad de ser la mejor".
@@ -101,26 +103,26 @@ Algoritmo: **LightGBM LambdaRank** (`objective=lambdarank`, NDCG@1/3).
 
 Label baseline: `is_chosen` (imita al motor). Upgrade: sustituir por `1 / response_time_s` del outcome real para learning-to-rank supervisado.
 
-### Anomaly detector (`src/hpe_ml/models/anomaly.py`)
+### Anomaly detector (`src/<paquete_ml>/models/anomaly.py`)
 
 Refino del IsolationForest que viene con el gemelo (ml-service). Entrena con datos reales de `ml_telemetry_features` en lugar del bootstrap sintético, exporta a ONNX, se sube al volumen `ml-models` del gemelo.
 
 ## Ciclo de deploy
 
-1. Entrena en `hpe-ml-training`.
+1. Entrena en `ml-training`.
 2. Exporta a `.onnx`.
 3. `docker compose cp` al servicio `ml-service` del gemelo.
 4. `docker compose restart ml-service`.
 5. El `simulation` backend vuelve a consumirlo automáticamente.
 
-Detalle: [`docs/deploy.md`](https://github.com/GonzaCm/hpe-ml-training/blob/main/docs/deploy.md) del proyecto paralelo.
+Detalle: `docs/deploy.md` del proyecto paralelo.
 
 ## Por qué vive fuera del gemelo
 
 - **Dependencias pesadas**: XGBoost + LightGBM + pyarrow + jupyter añaden ~500 MB. No deben estar en la imagen runtime del backend.
 - **Ciclo de vida distinto**: el gemelo actualiza cuando cambia un endpoint. El training puede iterar decenas de veces al día sobre el mismo gemelo congelado.
 - **Stack diferente**: notebooks + MLflow (futuro) + data visualization ≠ FastAPI + asyncio.
-- **Separación de concerns**: si mañana quieres usar SageMaker / Vertex / cualquier plataforma cloud, mueves solo `hpe-ml-training` sin tocar el gemelo.
+- **Separación de concerns**: si mañana quieres usar SageMaker / Vertex / cualquier plataforma cloud, mueves solo `ml-training` sin tocar el gemelo.
 
 ## Roadmap del proyecto paralelo
 

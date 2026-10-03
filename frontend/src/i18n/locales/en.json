@@ -217,23 +217,6 @@
     "osrm_warn": "The routing service isn't ready yet: units will travel in straight lines until it is.",
     "mode_change_error": "Could not change mode"
   },
-  "scenario_panel": {
-    "title": "Scenario · POI and events",
-    "desc": "Emergencies and jams sync via SSE. Street routing with OSRM.",
-    "emergency_title_label": "Emergency title",
-    "emergency_demo_default": "Demo emergency",
-    "add_emergency": "+ Emergency",
-    "add_emergency_tooltip": "Create emergency point",
-    "emergency_created": "Emergency created",
-    "add_jam": "+ Jam (demo)",
-    "add_jam_tooltip": "Demo jam polygon",
-    "jam_added": "Jam added (red zone)",
-    "assign_label": "Assign emergency → active ambulance",
-    "select_emergency": "— Emergency —",
-    "calc_assign": "Compute route and assign",
-    "select_amb_em": "Select ambulance and emergency",
-    "route_assigned": "Route assigned to twin"
-  },
   "controls": {
     "play": "Play",
     "pause": "Pause",
@@ -598,8 +581,8 @@
     "cancel": "Cancel",
     "callsign_ph": "e.g. AMB-042, UNIT-07…",
     "location": "Location",
-    "lat_ph": "Latitude (40.4168)",
-    "lon_ph": "Longitude (-3.7038)",
+    "lat_ph": "Latitude (42.8782)",
+    "lon_ph": "Longitude (-8.5448)",
     "enter_service": "Enter service",
     "remaining": "Remaining",
     "status": "Status",
@@ -796,5 +779,14 @@
       "high": "High",
       "critical": "Critical"
     }
+  },
+  "emergency_type": {
+    "medical": "Medical",
+    "trauma": "Trauma",
+    "fire": "Fire",
+    "hazmat": "Hazardous materials",
+    "flood": "Flood",
+    "altercation": "Altercation",
+    "mass_casualty": "Mass casualty"
   }
 }

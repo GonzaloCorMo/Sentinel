@@ -1,6 +1,6 @@
 # Pipeline ML de entrenamiento propio
 
-El gemelo digital captura datos crudos de cada tick, cada decisión y cada outcome para alimentar un proyecto paralelo (`hpe-ml-training`) donde se entrenan modelos propios y se vuelven a desplegar sobre el gemelo vía ONNX.
+El gemelo digital captura datos crudos de cada tick, cada decisión y cada outcome para alimentar un proyecto paralelo (`ml-training`) donde se entrenan modelos propios y se vuelven a desplegar sobre el gemelo vía ONNX.
 
 ## Flujo end-to-end
 
@@ -24,7 +24,7 @@ El gemelo digital captura datos crudos de cada tick, cada decisión y cada outco
                                │  SQL / pyarrow
                                ▼
                 ┌──────────────────────────────┐
-                │  hpe-ml-training (repo ppl)  │
+                │  ml-training (repo externo)  │
                 │  ├─ export.py → Parquet      │
                 │  ├─ features.py              │
                 │  ├─ models/eta_regressor.py  │ XGBoost
@@ -82,20 +82,22 @@ curl -X POST http://localhost:8080/api/sim/control \
   -d '{"speedMultiplier":15}'
 ```
 
-## Proyecto paralelo `hpe-ml-training`
+## Proyecto paralelo `ml-training`
 
-Vive como carpeta hermana del gemelo (`../hpe-ml-training/`). Detalle completo en su [README](https://github.com/GonzaCm/hpe-ml-training) y sus docs internas (`dataset.md`, `training.md`, `deploy.md`).
+Vive como carpeta hermana del gemelo (`../ml-training/`). Detalle completo en su README y sus docs internas (`dataset.md`, `training.md`, `deploy.md`).
+
+> Repositorio de entrenamiento externo; ajusta la ruta y el nombre del paquete a tu copia.
 
 Quickstart tras tener datos:
 
 ```bash
-cd ../hpe-ml-training
+cd ../ml-training
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env   # pega el POSTGRES_URL (local: postgresql://postgres:XXX@localhost:54322/postgres)
 
-python -m hpe_ml.export --out data/
-python -m hpe_ml.models.eta_regressor --data data/ml_mission_training.parquet
+python -m <paquete_ml>.export --out data/
+python -m <paquete_ml>.models.eta_regressor --data data/ml_mission_training.parquet
 ```
 
 ## Modelos

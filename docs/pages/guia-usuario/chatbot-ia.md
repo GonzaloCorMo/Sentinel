@@ -6,14 +6,21 @@ El chatbot de Sentinel es un asistente inteligente que responde preguntas sobre 
 
 ## Cómo acceder
 
-El chatbot aparece como un **panel flotante** en la esquina inferior izquierda de la aplicación. Está disponible en todas las vistas (mapa, flota, comunicaciones).
+El chatbot aparece como un **panel flotante** en la esquina inferior izquierda de la aplicación. Está disponible en todas las secciones (Mapa, Situación, Flota, Conectividad, Informes).
 
 - **Abrir**: haz clic en el botón circular con el icono de chat.
 - **Cerrar**: haz clic en la "X" del panel o en el botón circular de nuevo.
 
 ## Cómo usarlo
 
-1. Escribe tu pregunta en el campo de texto del panel.
+El asistente tiene dos modos, que eliges en el propio panel:
+
+- **Preguntar**: responde dudas sobre el proyecto, la tecnología y los protocolos buscando en la base de conocimiento (RAG).
+- **Dar una orden**: interpreta lo que escribes como un comando sobre la flota o el mapa (ver [Comandos soportados](#comandos-soportados-tool-calling)).
+
+Pasos:
+
+1. Elige el modo y escribe tu pregunta u orden en el campo de texto del panel.
 2. Pulsa Enter o haz clic en el botón de enviar.
 3. La respuesta aparecerá progresivamente en tiempo real (streaming).
 4. El historial de la conversación se mantiene entre recargas de página.
@@ -59,7 +66,7 @@ El chatbot aparece como un **panel flotante** en la esquina inferior izquierda d
 | `reset_filters` | "limpia los filtros" |
 | `explain` | (cualquier pregunta libre — pasa a RAG) |
 
-Detrás del comando hay un fast-path regex (latencia <50 ms) y un fallback al LLM (Gemma, endpoint vLLM externo) para casos ambiguos. El endpoint subyacente es `POST /api/ai/command` o `GET /ask?q=...`.
+Detrás del comando hay un fast-path regex (latencia <50 ms) y un fallback al LLM local (Ollama, `qwen2.5:3b` por defecto) para casos ambiguos. El endpoint subyacente es `POST /api/ai/command` o `GET /ask?q=...`.
 
 ### Lo que no puede hacer
 
@@ -70,11 +77,11 @@ Detrás del comando hay un fast-path regex (latencia <50 ms) y un fallback al LL
 
 | Componente | Proveedor | Endpoint default |
 |---|---|---|
-| Chat + tool-calling | vLLM externo, Gemma (flash) | `http://10.10.48.10:8000/v1` (`google/gemma-4-31b-it`) |
-| Razonamiento extenso (informes) | vLLM externo, Qwen (flagship) | `http://10.10.48.10:8001/v1` (`Qwen/Qwen3-235B-A22B`) |
+| Chat + tool-calling | Ollama local (flash) | `http://ollama:11434/v1` (`qwen2.5:3b`) |
+| Informes de turno e IA observadora | Ollama local (flagship) | `http://ollama:11434/v1` (`qwen2.5:3b`) |
 | Embeddings | Ollama local | `http://ollama:11434/v1` (`nomic-embed-text`) |
 
-Solo Ollama corre en el host (perfiles compose `gpu-nvidia`, `gpu-amd`, `cpu`). El chat va siempre al endpoint vLLM externo y no requiere GPU local.
+Toda la IA corre en local dentro del stack (perfiles compose `gpu-nvidia`, `gpu-amd`, `cpu`). Con GPU las respuestas son mucho más rápidas. Cómo cambiar de modelo o de servidor: [IA local con Ollama](../technical/ai-chatbot-rag.md#ia-local-con-ollama).
 
 ## Datos técnicos
 

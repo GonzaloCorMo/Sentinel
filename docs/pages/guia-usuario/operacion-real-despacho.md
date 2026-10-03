@@ -8,10 +8,10 @@
 4. Ejecutar `Asignar emergencia a ambulancia`.
 5. Confirmar en mapa la ruta y seguimiento.
 
-## Mapa operacional (Leaflet)
+## Mapa operacional
 
-- **Mapa (Leaflet + OpenStreetMap)**: vista principal para despacho; aquí se colocan ambulancias, emergencias, hospitales, gasolineras y atascos haciendo clic en el mapa con el modo de colocación activo.
-- **Sin datos en flota**: el mapa se muestra igual (centrado en la región activa; Aruba por defecto) para poder colocar elementos o revisar la zona; no depende de que ya existan coordenadas en la simulación.
+- **Mapa** (sección *Mapa*, `/map`; aspecto tipo Google Maps en tema claro y oscuro, teselas vectoriales de OpenFreeMap): vista principal para despacho; aquí se colocan ambulancias, emergencias, hospitales, gasolineras y atascos haciendo clic en el mapa con el modo de colocación activo.
+- **Sin datos en flota**: el mapa se muestra igual (centrado en la región activa; Santiago de Compostela por defecto) para poder colocar elementos o revisar la zona; no depende de que ya existan coordenadas en la simulación.
 - Si el mapa aparece en gris o sin teselas, recarga la página o usa **Maximizar mapa** para forzar el redibujado.
 
 ## Buenas prácticas

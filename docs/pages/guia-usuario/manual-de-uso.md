@@ -7,9 +7,10 @@ Manual operativo para ejecutar y usar Sentinel, el gemelo digital de la flota de
 ## 1) Arranque del entorno
 
 1. Inicia servicios con `./up.sh` desde la raíz del repo.
-2. Verifica que la app responde en `http://10.10.48.25:5173` (producción) o `http://localhost:5173` (local).
-3. Verifica la documentación en `http://10.10.48.25:3001` (o `http://localhost:3001`).
-4. Healthcheck rápido del backend: `curl http://10.10.48.25:8080/health`.
+2. Verifica que la app responde en `http://localhost:5173`.
+3. Verifica la documentación en `http://localhost:3001`.
+4. Healthcheck rápido del backend: `curl http://localhost:8080/health`.
+5. En el primer arranque, espera a que `ollama-init` descargue los modelos de IA (~2,2 GB); hasta entonces el asistente no responde.
 
 ## 2) Acceso y autenticación
 
@@ -24,15 +25,30 @@ Manual operativo para ejecutar y usar Sentinel, el gemelo digital de la flota de
 
 Selector de idioma visible en la cabecera y en el login. Tres idiomas: **Español** (default), **Inglés**, **Gallego**. La elección persiste en localStorage.
 
-## 4) Selector de región / mapa
+## 4) Navegación del dashboard
 
-En la cabecera del dashboard hay un `RegionSelector` con 4 opciones: Aruba (default), Santiago de Compostela, Bogotá, Ciudad de México. Cambiar de región **resetea la simulación** (POIs y flota se borran porque sus coordenadas no son válidas en el nuevo grafo OSRM). El backend conmuta el contenedor OSRM activo automáticamente; los demás quedan idle.
+El menú principal tiene seis secciones:
 
-## 5) Mapa de operaciones (`/map`)
+| Sección | Ruta | Para qué sirve |
+|---|---|---|
+| **Mapa** | `/map` | Operación en directo: ver y colocar unidades, emergencias y lugares, y controlar la simulación. |
+| **Situación** | `/overview` | Resumen de la región activa: clima, eventos, estado de la flota y reparto por zonas. |
+| **Flota** | `/fleet` | Tarjetas con el estado y la telemetría de cada unidad, con filtros. |
+| **Conectividad** | `/comms` | Estado de los canales de comunicación (MQTT, malla P2P, HTTP) y su actividad. |
+| **Informes** | `/reports` | Informes de turno generados por la IA. |
+| **Ajustes** | `/config` | Tipos de unidad y de lugar disponibles en el mapa, y cómo se asignan las emergencias. |
+
+Los mapas tienen un aspecto similar a Google Maps, en tema claro y oscuro (teselas vectoriales de OpenFreeMap con MapLibre GL; no requieren API key).
+
+## 5) Selector de región
+
+En la cabecera del dashboard hay un `RegionSelector` con 3 opciones: Santiago de Compostela (por defecto), Bogotá y Ciudad de México. Cambiar de región **resetea la simulación** (POIs y flota se borran porque sus coordenadas no son válidas en el nuevo grafo OSRM). El backend conmuta el contenedor OSRM activo automáticamente; los demás quedan idle.
+
+## 6) Mapa (`/map`)
 
 Vista principal del gemelo digital con mapa interactivo:
 
-- **Mapa Leaflet** con ambulancias, emergencias, hospitales, gasolineras, estaciones de carga, estaciones meteorológicas, eventos externos y atascos en tiempo real.
+- **Mapa interactivo** con ambulancias, emergencias, hospitales, gasolineras, estaciones de carga, estaciones meteorológicas, eventos externos y atascos en tiempo real.
 - **Barra de herramientas** (lateral izquierda): crear emergencias, ambulancias, hospitales, gasolineras, charging stations, atascos.
 - **Paleta de tipos de unidad**: arrastra desde la paleta para spawn de un tipo concreto (combustion / electric / hybrid). El catálogo viene de `fleet_entity_types`.
 - **Panel telemetría** (lateral derecha): vitales paciente, mecánica, GPS, environmental, network de la unidad seleccionada.
@@ -53,7 +69,7 @@ Vista principal del gemelo digital con mapa interactivo:
 | **Moderate** (ámbar) | Vitales alteradas, atención requerida |
 | **Critical** (rojo) | Vitales críticas, el motor IA puede intervenir |
 
-## 6) Telemetría flota (`/fleet`)
+## 7) Flota (`/fleet`)
 
 Tarjetas de todas las unidades con indicadores de:
 
@@ -65,17 +81,17 @@ Tarjetas de todas las unidades con indicadores de:
 
 Click en una tarjeta para detalles ampliados.
 
-## 7) Vista global (`/island`)
+## 8) Situación (`/overview`)
 
-Dashboard agregado de la región activa (datos de `GET /api/island/summary`):
+Resumen agregado de la región activa (datos de `GET /api/region/summary`):
 
 - Agregados meteorológicos (avg temp, max precip, max viento, min visibilidad).
 - Eventos externos activos por tipo y severidad (ver [Fuente de eventos](../technical/fuente-de-eventos.md)).
 - KPIs de flota (total, emergencias activas, fuel low, ETA media, pulse rate).
 - Weather impact: `worstFactor`, `avgFactor`, `affectedMissions`.
-- Bucketing por cuadrantes (NW/NE/SW/SE).
+- Reparto por cuadrantes (NW/NE/SW/SE) alrededor del centro de la región.
 
-## 8) Comunicaciones (`/comms`)
+## 9) Conectividad (`/comms`)
 
 Monitorización de los canales:
 
@@ -84,13 +100,14 @@ Monitorización de los canales:
 - Tabla de actividad por unidad.
 - Indicador del canal activo.
 
-## 9) Panel de IA (HITL / autónomo)
+## 10) Panel de IA (con aprobación / autónoma)
 
 Esquina inferior derecha:
 
-- **Propuestas IA**: anomalías + protocolo sugerido + razonamiento LLM.
+- **Sugerencias de la IA**: panel con las anomalías detectadas, el protocolo sugerido y el razonamiento del LLM.
 - **Botones**: aprobar / rechazar.
-- **Modo autónomo**: la IA ejecuta sin aprobación. Al activarlo, las pendientes se auto-resuelven.
+- **Modo "Con aprobación"**: la IA propone y el operador decide.
+- **Modo "Autónoma"**: la IA ejecuta sin aprobación. Al activarlo, las pendientes se resuelven solas.
 - **Log**: historial reciente de propuestas resueltas.
 
 ### Tipos de anomalías detectadas
@@ -103,16 +120,16 @@ Esquina inferior derecha:
 | Emergencia desatendida | Sin asignar > 30s | Auto-despachar la unidad más cercana |
 | Weather hazard | Eventos meteorológicos cerca | Reroute o pausa según severidad |
 
-## 10) Chatbot ⌘ comando
+## 11) Asistente (Preguntar / Dar una orden)
 
 Chat flotante (esquina inferior izquierda) con dos modos:
 
-- **Pregunta libre** (RAG sobre protocolos): ej. "¿Cuál es el protocolo de IAM?".
-- **Comando estructurado** (tool-calling): ej. "muéstrame las ambulancias con combustible bajo", "centra el mapa en AMB-003", "pasa la IA a modo autónomo". Usa un fast-path por regex y el LLM (Gemma) como fallback.
+- **Preguntar** (RAG sobre protocolos): ej. "¿Cuál es el protocolo de IAM?".
+- **Dar una orden** (tool-calling): ej. "muéstrame las ambulancias con combustible bajo", "centra el mapa en AMB-003", "pasa la IA a modo autónomo". Usa un fast-path por regex y el LLM local (Ollama) como fallback.
 
 Detalles en [Chatbot IA](chatbot-ia.md).
 
-## 11) Informes post-turno (`/reports`)
+## 12) Informes (`/reports`)
 
 Generador LLM de informe operativo:
 
@@ -120,7 +137,12 @@ Generador LLM de informe operativo:
 - Genera con `POST /api/ai/shift-report` → KPIs + highlights + recomendaciones.
 - Listado histórico vía `GET /api/ai/shift-reports`.
 
-## 12) Panel del vehículo (`/vehicle`, rol `vehicle`)
+## 13) Ajustes (`/config`)
+
+- Catálogo de tipos de unidad y de lugar que aparecen en el mapa: crear, editar y borrar.
+- Configuración de cómo se asignan las emergencias a las unidades.
+
+## 14) Panel del vehículo (`/vehicle`, rol `vehicle`)
 
 - Selector de tipo de unidad en el primer login (combustión, eléctrica, helicóptero, etc.).
 - Mapa con ruta OSRM steps turn-by-turn (proxy `/api/osrm/...`).
@@ -128,12 +150,13 @@ Generador LLM de informe operativo:
 - Botón "He llegado" para avanzar fase de misión manualmente.
 - Modo manual (drag pin) o GPS real (`navigator.geolocation`).
 
-## 13) Solución de problemas
+## 15) Solución de problemas
 
 - Backend caído → la UI muestra aviso de desconexión y cae a polling `/api/sim/state` cada 2 s.
 - Sin persistencia → revisar `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`.
 - OSRM no responde → ambulancias usan ruta recta como fallback (badge OSRM en rojo).
 - Sin eventos externos ni meteorología → revisar `EVENT_SOURCE` y el estado en `GET /api/events/status`; la simulación local sigue funcionando.
+- El asistente tarda o no responde → comprobar que `ollama-init` terminó y el perfil de GPU usado; ver [IA local con Ollama](../technical/ai-chatbot-rag.md#ia-local-con-ollama).
 - Recuperación de contraseña Supabase → revisar redirect URLs en Supabase Auth y abrir el enlace en el mismo navegador.
 
 ## Referencias

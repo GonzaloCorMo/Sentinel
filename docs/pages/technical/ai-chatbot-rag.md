@@ -54,12 +54,12 @@ Orquestador del pipeline:
 
 Capa de abstracción del proveedor de LLM:
 
-- **Chat → endpoint vLLM externo** (API compatible con OpenAI). Dos endpoints disponibles:
-  - **Flash** (default chat + tool-calling): `LLM_FLASH_BASE_URL` → `http://10.10.48.10:8000/v1`, modelo `google/gemma-4-31b-it`.
-  - **Flagship** (razonamiento extenso, informes post-turno): `LLM_FLAGSHIP_BASE_URL` → `http://10.10.48.10:8001/v1`, modelo `Qwen/Qwen3-235B-A22B`.
+- **Chat → Ollama local** (API compatible con OpenAI). Hay dos "ranuras" de modelo, que por defecto apuntan al mismo sitio:
+  - **Flash** (chat y comandos con tool-calling): `LLM_FLASH_BASE_URL` → `http://ollama:11434/v1`, modelo `qwen2.5:3b`.
+  - **Flagship** (informes de turno y razonamiento de la IA observadora): `LLM_FLAGSHIP_BASE_URL` → `http://ollama:11434/v1`, modelo `qwen2.5:3b`.
 - **Embeddings → Ollama local** (`OLLAMA_BASE_URL=http://ollama:11434/v1`), modelo `nomic-embed-text`.
 - Los embeddings se rellenan con ceros hasta 1536 dimensiones para coincidir con el esquema de la base de datos (Postgres pgvector).
-- El chat **no** descarga modelos al host: todo va al endpoint vLLM externo. Solo los embeddings necesitan GPU/CPU local (perfiles compose `gpu-nvidia`, `gpu-amd`, `cpu`).
+- Cada llamada tiene un tiempo máximo de `LLM_TIMEOUT_SEC` (60 s; 5 s para conectar) y un reintento.
 
 ### `simulation/app/knowledge_seeder.py`
 
@@ -126,10 +126,63 @@ Panel flotante colapsable en la esquina inferior izquierda (uso desde el punto d
 
 | Variable | Descripción | Valor por defecto |
 |----------|-------------|-------------------|
-| `LLM_FLASH_BASE_URL` | Endpoint vLLM externo para chat | `http://10.10.48.10:8000/v1` |
-| `LLM_FLAGSHIP_BASE_URL` | Endpoint vLLM externo para razonamiento extenso | `http://10.10.48.10:8001/v1` |
-| `LLM_FLASH_MODEL` | Modelo flash (chat + tool-calling) | `google/gemma-4-31b-it` |
-| `LLM_FLAGSHIP_MODEL` | Modelo flagship (informes) | `Qwen/Qwen3-235B-A22B` |
-| `LLM_API_KEY` | API key del endpoint vLLM externo | `not-needed` |
-| `OLLAMA_BASE_URL` | URL Ollama (embeddings) | `http://ollama:11434/v1` |
+| `OLLAMA_CHAT_MODEL` | Modelo de chat que `ollama-init` descarga | `qwen2.5:3b` |
 | `OLLAMA_EMBED_MODEL` | Modelo de embeddings | `nomic-embed-text` |
+| `OLLAMA_CONTEXT_LENGTH` | Ventana de contexto de Ollama (fijada en el compose) | `8192` |
+| `LLM_FLASH_BASE_URL` | Endpoint para chat y comandos | `http://ollama:11434/v1` |
+| `LLM_FLAGSHIP_BASE_URL` | Endpoint para informes y razonamiento | `http://ollama:11434/v1` |
+| `LLM_FLASH_MODEL` | Modelo flash (chat + tool-calling) | `qwen2.5:3b` |
+| `LLM_FLAGSHIP_MODEL` | Modelo flagship (informes, IA observadora) | `qwen2.5:3b` |
+| `LLM_API_KEY` | API key del endpoint (Ollama no la usa) | `not-needed` |
+| `LLM_TIMEOUT_SEC` | Tiempo máximo por llamada (conexión 5 s, 1 reintento) | `60` |
+| `AI_OBSERVER_LLM_CONCURRENCY` | Llamadas simultáneas de la IA observadora en segundo plano | `1` |
+| `OLLAMA_BASE_URL` | URL de Ollama para embeddings | `http://ollama:11434/v1` |
+
+## IA local con Ollama
+
+Toda la IA corre dentro del stack de Docker, sin servicios externos: chat, comandos, informes de turno y razonamiento de la IA observadora.
+
+### Modelos
+
+| Uso | Modelo por defecto | Tamaño aproximado |
+|-----|--------------------|-------------------|
+| Chat, comandos, informes, IA observadora | `qwen2.5:3b` | ~1,9 GB |
+| Embeddings (RAG) | `nomic-embed-text` | ~270 MB |
+
+El servicio `ollama-init` descarga ambos modelos en el primer arranque y los guarda en el volumen `ollama-data`, así que no se vuelven a bajar. La ventana de contexto es de 8k tokens (`OLLAMA_CONTEXT_LENGTH=8192`).
+
+### Perfiles según el hardware
+
+Ollama corre en un contenedor distinto según el perfil de compose; todos se registran en la red con el alias `ollama`:
+
+| Perfil | Contenedor | Cuándo usarlo |
+|--------|------------|---------------|
+| `gpu-nvidia` | `ollama-nvidia` | GPU NVIDIA con NVIDIA Container Toolkit (recomendado) |
+| `gpu-amd` | `ollama-amd` | GPU AMD con ROCm |
+| `cpu` | `ollama-cpu` | Sin GPU; funciona, pero el chat es bastante más lento |
+
+```bash
+docker compose --profile gpu-nvidia up -d
+```
+
+### Cambiar de modelo
+
+1. En `.env`, indica el modelo nuevo para la descarga y para las dos ranuras:
+   ```bash
+   OLLAMA_CHAT_MODEL=llama3.2:3b
+   LLM_FLASH_MODEL=llama3.2:3b
+   LLM_FLAGSHIP_MODEL=llama3.2:3b
+   ```
+2. Descarga el modelo y reinicia el backend:
+   ```bash
+   docker compose up -d ollama-init
+   docker compose up -d simulation
+   ```
+
+Para usar otro servidor compatible con OpenAI (vLLM, LM Studio…), cambia `LLM_FLASH_BASE_URL` / `LLM_FLAGSHIP_BASE_URL` (y, si hace falta, `LLM_API_KEY`). Los embeddings siguen en Ollama.
+
+### Rendimiento orientativo
+
+- **GPU NVIDIA RTX 3050 (4 GB)**: `qwen2.5:3b` cabe en torno al 87 % en la GPU; una respuesta del chat tarda unos 10 s.
+- **CPU**: válido para probar; cuenta con respuestas bastante más lentas.
+- La IA observadora hace llamadas en segundo plano. `AI_OBSERVER_LLM_CONCURRENCY=1` limita cuántas van a la vez, para que el chat del operador no tenga que esperar.
