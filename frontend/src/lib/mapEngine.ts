@@ -1,8 +1,12 @@
 /**
- * Motor de mapas de Sentinel: MapLibre GL nativo con el estilo Liberty de
- * OpenFreeMap (teselas vectoriales OpenMapTiles, sin API key), usado tal cual
- * e igual en tema claro y oscuro. Las coordenadas de la app van en
+ * Motor de mapas de Sentinel: MapLibre GL nativo con los estilos Alidade
+ * Smooth de Stadia Maps, usados tal cual: «Alidade Smooth» en tema claro y
+ * «Alidade Smooth Dark» en oscuro. El mapa cambia de estilo al cambiar el
+ * tema sin perder las capas propias. Las coordenadas de la app van en
  * [lat, lon]; MapLibre usa [lon, lat] — usa `toLngLat` en la frontera.
+ *
+ * Stadia no pide clave desde localhost; en un dominio público hay que dar de
+ * alta el dominio en Stadia o definir `VITE_STADIA_API_KEY`.
  */
 import * as maplibregl from "maplibre-gl";
 import type { StyleSpecification } from "maplibre-gl";
@@ -17,22 +21,46 @@ maplibregl.setWorkerUrl(maplibreWorkerUrl);
 export { maplibregl };
 export type LatLon = [number, number];
 
-const BASE_STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
+export type MapTheme = "light" | "dark";
 
-let stylePromise: Promise<StyleSpecification> | null = null;
+const STYLE_URLS: Record<MapTheme, string> = {
+  light: "https://tiles.stadiamaps.com/styles/alidade_smooth.json",
+  dark: "https://tiles.stadiamaps.com/styles/alidade_smooth_dark.json",
+};
+const STADIA_KEY = (import.meta.env.VITE_STADIA_API_KEY as string | undefined)?.trim();
 
-/** Estilo Liberty sin modificar (se descarga una vez y se reutiliza). */
-export function sentinelStyle(): Promise<StyleSpecification> {
-  stylePromise ??= fetch(BASE_STYLE_URL)
-    .then((r) => {
-      if (!r.ok) throw new Error(`Estilo de mapa no disponible (${r.status})`);
-      return r.json() as Promise<StyleSpecification>;
-    })
-    .catch((err) => {
-      stylePromise = null;
-      throw err;
-    });
-  return stylePromise;
+/** Tema activo de la app (`data-theme` en <html>, oscuro por defecto). */
+export function currentMapTheme(): MapTheme {
+  return document.documentElement.dataset.theme === "light" ? "light" : "dark";
+}
+
+const styleCache = new Map<MapTheme, Promise<StyleSpecification>>();
+
+/** Estilo de Stadia para el tema (se descarga una vez y se reutiliza). */
+export function sentinelStyle(theme: MapTheme = currentMapTheme()): Promise<StyleSpecification> {
+  let promise = styleCache.get(theme);
+  if (!promise) {
+    const url = STADIA_KEY ? `${STYLE_URLS[theme]}?api_key=${encodeURIComponent(STADIA_KEY)}` : STYLE_URLS[theme];
+    promise = fetch(url)
+      .then((r) => {
+        if (!r.ok) throw new Error(`Estilo de mapa no disponible (${r.status})`);
+        return r.json() as Promise<StyleSpecification>;
+      })
+      .catch((err) => {
+        styleCache.delete(theme);
+        throw err;
+      });
+    styleCache.set(theme, promise);
+  }
+  return promise;
+}
+
+async function styleOrOffline(theme: MapTheme): Promise<StyleSpecification> {
+  try {
+    return await sentinelStyle(theme);
+  } catch {
+    return OFFLINE_STYLE;
+  }
 }
 
 /** Estilo mínimo si no hay red hacia el servidor de teselas: al menos no queda en blanco. */
@@ -69,12 +97,8 @@ export interface CreateMapOptions {
  * cargado, de modo que se pueden añadir fuentes y capas propias.
  */
 export async function createMap(container: HTMLElement, opts: CreateMapOptions): Promise<maplibregl.Map> {
-  let style: StyleSpecification;
-  try {
-    style = await sentinelStyle();
-  } catch {
-    style = OFFLINE_STYLE;
-  }
+  let theme = currentMapTheme();
+  const style = await styleOrOffline(theme);
   const map = new maplibregl.Map({
     container,
     style,
@@ -101,11 +125,33 @@ export async function createMap(container: HTMLElement, opts: CreateMapOptions):
   map.on("styleimagemissing", (e) => {
     if (!map.hasImage(e.id)) map.addImage(e.id, { width: 1, height: 1, data: new Uint8Array(4) });
   });
+  // Cambio de tema: nuevo estilo base conservando fuentes y capas propias
+  // (rutas, áreas…). Los marcadores HTML no dependen del estilo.
+  const themeObserver = new MutationObserver(async () => {
+    const next = currentMapTheme();
+    if (next === theme) return;
+    theme = next;
+    const nextStyle = await styleOrOffline(next);
+    if (theme !== next) return;
+    map.setStyle(nextStyle, { transformStyle: keepOverlays });
+  });
+  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  map.once("remove", () => themeObserver.disconnect());
   await new Promise<void>((resolve) => {
     if (map.isStyleLoaded()) resolve();
     else map.once("load", () => resolve());
   });
   return map;
+}
+
+/** Copia al estilo nuevo las fuentes que no son del mapa base y las capas que las usan. */
+function keepOverlays(prev: StyleSpecification | undefined, next: StyleSpecification): StyleSpecification {
+  if (!prev) return next;
+  const own = Object.keys(prev.sources).filter((id) => !(id in next.sources));
+  const sources = { ...next.sources };
+  for (const id of own) sources[id] = prev.sources[id];
+  const layers = prev.layers.filter((l) => "source" in l && own.includes(l.source as string));
+  return { ...next, sources, layers: [...next.layers, ...layers] };
 }
 
 /** Polígono circular (anillo [lon, lat]) de radio en metros, para áreas de incidencia. */

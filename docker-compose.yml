@@ -627,6 +627,7 @@ services:
       VITE_SUPABASE_URL: http://localhost:54321
       VITE_SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
       VITE_SIMULATION_API_URL: http://localhost:8080
+      VITE_STADIA_API_KEY: ${STADIA_API_KEY:-}
       # Proxy dev de Vite: /api → simulation, /sb → supabase-kong.
       # OSRM ya no se proxea desde el frontend: el backend rutea contra la
       # región activa internamente y devuelve la polilínea ya calculada.

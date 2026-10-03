@@ -33,10 +33,11 @@
 
 ## Mapas (`lib/mapEngine.ts`)
 
-- MapLibre GL nativo con el estilo **Liberty de OpenFreeMap usado tal cual** (sin API key), igual en ambos temas. No lo recolorees ni escribas un estilo propio: se decidió usar un tema existente para minimizar errores.
+- MapLibre GL nativo con los estilos de **Stadia Maps usados tal cual**: Alidade Smooth (tema claro) y Alidade Smooth Dark (oscuro). `createMap` observa `data-theme` y cambia el estilo con `setStyle` + `transformStyle`, conservando las fuentes y capas propias. No recolorees los estilos ni escribas uno propio: se eligió un tema existente para minimizar errores.
+- Stadia no pide clave desde localhost. En un dominio público: registra el dominio en Stadia o define `STADIA_API_KEY` (llega al frontend como `VITE_STADIA_API_KEY`).
 - Crea mapas con `await createMap(el, { center: [lat, lon], zoom })`: espera a que el estilo cargue y aplica `ResizeObserver`. El contenedor necesita alto y ancho explícitos (`h-full w-full`, no `absolute inset-0`: MapLibre fuerza `position: relative`).
 - Marcadores: `maplibregl.Marker({ element })`, actualizados en su sitio (no se recrean en cada tick). Líneas y áreas: fuentes GeoJSON con `setGeoJson()`. Tooltips: `createHoverTooltip()`.
-- El mapa base es claro también en tema oscuro, así que marcadores y popups usan colores fijos (`.sentinel-map`, `MAP_COLORS`), no tokens del tema.
+- Los colores de rutas y áreas dependen del tema del mapa (`MAP_PALETTES` en `AmbulanceMap.vue`) y van como propiedades de cada elemento GeoJSON, para que cambien al cambiar el tema. Los nodos tácticos (relleno oscuro y borde de color) valen para ambos.
 - **Marcadores = nodos tácticos** (`lib/tacticalMarkers.ts`): SVG con contorno de 1,5 px y relleno oscuro al 90 %.
   - Forma por categoría: cuadrado = infraestructura, rectángulo = vehículo, rombo = emergencia.
   - Color solo en el borde: cian = operativa, ámbar = aviso, rojo = emergencia, gris = infraestructura o apagada.

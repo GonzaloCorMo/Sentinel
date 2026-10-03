@@ -90,5 +90,5 @@ Qué usamos y dónde vive cada pieza.
 - [Vue 3](https://vuejs.org/)
 - [FastAPI](https://fastapi.tiangolo.com/)
 - [Supabase](https://supabase.com/docs)
-- [MapLibre GL JS](https://maplibre.org/) + [OpenFreeMap](https://openfreemap.org/)
+- [MapLibre GL JS](https://maplibre.org/) + [Stadia Maps](https://stadiamaps.com/) (estilos Alidade Smooth)
 - [ECharts](https://echarts.apache.org/)

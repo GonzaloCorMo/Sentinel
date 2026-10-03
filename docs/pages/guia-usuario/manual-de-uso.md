@@ -38,7 +38,7 @@ El menú principal tiene seis secciones:
 | **Informes** | `/reports` | Informes de turno generados por la IA. |
 | **Ajustes** | `/config` | Tipos de unidad y de lugar disponibles en el mapa, y cómo se asignan las emergencias. |
 
-Los mapas tienen un aspecto similar a Google Maps, en tema claro y oscuro (teselas vectoriales de OpenFreeMap con MapLibre GL; no requieren API key).
+El mapa sigue el tema de la aplicación: Alidade Smooth en tema claro y Alidade Smooth Dark en oscuro (Stadia Maps con MapLibre GL). En local no necesita clave; en un dominio público hay que registrar el dominio en Stadia Maps o definir `STADIA_API_KEY` en `.env`.
 
 ## 5) Selector de región
 

@@ -4,7 +4,7 @@ import { useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { getSupabase } from "@/lib/supabase";
 import { cssVar, useTheme } from "@/composables/useTheme";
-import { createMap, maplibregl, setGeoJson, toLngLat, type LatLon } from "@/lib/mapEngine";
+import { createMap, currentMapTheme, maplibregl, setGeoJson, toLngLat, type LatLon } from "@/lib/mapEngine";
 import { DEFAULT_SPAWN_LAT, DEFAULT_SPAWN_LON } from "@/lib/mapDefaults";
 import { tacticalNodeHtml } from "@/lib/tacticalMarkers";
 import { prefixForType } from "@/lib/vehicleId";
@@ -452,8 +452,8 @@ async function register() {
 let mapLoading = false;
 
 /** Ruta en azul de navegador sobre un borde blanco (el mapa base es claro). */
-const ROUTE_COLOR = "#1a73e8";
-const ROUTE_CASING = "#ffffff";
+/** Ruta de navegación sobre Alidade Smooth (claro) / Smooth Dark (oscuro). */
+const routeColors = () => (currentMapTheme() === "dark" ? { line: "#5ec4d6", casing: "#1d1f24" } : { line: "#0891b2", casing: "#ffffff" });
 
 async function initMap(centerLat: number, centerLon: number) {
   if (mapInstance || mapLoading) return;
@@ -470,14 +470,20 @@ async function initMap(centerLat: number, centerLon: number) {
       type: "line",
       source: "vehicle-route",
       layout: { "line-cap": "round", "line-join": "round" },
-      paint: { "line-color": ROUTE_CASING, "line-width": 11 },
+      paint: { "line-color": routeColors().casing, "line-width": 11 },
     });
     m.addLayer({
       id: "vehicle-route-line",
       type: "line",
       source: "vehicle-route",
       layout: { "line-cap": "round", "line-join": "round" },
-      paint: { "line-color": ROUTE_COLOR, "line-width": 6 },
+      paint: { "line-color": routeColors().line, "line-width": 6 },
+    });
+    // Con el cambio de tema se recarga el estilo base: la ruta toma los colores nuevos.
+    m.on("style.load", () => {
+      if (!m.getLayer("vehicle-route-line")) return;
+      m.setPaintProperty("vehicle-route-casing", "line-color", routeColors().casing);
+      m.setPaintProperty("vehicle-route-line", "line-color", routeColors().line);
     });
     mapInstance = m;
     updateMap(true);
@@ -1513,7 +1519,7 @@ textarea.vh-input { height: auto; padding: 8px 10px; resize: vertical; }
   width: 1.5px;
   height: 22px;
   margin-left: -0.75px;
-  background: #101317;
+  background: var(--map-ink-strong);
   transform-origin: 50% 100%;
   transition: transform 0.4s linear;
 }

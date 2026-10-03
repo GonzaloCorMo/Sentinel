@@ -200,8 +200,9 @@
 
 /* Overrides de terceros (MapLibre, vue-sonner) sin capa: deben ganar a sus hojas. */
 /* ── Mapa (MapLibre) ─────────────────────────────────────────────────────
- * El mapa base es claro en ambos temas, así que marcadores, etiquetas y
- * popups usan colores fijos pensados para ese fondo. */
+ * Mapa base Stadia Alidade Smooth (claro) / Smooth Dark (oscuro). Los nodos
+ * tácticos llevan relleno oscuro y borde de color, legibles en ambos; solo
+ * cambian el fondo de carga y el trazo de selección (--map-ink-strong). */
 .sentinel-map {
   --map-ink: #202124;
   --map-ink-2: #5f6368;
@@ -209,8 +210,11 @@
   --map-border: #dadce0;
   --map-crit: #d93025;
   --map-warn: #e37400;
-  background: #f2f1ed;
+  background: #f5f5f3;
 }
+:root { --map-ink-strong: #101317; }
+:root[data-theme="dark"] { --map-ink-strong: #e3e7ec; }
+:root[data-theme="dark"] .sentinel-map { background: #1d1f24; }
 .maplibregl-map { font-family: var(--font-sans); }
 .maplibregl-map .maplibregl-ctrl-group {
   border-radius: 0 !important;
@@ -237,7 +241,7 @@
 .tn-pip { fill: var(--tn); }
 .tn-frame { fill: none; stroke: var(--tn); stroke-width: 1; opacity: 0.55; }
 .tn-brackets { position: absolute; overflow: visible; pointer-events: none; }
-.tn-brackets path { fill: none; stroke: #101317; stroke-width: 1.5; }
+.tn-brackets path { fill: none; stroke: var(--map-ink-strong); stroke-width: 1.5; }
 .tn-brackets-matched path { stroke: #5ec4d6; stroke-dasharray: 2 1.5; }
 .map-marker-host:hover .tn-shape { stroke: #ffffff; }
 .map-marker-host:hover .tn-label { color: #ffffff; }

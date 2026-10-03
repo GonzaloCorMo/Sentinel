@@ -12,6 +12,7 @@ import {
   circleRing,
   createHoverTooltip,
   createMap,
+  currentMapTheme,
   maplibregl,
   setGeoJson,
   toLngLat,
@@ -45,15 +46,12 @@ const container = ref<HTMLDivElement | null>(null);
 let map: maplibregl.Map | null = null;
 let tooltip: ReturnType<typeof createHoverTooltip> | null = null;
 
-/** El mapa base es claro en ambos temas: los trazos usan colores fijos legibles sobre él. */
-const MAP_COLORS = {
-  routeSelected: "#0891b2",
-  route: "#5f6368",
-  warn: "#e37400",
-  crit: "#d93025",
-  muted: "#80868b",
-  casing: "#ffffff",
+/** Trazos legibles sobre cada mapa base (Alidade Smooth / Smooth Dark). */
+const MAP_PALETTES = {
+  light: { routeSelected: "#0891b2", route: "#5f6368", warn: "#e37400", crit: "#d93025", muted: "#80868b", casing: "#ffffff" },
+  dark: { routeSelected: "#5ec4d6", route: "#9aa0a6", warn: "#ffb020", crit: "#ff4d4d", muted: "#80868b", casing: "#1d1f24" },
 };
+const mapColors = () => MAP_PALETTES[currentMapTheme()];
 
 /** Escapa texto de origen externo (PWA ciudadana, ingesta REST) antes de meterlo en HTML. */
 function esc(v: unknown): string {
@@ -178,11 +176,11 @@ function severityColor(severity: string | undefined): string {
   switch ((severity ?? "").toLowerCase()) {
     case "critical":
     case "high":
-      return MAP_COLORS.crit;
+      return mapColors().crit;
     case "medium":
-      return MAP_COLORS.warn;
+      return mapColors().warn;
     default:
-      return MAP_COLORS.muted;
+      return mapColors().muted;
   }
 }
 
@@ -316,14 +314,14 @@ function addOverlayLayers(m: maplibregl.Map) {
   for (const id of ["events", "jams", "routes", "companion-routes", "weather"]) setGeoJson(m, id, []);
   m.addLayer({ id: "events-fill", type: "fill", source: "events", paint: { "fill-color": ["get", "color"], "fill-opacity": 0.14 } });
   m.addLayer({ id: "events-line", type: "line", source: "events", paint: { "line-color": ["get", "color"], "line-width": 1.5 } });
-  m.addLayer({ id: "jams-fill", type: "fill", source: "jams", paint: { "fill-color": MAP_COLORS.crit, "fill-opacity": 0.16 } });
-  m.addLayer({ id: "jams-line", type: "line", source: "jams", paint: { "line-color": MAP_COLORS.crit, "line-width": 1.5, "line-dasharray": [2, 1.5] } });
+  m.addLayer({ id: "jams-fill", type: "fill", source: "jams", paint: { "fill-color": ["get", "color"], "fill-opacity": 0.16 } });
+  m.addLayer({ id: "jams-line", type: "line", source: "jams", paint: { "line-color": ["get", "color"], "line-width": 1.5, "line-dasharray": [2, 1.5] } });
   m.addLayer({
     id: "routes-casing",
     type: "line",
     source: "routes",
     layout: { "line-cap": "round", "line-join": "round" },
-    paint: { "line-color": MAP_COLORS.casing, "line-width": ["+", ["get", "width"], 3], "line-opacity": ["get", "opacity"] },
+    paint: { "line-color": ["get", "casing"], "line-width": ["+", ["get", "width"], 3], "line-opacity": ["get", "opacity"] },
   });
   m.addLayer({
     id: "routes-line",
@@ -379,14 +377,15 @@ function addOverlayLayers(m: maplibregl.Map) {
 function routeStyle(amb: Ambulance) {
   const sel = selectedAmbulanceId.value === amb.id;
   const wf = (amb as Ambulance & { weatherFactor?: number }).weatherFactor;
+  const c = mapColors();
   const color = sel
-    ? MAP_COLORS.routeSelected
+    ? c.routeSelected
     : wf != null && wf < 0.65
-      ? MAP_COLORS.crit
+      ? c.crit
       : wf != null && wf < 0.85
-        ? MAP_COLORS.warn
-        : MAP_COLORS.route;
-  return { color, width: sel ? 5 : 3, opacity: sel ? 0.95 : 0.7 };
+        ? c.warn
+        : c.route;
+  return { color, casing: c.casing, width: sel ? 5 : 3, opacity: sel ? 0.95 : 0.7 };
 }
 
 let fittedFilterKey = "";
@@ -513,7 +512,7 @@ function syncLayers() {
         : `<b>${name}</b><br>${esc(i18nT("map.no_reading"))}`;
       return {
         type: "Feature",
-        properties: { tip, color: alert ? MAP_COLORS.crit : MAP_COLORS.muted, radius: alert ? 8 : 5 },
+        properties: { tip, color: alert ? mapColors().crit : mapColors().muted, radius: alert ? 8 : 5 },
         geometry: { type: "Point", coordinates: [st.longitude, st.latitude] },
       } as GeoJSON.Feature;
     });
@@ -556,7 +555,7 @@ function syncLayers() {
         ring.push(ring[0]);
         return {
           type: "Feature",
-          properties: { id: j.id, tip: `<b>${esc(i18nT("operations.tool_jam"))}</b>` },
+          properties: { id: j.id, color: mapColors().crit, tip: `<b>${esc(i18nT("operations.tool_jam"))}</b>` },
           geometry: { type: "Polygon", coordinates: [ring] },
         } as GeoJSON.Feature;
       }),
@@ -590,7 +589,7 @@ function syncLayers() {
     if (c.routeCoords && c.routeCoords.length >= 2) {
       compRoutes.push({
         type: "Feature",
-        properties: { color: MAP_COLORS.route },
+        properties: { color: mapColors().route },
         geometry: { type: "LineString", coordinates: c.routeCoords.map((pt) => toLngLat(pt as LatLon)) },
       });
     }
@@ -738,6 +737,7 @@ onMounted(async () => {
   tooltip = createHoverTooltip(m);
   addOverlayLayers(m);
   m.on("zoom", scheduleNodes);
+  m.on("style.load", scheduleSync);
 
   m.on("click", (e) => {
     const tool = mapToolRef.value;
