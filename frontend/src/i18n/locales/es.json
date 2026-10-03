@@ -628,7 +628,9 @@
       "pending": "Sin asignar",
       "assigned": "Unidad en camino",
       "resolved": "Atendida"
-    }
+    },
+    "cluster_count": "{n} unidades en el mismo punto",
+    "cluster_hint": "Acerca el mapa para verlas por separado"
   },
   "operations": {
     "title": "Mapa",
@@ -758,7 +760,8 @@
     "pulse": "Pulso",
     "bpm": "lpm",
     "glasgow": "Glasgow",
-    "scenario_generated_desc": "{hospitals} hospitales · {stations} gasolineras · {units} unidades · {incidents} emergencias"
+    "scenario_generated_desc": "{hospitals} hospitales · {stations} gasolineras · {units} unidades · {incidents} emergencias",
+    "no_destination": "Sin destino: disponible"
   },
   "auth_callback": {
     "verifying": "Verificando…",

@@ -10,6 +10,7 @@ import { remainingRouteCoords } from "@/lib/routePolyline";
 import { cssVar, useTheme } from "@/composables/useTheme";
 import { sanitizeSvg } from "@/lib/sanitize";
 import { addBasemap, type Basemap } from "@/lib/basemap";
+import { unitStatus } from "@/lib/unitStatus";
 import { useRegionStore } from "@/stores/region";
 import { useSimulationStore } from "@/stores/simulation";
 
@@ -215,12 +216,12 @@ function companionLabel(c: Companion): string {
 function companionPopupHtml(c: Companion, emergencyTitle: string | null) {
   const title = c.displayLabel ?? companionLabel(c);
   const typeLine = c.typeName ?? c.kind;
-  const em = emergencyTitle ? `<p style="color:var(--text-3);margin:0">Emergencia: <b>${esc(emergencyTitle)}</b></p>` : "";
+  const em = emergencyTitle ? `<p style="color:var(--text-3);margin:0">${esc(i18nT("operations.destination"))}: <b>${esc(emergencyTitle)}</b></p>` : "";
   return `<div style="font-size:11px;min-width:180px;line-height:1.5;font-variant-numeric:tabular-nums">
     <p style="font-weight:600;margin:0 0 2px">${esc(title)}</p>
     <p style="color:var(--text-3);margin:0">${esc(typeLine)} · ${esc(c.status)}</p>
     ${em}
-    <p style="color:var(--text-3);margin:0">Vel: ${c.speedKmh} km/h</p>
+    <p style="color:var(--text-3);margin:0">${esc(i18nT("operations.speed"))}: ${Math.round(c.speedKmh)} km/h</p>
     <p style="color:var(--text-4);margin:4px 0 0;font-size:10px">GPS: ${c.latitude.toFixed(5)}, ${c.longitude.toFixed(5)}</p>
   </div>`;
 }
@@ -229,7 +230,7 @@ function popupHtml(label: string, amb: Ambulance) {
   const tel = amb.telemetry;
   const lat = amb.latitude ?? 0;
   const lon = amb.longitude ?? 0;
-  const fsm = amb.fsmState ?? "—";
+  const statusText = i18nT(`status.${unitStatus(amb).key}`);
   const severity = amb.patientSeverity ?? "";
   const sevBadge = severity
     ? `<span style="display:inline-block;padding:0 5px;border-radius:2px;font-size:10px;font-weight:500;font-family:var(--font-mono);text-transform:uppercase;${severity === "critical" ? "border:1px solid var(--crit-600);color:var(--crit-300)" : severity === "moderate" ? "border:1px solid var(--warn-600);color:var(--warn-300)" : "border:1px solid var(--ok-600);color:var(--ok-300)"}">${severity}</span>`
@@ -250,8 +251,8 @@ function popupHtml(label: string, amb: Ambulance) {
 
   return `<div style="font-size:11px;min-width:180px;line-height:1.5;font-variant-numeric:tabular-nums">
     <p style="font-weight:600;margin:0 0 2px">${esc(label)} ${sevBadge}</p>
-    <p style="color:var(--text-3);margin:0">Estado: <b>${esc(fsm)}</b></p>
-    <p style="color:var(--text-3);margin:0">GPS: ${lat.toFixed(5)}, ${lon.toFixed(5)}</p>
+    <p style="color:var(--text-3);margin:0"><b>${esc(statusText)}</b></p>
+    <p style="color:var(--text-3);margin:0;font-family:var(--font-mono)">${lat.toFixed(5)}, ${lon.toFixed(5)}</p>
     <p style="color:var(--text-3);margin:0">${i18nT("operations.speed")}: ${tel?.positioning?.speedKmh ?? "—"} km/h</p>
     <p style="color:var(--text-3);margin:2px 0 0">${energyLabel}: ${v.toFixed(0)} %</p>
     ${energyBar}
@@ -377,8 +378,8 @@ function syncLayers() {
       const typeName = et?.name || c.typeId;
       const popup = `<div style="font-size:11px;line-height:1.5;min-width:180px">
         <p style="font-weight:600;margin:0 0 2px">${esc(typeName)} — base</p>
-        <p style="color:var(--text-3);margin:0">${c.items.length} unidades agrupadas</p>
-        <p style="color:var(--text-4);margin:4px 0 0;font-size:10px">Acércate para verlas individualmente</p>
+        <p style="color:var(--text-3);margin:0">${esc(i18nT("map.cluster_count", { n: c.items.length }))}</p>
+        <p style="color:var(--text-4);margin:4px 0 0;font-size:10px">${esc(i18nT("map.cluster_hint"))}</p>
       </div>`;
       const existing = clusterMarkers.get(key);
       if (existing) {

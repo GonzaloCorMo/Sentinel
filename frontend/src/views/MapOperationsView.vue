@@ -369,7 +369,7 @@ const destinationLabel = computed(() => {
   const phase = amb.missionPhase;
   if (phase === "to_emergency" && amb.assignedEmergencyId) {
     const e = s.emergencies.find((x) => x.id === amb.assignedEmergencyId);
-    return e ? `${e.title} (${e.status})` : String(amb.assignedEmergencyId);
+    return e ? e.title : String(amb.assignedEmergencyId);
   }
   if (phase === "to_refuel" && amb.refuelPoiId) {
     const p = s.pois.find((x) => x.id === amb.refuelPoiId);
@@ -382,7 +382,7 @@ const destinationLabel = computed(() => {
     }
     return p ? t("operations.staging_at", { name: p.name }) : t("operations.staging_default");
   }
-  return "—";
+  return t("operations.no_destination");
 });
 
 const selectedPowertrain = computed(() => (selectedAmbulance.value ? powertrainOfAmb(selectedAmbulance.value) : "combustion"));

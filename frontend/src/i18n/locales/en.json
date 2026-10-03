@@ -628,7 +628,9 @@
       "pending": "Unassigned",
       "assigned": "Unit en route",
       "resolved": "Resolved"
-    }
+    },
+    "cluster_count": "{n} units at the same spot",
+    "cluster_hint": "Zoom in to see them separately"
   },
   "operations": {
     "title": "Map",
@@ -758,7 +760,8 @@
     "pulse": "Pulse",
     "bpm": "bpm",
     "glasgow": "GCS",
-    "scenario_generated_desc": "{hospitals} hospitals · {stations} fuel stations · {units} units · {incidents} incidents"
+    "scenario_generated_desc": "{hospitals} hospitals · {stations} fuel stations · {units} units · {incidents} incidents",
+    "no_destination": "No destination: available"
   },
   "auth_callback": {
     "verifying": "Verifying…",
