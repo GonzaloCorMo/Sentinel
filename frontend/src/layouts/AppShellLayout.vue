@@ -65,10 +65,10 @@ interface FilterPill { key: string; label: string; }
 const activePills = computed<FilterPill[]>(() => {
   const f = uiFilters.value;
   const pills: FilterPill[] = [];
-  if (f.fuelBelow != null) pills.push({ key: "fuelBelow", label: `⛽ ${t("filters.fuel_below", { value: f.fuelBelow })}` });
-  if (f.fuelAbove != null) pills.push({ key: "fuelAbove", label: `⛽ ${t("filters.fuel_above", { value: f.fuelAbove })}` });
-  if (f.batteryBelow != null) pills.push({ key: "batteryBelow", label: `🔋 ${t("filters.battery_below", { value: f.batteryBelow })}` });
-  if (f.hasPatient === true) pills.push({ key: "hasPatient", label: `🚑 ${t("filters.with_patient")}` });
+  if (f.fuelBelow != null) pills.push({ key: "fuelBelow", label: t("filters.fuel_below", { value: f.fuelBelow }) });
+  if (f.fuelAbove != null) pills.push({ key: "fuelAbove", label: t("filters.fuel_above", { value: f.fuelAbove }) });
+  if (f.batteryBelow != null) pills.push({ key: "batteryBelow", label: t("filters.battery_below", { value: f.batteryBelow }) });
+  if (f.hasPatient === true) pills.push({ key: "hasPatient", label: t("filters.with_patient") });
   if (f.hasPatient === false) pills.push({ key: "hasPatient", label: t("filters.without_patient") });
   if (f.severity) pills.push({ key: "severity", label: t("filters.severity", { value: f.severity }) });
   if (f.entityTypeId) pills.push({ key: "entityTypeId", label: t("filters.type", { value: f.entityTypeId }) });
@@ -115,7 +115,7 @@ const nav = computed(() => [
     icon: "M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z M15 11a3 3 0 11-6 0 3 3 0 016 0z",
   },
   {
-    to: "/island",
+    to: "/overview",
     label: t("nav.island"),
     icon: "M3 12h18 M12 3v18 M5 5l14 14 M19 5L5 19",
   },
@@ -153,18 +153,18 @@ const nav = computed(() => [
             <rect x="28" y="28" width="8" height="8" fill="currentColor" />
           </svg>
           <span class="text-[13px] font-semibold tracking-tight text-slate-100">Sentinel</span>
-          <span
-            class="ml-1 h-1.5 w-1.5 rounded-full"
-            :class="streamStatus === 'connected' ? 'bg-green-400' : streamStatus === 'connecting' ? 'bg-amber-400 animate-pulse' : 'bg-red-400'"
-            :title="streamStatus === 'connected' ? t('header.sse_connected') : streamStatus === 'connecting' ? t('header.sse_connecting') : t('header.sse_disconnected')"
-          />
-          <span
-            v-if="state?.osrmRouting"
-            class="hidden font-mono text-[10px] uppercase tracking-wider lg:inline"
-            :class="state.osrmRouting.ready ? 'text-slate-500' : 'text-amber-400'"
-          >
-            {{ state.osrmRouting.ready ? t('header.osrm_ok') : t('header.osrm_loading') }}
+          <span class="ml-2 flex items-center gap-1.5 text-[11px] text-slate-500">
+            <span
+              class="h-1.5 w-1.5 rounded-full"
+              :class="streamStatus === 'connected' ? 'bg-green-400' : streamStatus === 'reconnecting' ? 'bg-red-400' : 'bg-amber-400'"
+            />
+            {{ streamStatus === 'connected' ? t('header.sse_connected') : streamStatus === 'reconnecting' ? t('header.sse_disconnected') : t('header.sse_connecting') }}
           </span>
+          <span
+            v-if="state?.osrmRouting && !state.osrmRouting.ready"
+            class="hidden text-[11px] text-amber-400 lg:inline"
+            :title="t('sim.osrm_warn')"
+          >· {{ t('header.osrm_loading') }}</span>
         </div>
 
         <!-- Navegación -->
@@ -211,7 +211,7 @@ const nav = computed(() => [
         <!-- Controles -->
         <div class="ml-auto flex items-center gap-1.5 border-l border-slate-800 px-3 min-[1700px]:ml-0">
           <span
-            class="flex items-center gap-1.5 rounded border px-2 py-1 font-mono text-[10px] uppercase tracking-wider"
+            class="flex items-center gap-1.5 rounded border px-2 py-1 text-[11px]"
             :class="aiMode === 'autonomous' ? 'border-slate-600 text-slate-100' : 'border-amber-500/40 text-amber-300'"
           >
             <span class="h-1.5 w-1.5 rounded-full" :class="aiMode === 'autonomous' ? 'bg-slate-300' : 'bg-amber-400'" />

@@ -5,6 +5,7 @@ import { useI18n } from "vue-i18n";
 import FleetTelemetryCard from "@/components/fleet/FleetTelemetryCard.vue";
 import PatientVitalsChart from "@/components/dashboard/PatientVitalsChart.vue";
 import { useSimulationStore } from "@/stores/simulation";
+import { displayId } from "@/lib/vehicleId";
 
 const { t } = useI18n();
 const store = useSimulationStore();
@@ -106,6 +107,16 @@ interface MlPredictionRow {
   ok?: boolean;
 }
 const mlResults = ref<MlPredictionRow[]>([]);
+const SEVERITY_ORDER: Record<string, number> = { critical: 0, warning: 1 };
+/** Resultados ordenados (lo urgente primero) y con el nombre visible de cada unidad. */
+const mlRows = computed(() =>
+  [...mlResults.value]
+    .sort((a, b) => (SEVERITY_ORDER[a.severity ?? ""] ?? 2) - (SEVERITY_ORDER[b.severity ?? ""] ?? 2))
+    .map((r) => {
+      const amb = state.value?.ambulances?.find((a) => a.id === r.ambulanceId);
+      return { ...r, label: amb ? displayId(amb, undefined, state.value?.entityTypes) : r.ambulanceId.slice(0, 8) };
+    }),
+);
 const mlBusy = ref(false);
 async function runMlPrediction() {
   mlBusy.value = true;
@@ -126,7 +137,7 @@ async function runMlPrediction() {
   <div class="space-y-5">
     <div class="flex flex-wrap items-start justify-between gap-4">
       <div>
-        <h2 class="text-lg font-semibold tracking-tight text-slate-100">{{ t('fleet.title') }}</h2>
+        <h1 class="text-lg font-semibold tracking-tight text-slate-100">{{ t('fleet.title') }}</h1>
         <p class="mt-0.5 text-sm text-slate-500">
           {{ t('fleet.subtitle') }}
         </p>
@@ -206,74 +217,48 @@ async function runMlPrediction() {
         @click="selectAmbulance(a.id)"
       />
     </div>
-    <p v-else-if="stats.total === 0" class="rounded-xl border border-dashed border-slate-700 p-8 text-center text-sm text-slate-500">
+    <p v-else-if="stats.total === 0" class="rounded border border-dashed border-slate-700 p-8 text-center text-sm text-slate-500">
       {{ t('fleet.no_units_sim') }}
     </p>
-    <p v-else class="rounded-xl border border-dashed border-slate-700 p-8 text-center text-sm text-slate-500">
+    <p v-else class="rounded border border-dashed border-slate-700 p-8 text-center text-sm text-slate-500">
       {{ t('fleet.no_units_filter') }}
     </p>
 
-    <div class="rounded-xl border border-purple-700/30 bg-purple-950/10 p-4">
-      <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h3 class="text-sm font-semibold text-purple-300">{{ t('fleet.ml_pipeline') }}</h3>
-          <p class="text-[11px] text-slate-500">
-            {{ t('fleet.ml_desc') }}
-          </p>
+    <section class="panel">
+      <div class="flex flex-wrap items-start justify-between gap-3 border-b border-slate-800 px-4 py-3">
+        <div class="max-w-xl">
+          <h2 class="text-sm font-medium text-slate-100">{{ t('fleet.ml_pipeline') }}</h2>
+          <p class="text-xs text-slate-500">{{ t('fleet.ml_desc') }}</p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
           <button
-            class="rounded-lg border border-purple-500/40 bg-purple-600/20 px-3 py-1.5 text-xs font-medium text-purple-200 transition hover:bg-purple-600/30 disabled:opacity-50"
+            class="rounded bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-950 hover:bg-slate-300 disabled:opacity-50"
             :disabled="mlBusy"
             @click="runMlPrediction"
           >{{ mlBusy ? t('fleet.predicting') : t('fleet.predict_now') }}</button>
-          <a
-            class="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 transition hover:bg-slate-800"
-            href="/api/ml/export?hours=6&format=csv"
-            download
-          >{{ t('fleet.csv_6h') }}</a>
-          <a
-            class="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 transition hover:bg-slate-800"
-            href="/api/ml/export?hours=6&format=parquet"
-            download
-          >{{ t('fleet.parquet_6h') }}</a>
+          <a class="rounded border border-slate-700 px-3 py-1.5 text-xs text-slate-300 no-underline hover:bg-slate-800" href="/api/ml/export?hours=6&format=csv" download>{{ t('fleet.csv_6h') }}</a>
+          <a class="rounded border border-slate-700 px-3 py-1.5 text-xs text-slate-300 no-underline hover:bg-slate-800" href="/api/ml/export?hours=6&format=parquet" download>{{ t('fleet.parquet_6h') }}</a>
         </div>
       </div>
-      <div v-if="mlResults.length" class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-        <div
-          v-for="r in mlResults"
-          :key="r.ambulanceId"
-          class="rounded-lg border px-3 py-2"
-          :class="r.severity === 'critical'
-            ? 'border-rose-500/50 bg-rose-950/25'
-            : r.severity === 'warning'
-            ? 'border-amber-500/50 bg-amber-950/25'
-            : 'border-slate-700/50 bg-slate-950/40'"
-        >
-          <div class="flex items-center justify-between">
-            <span class="font-mono text-[11px] text-slate-300">{{ r.ambulanceId.slice(0, 8) }}</span>
-            <span
-              class="rounded px-1.5 py-0.5 text-[9px] font-bold uppercase"
-              :class="r.severity === 'critical'
-                ? 'bg-rose-500/30 text-rose-200'
-                : r.severity === 'warning'
-                ? 'bg-amber-500/30 text-amber-200'
-                : 'bg-slate-700/60 text-slate-300'"
-            >{{ r.severity }}</span>
-          </div>
-          <div class="mt-1 text-[11px] text-slate-400">
-            score: <span class="font-mono text-slate-100">{{ r.anomalyScore?.toFixed(3) }}</span>
-            <span v-if="r.isAnomaly" class="ml-2 text-rose-300">• {{ t('fleet.anomaly_label') }}</span>
-          </div>
-        </div>
-      </div>
-      <p v-else class="text-[11px] text-slate-600 italic">
-        {{ t('fleet.ml_no_predictions') }}
-      </p>
-    </div>
+      <ul v-if="mlRows.length" class="divide-y divide-slate-800">
+        <li v-for="r in mlRows" :key="r.ambulanceId" class="flex items-center justify-between gap-3 px-4 py-2 text-xs">
+          <span class="font-mono text-slate-200">{{ r.label }}</span>
+          <span
+            class="rounded-sm border px-1.5 py-px"
+            :class="r.severity === 'critical'
+              ? 'border-red-500/40 text-red-300'
+              : r.severity === 'warning'
+                ? 'border-amber-500/40 text-amber-300'
+                : 'border-slate-700 text-slate-400'"
+            :title="`${t('fleet.anomaly_score')}: ${r.anomalyScore?.toFixed(3) ?? '—'}`"
+          >{{ r.severity === 'critical' ? t('fleet.ml_critical') : r.severity === 'warning' ? t('fleet.ml_warning') : t('fleet.normal_label') }}</span>
+        </li>
+      </ul>
+      <p v-else class="px-4 py-3 text-xs text-slate-500">{{ t('fleet.ml_no_predictions') }}</p>
+    </section>
 
     <div class="max-w-3xl">
-      <p class="mb-2 text-xs font-medium text-slate-500">
+      <p class="mb-2 text-xs text-slate-500">
         {{ t('fleet.vitals_title') }}
       </p>
       <PatientVitalsChart />

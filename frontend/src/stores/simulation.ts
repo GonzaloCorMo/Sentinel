@@ -46,7 +46,7 @@ async function ensureOk(r: Response, fallback: string) {
 
 export const useSimulationStore = defineStore("simulation", () => {
   const state = shallowRef<SimulationStatePayload | null>(null);
-  const streamStatus = ref("—");
+  const streamStatus = ref<"idle" | "connecting" | "connected" | "reconnecting">("idle");
   const commsStreamStatus = ref("—");
   const commsLog = ref<CommsLogEntry[]>([]);
   const lastCommsSeq = ref(0);
@@ -139,9 +139,10 @@ export const useSimulationStore = defineStore("simulation", () => {
   /** Abre el EventSource de `/api/sim/stream`; idempotente (cierra previo). */
   function connectSSE() {
     disconnectSSE();
+    streamStatus.value = "connecting";
     eventSource = new EventSource("/api/sim/stream");
     eventSource.onopen = () => {
-      streamStatus.value = "conectado";
+      streamStatus.value = "connected";
     };
     eventSource.onmessage = (ev: MessageEvent) => {
       try {
@@ -154,7 +155,7 @@ export const useSimulationStore = defineStore("simulation", () => {
       }
     };
     eventSource.onerror = () => {
-      streamStatus.value = "error / reconectando…";
+      streamStatus.value = "reconnecting";
     };
   }
 

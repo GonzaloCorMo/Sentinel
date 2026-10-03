@@ -5,6 +5,8 @@ import { toast } from "vue-sonner";
 import { useI18n } from "vue-i18n";
 import AmbulanceMap from "@/components/dashboard/AmbulanceMap.vue";
 import SimulationControls from "@/components/dashboard/SimulationControls.vue";
+import StatusChip from "@/components/ui/StatusChip.vue";
+import { unitStatus } from "@/lib/unitStatus";
 import { energyOf, operatingCostOf, powertrainOf } from "@/lib/energyDisplay";
 import { useBuilderStore, type BuilderTool } from "@/stores/builder";
 import { useEntitiesStore } from "@/stores/entities";
@@ -59,7 +61,6 @@ function focusMatch(id: string) { store.selectAmbulance(id); }
 const { currentBuilderTool, placeEntityId } = storeToRefs(builder);
 
 const incidentCount = ref(5);
-const showIncidentGen = ref(false);
 const aiGenTab = ref<"incidents" | "scenario">("incidents");
 const generatingScenario = ref(false);
 
@@ -145,11 +146,15 @@ async function generateFullScenario() {
     });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const j = await r.json();
-    toast.success(
-      t("operations.scenario_generated"),
-      { description: `${j.placed?.hospitals ?? 0} hospitales · ${j.placed?.gasStations ?? 0} gasolineras · ${j.placed?.ambulances ?? 0} ambulancias · ${j.placed?.incidents ?? 0} incidencias` },
-    );
-    showIncidentGen.value = false;
+    toast.success(t("operations.scenario_generated"), {
+      description: t("operations.scenario_generated_desc", {
+        hospitals: j.placed?.hospitals ?? 0,
+        stations: j.placed?.gasStations ?? 0,
+        units: j.placed?.ambulances ?? 0,
+        incidents: j.placed?.incidents ?? 0,
+      }),
+    });
+    openMenu.value = null;
     await store.fetchState();
   } catch (e) {
     toast.error(t("operations.scenario_error"), { description: (e as Error).message });
@@ -161,7 +166,7 @@ async function generateFullScenario() {
 async function generateIncidents() {
   try {
     await entities.generateIncidents(incidentCount.value);
-    showIncidentGen.value = false;
+    openMenu.value = null;
     await store.fetchState();
   } catch {
     /* handled in store */
@@ -175,7 +180,6 @@ const hospitalName = ref("Hospital");
 const gasStationName = ref("Gasolinera");
 const customPlaceName = ref("");
 
-const objectPaletteTab = ref<"vehicles" | "places">("vehicles");
 const objectSearch = ref("");
 
 import { displayId } from "@/lib/vehicleId";
@@ -240,24 +244,6 @@ const vehicleEntityTypes = computed(() => entityTypesList.value.filter((e) => e.
 
 const placeEntityTypes = computed(() => entityTypesList.value.filter((e) => e.kind === "place"));
 
-const staticVehiclePalette = computed(() => [
-  { id: "nav", label: t("operations.tool_navigate"), hint: t("operations.tool_navigate_hint"), keywords: "mapa cursor map" },
-  { id: "emg", label: t("operations.tool_emergency"), hint: t("operations.tool_emergency_hint"), keywords: "incidente 112 emergency" },
-  { id: "jam", label: t("operations.tool_jam"), hint: t("operations.tool_jam_hint"), keywords: "trafico bloqueo traffic" },
-  { id: "del", label: t("operations.tool_delete"), hint: t("operations.tool_delete_hint"), keywords: "borrar delete remove quitar x eliminar" },
-] as const);
-
-function iconForVehicleType(id: string, name?: string): string {
-  const s = `${id} ${name || ""}`.toLowerCase();
-  if (s.includes("heli"))   return "🚁";
-  if (s.includes("polic") || s.includes("patrol")) return "🚓";
-  if (s.includes("fire") || s.includes("bomb"))    return "🚒";
-  if (s.includes("moto"))   return "🏍️";
-  if (s.includes("drone"))  return "🛸";
-  if (s.includes("boat") || s.includes("barco"))   return "🚤";
-  return "🚑";
-}
-
 function isVehicleEntityActive(id: string): boolean {
   if (id === "ambulance") return currentBuilderTool.value === "add_ambulance";
   return currentBuilderTool.value === "add_vehicle" && builder.vehicleEntityId === id;
@@ -291,10 +277,6 @@ function paletteSearchMatches(text: string): boolean {
   return text.toLowerCase().includes(q);
 }
 
-const filteredStaticVehicles = computed(() =>
-  staticVehiclePalette.value.filter((row) => paletteSearchMatches(`${row.label} ${row.hint} ${row.keywords}`)),
-);
-
 const filteredVehicleEntities = computed(() =>
   vehicleEntityTypes.value.filter(
     (e) => paletteSearchMatches(`${e.name} ${e.id} ${e.description ?? ""} ${e.capabilities ?? ""}`),
@@ -324,12 +306,26 @@ function onPaletteStaticVehicle(id: "nav" | "emg" | "jam" | "del") {
 }
 
 function onPaletteVehicleEntity(et: EntityType) {
-  // Click en cualquier tipo de vehículo del catálogo → activa la herramienta
-  // "colocar unidad" para que el siguiente click en el mapa la instancie.
+  // Activa "colocar unidad": el siguiente clic en el mapa la instancia.
   builder.selectVehicleEntity(et.id);
-  toast.message(t("operations.place_palette_msg", { name: et.name }), {
-    description: t("operations.place_palette_desc"),
-  });
+}
+
+// ── Menús desplegables de la barra (unidad / lugar / generar) ───────────
+const openMenu = ref<null | "unit" | "place" | "generate">(null);
+function toggleMenu(menu: "unit" | "place" | "generate") {
+  openMenu.value = openMenu.value === menu ? null : menu;
+}
+function pickTool(id: "nav" | "emg" | "jam" | "del") {
+  openMenu.value = null;
+  onPaletteStaticVehicle(id);
+}
+function pickVehicle(et: EntityType) {
+  openMenu.value = null;
+  onPaletteVehicleEntity(et);
+}
+function pickPlace(et: EntityType) {
+  openMenu.value = null;
+  onPalettePlaceEntity(et);
 }
 
 function onPalettePlaceEntity(et: EntityType) {
@@ -436,6 +432,7 @@ function onTelemetryCompanionChange(ev: Event) {
 
 function onKeydown(ev: KeyboardEvent) {
   if (ev.key === "Escape") {
+    openMenu.value = null;
     builder.clearTool();
   }
 }
@@ -642,675 +639,490 @@ async function onMapClick(lat: number, lng: number) {
 </script>
 
 <template>
-  <div class="relative flex flex-col gap-4 pb-6">
+  <div class="relative flex flex-col gap-3 pb-6">
+    <!-- Título de página -->
+    <div v-if="!mapFullscreen" class="flex flex-wrap items-end justify-between gap-2">
+      <div>
+        <h1 class="text-lg font-semibold tracking-tight text-slate-100">{{ t('operations.title') }}</h1>
+        <p class="text-sm text-slate-500">{{ t('operations.subtitle') }}</p>
+      </div>
+    </div>
+
     <div
       ref="mapBlockRef"
-      class="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-slate-800/60 bg-slate-950/30"
-      :class="mapFullscreen ? 'h-full w-full min-h-0 flex-col rounded-none border-0' : ''"
+      class="flex min-h-0 flex-col overflow-hidden rounded border border-slate-800 bg-slate-900"
+      :class="mapFullscreen ? 'h-full w-full min-h-0 rounded-none border-0' : ''"
     >
-      <!-- Scenario builder header -->
-      <div class="shrink-0 border-b border-slate-800/60 bg-slate-900/60 p-4">
-        <div class="flex items-center justify-between">
-          <div>
-            <h2 class="text-sm font-semibold text-slate-200">{{ t('operations.scenario_builder') }}</h2>
-            <p class="mt-0.5 text-[11px] text-slate-500">
-              {{ t('map.click_to_place') }}.
-              <kbd class="ml-1 rounded bg-slate-800 px-1 py-0.5 text-[10px] text-slate-400">Esc</kbd> {{ t('operations.esc_to_cancel') }}
-            </p>
-          </div>
-        </div>
-
-        <!-- Paleta: todo lo que puede aparecer en el mapa (registro + IA) -->
-        <div class="mt-4 rounded-xl border border-slate-800/80 bg-slate-950/40 p-3">
-          <div class="mb-2 flex flex-wrap items-center gap-2">
-            <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{{ t('operations.objects_in_map') }}</span>
-            <div class="flex rounded-lg border border-slate-700/80 p-0.5 text-[10px] font-medium">
-              <button
-                type="button"
-                class="rounded-md px-2.5 py-1 transition"
-                :class="
-                  objectPaletteTab === 'vehicles'
-                    ? 'bg-slate-700 text-slate-100'
-                    : 'text-slate-500 hover:text-slate-300'
-                "
-                @click="objectPaletteTab = 'vehicles'"
-              >
-                {{ t('operations.tool_vehicles') }}
-              </button>
-              <button
-                type="button"
-                class="rounded-md px-2.5 py-1 transition"
-                :class="
-                  objectPaletteTab === 'places'
-                    ? 'bg-slate-700 text-slate-100'
-                    : 'text-slate-500 hover:text-slate-300'
-                "
-                @click="objectPaletteTab = 'places'"
-              >
-                {{ t('operations.tool_hospital') }} / {{ t('operations.tool_gas') }}
-              </button>
-            </div>
-            <input
-              v-model="objectSearch"
-              type="search"
-              :placeholder="t('operations.search_palette')"
-              class="ml-auto min-w-[7rem] flex-1 rounded-lg border border-slate-700/80 bg-slate-950 px-2.5 py-1.5 text-xs text-slate-200 outline-none placeholder:text-slate-600 focus:border-emerald-500/40"
-            />
-          </div>
-          <!-- Modo de colocación: 1 unidad | base N -->
-          <div
-            v-if="objectPaletteTab === 'vehicles'"
-            class="mb-2 flex items-center gap-2 text-[10px] text-slate-400"
-          >
-            <div class="flex rounded-md border border-slate-700/80 p-0.5">
-              <button
-                type="button"
-                class="rounded-sm px-2 py-0.5 transition"
-                :class="placementMode === 'single' ? 'bg-emerald-600/30 text-emerald-200' : 'text-slate-500 hover:text-slate-300'"
-                :title="t('operations.single_unit')"
-                @click="placementMode = 'single'"
-              >1</button>
-              <button
-                type="button"
-                class="rounded-sm px-2 py-0.5 transition"
-                :class="placementMode === 'base' ? 'bg-emerald-600/30 text-emerald-200' : 'text-slate-500 hover:text-slate-300'"
-                :title="t('operations.base_tooltip')"
-                @click="placementMode = 'base'"
-              >{{ t('operations.base_unit') }}</button>
-            </div>
-            <input
-              v-if="placementMode === 'base'"
-              v-model.number="baseCount"
-              type="number"
-              min="1"
-              max="20"
-              class="w-14 rounded-md border border-slate-700 bg-slate-900 px-2 py-0.5 text-center text-xs text-slate-200 focus:border-emerald-500/40 focus:outline-none"
-              :title="t('operations.base_count_tooltip')"
-            />
-            <span v-if="placementMode === 'base'" class="text-slate-500">{{ t('controls.tools.ambulance').toLowerCase() }}</span>
-          </div>
-          <div
-            v-if="objectPaletteTab === 'vehicles'"
-            class="flex max-h-36 flex-wrap gap-1.5 overflow-y-auto"
-          >
-            <button
-              v-for="row in filteredStaticVehicles"
-              :key="row.id"
-              type="button"
-              class="rounded-lg border px-2.5 py-1.5 text-left text-[10px] font-medium transition hover:bg-slate-800/80"
-              :class="[
-                (row.id === 'nav' && !currentBuilderTool) ||
-                (row.id === 'emg' && currentBuilderTool === 'add_emergency') ||
-                (row.id === 'jam' && currentBuilderTool === 'add_traffic')
-                  ? 'border-emerald-500/50 bg-emerald-950/25 text-emerald-200'
-                  : (row.id === 'del' && currentBuilderTool === 'delete')
-                    ? 'border-rose-500/60 bg-rose-950/30 text-rose-200'
-                    : 'border-slate-700/80 text-slate-400',
-              ]"
-              :title="row.hint"
-              @click="onPaletteStaticVehicle(row.id)"
-            >
-              <span class="block text-slate-200">{{ row.label }}</span>
-              <span class="block font-normal text-slate-600">{{ row.hint }}</span>
-            </button>
-            <!-- Chips de unidades: icono + nombre, compacto, resalta activa -->
-            <button
-              v-for="et in filteredVehicleEntities"
-              :key="et.id"
-              type="button"
-              class="flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[11px] transition hover:bg-slate-800/80"
-              :class="
-                isVehicleEntityActive(et.id)
-                  ? 'border-emerald-500/60 bg-emerald-950/30 text-emerald-100'
-                  : 'border-slate-700/80 text-slate-300'
-              "
-              :title="et.description ?? `Colocar unidad: ${et.name}`"
-              @click="onPaletteVehicleEntity(et)"
-            >
-              <span class="text-sm leading-none">{{ iconForVehicleType(et.id, et.name) }}</span>
-              <span class="font-medium">{{ et.name }}</span>
-              <span
-                v-if="countFor(et.id) > 0"
-                class="ml-0.5 rounded-sm bg-slate-800/90 px-1.5 text-[9px] font-bold text-emerald-300 ring-1 ring-emerald-700/40"
-                :title="t('operations.active_count_tooltip')"
-              >{{ countFor(et.id) }}</span>
-              <span
-                v-if="!et.builtIn"
-                class="ml-0.5 rounded-sm bg-purple-500/15 px-1 text-[9px] font-semibold text-purple-300"
-                title="Tipo personalizado o generado por IA"
-              >·</span>
-            </button>
-            <p v-if="!filteredStaticVehicles.length && !filteredVehicleEntities.length" class="w-full py-2 text-center text-[10px] text-slate-600">
-              Sin coincidencias
-            </p>
-          </div>
-          <div v-else class="flex max-h-36 flex-wrap gap-1.5 overflow-y-auto">
-            <button
-              v-for="et in filteredPlaceEntities"
-              :key="et.id"
-              type="button"
-              class="rounded-lg border px-2.5 py-1.5 text-left text-[10px] transition hover:bg-slate-800/80"
-              :class="
-                isPlacePaletteActive(et.id)
-                  ? 'border-violet-500/50 bg-violet-950/25 text-violet-100'
-                  : 'border-slate-700/80 text-slate-400'
-              "
-              :title="et.description ?? 'Clic para colocar en el mapa'"
-              @click="onPalettePlaceEntity(et)"
-            >
-              <span class="font-medium text-slate-200">{{ et.name }}</span>
-              <span
-                v-if="placeCountFor(et.id) > 0"
-                class="ml-1 rounded-sm bg-slate-800/90 px-1.5 text-[9px] font-bold text-violet-300 ring-1 ring-violet-700/40"
-                title="Lugares activos de este tipo"
-              >{{ placeCountFor(et.id) }}</span>
-              <span v-if="!et.builtIn" class="ml-1 text-[9px] text-purple-400">IA</span>
-            </button>
-            <p v-if="!filteredPlaceEntities.length" class="w-full py-2 text-center text-[10px] text-slate-600">
-              Sin coincidencias
-            </p>
-          </div>
-        </div>
-
-        <!-- Context input fields -->
-        <div v-if="currentBuilderTool === 'add_emergency'" class="mt-3 flex max-w-lg flex-wrap gap-3">
-          <div class="flex-1 min-w-[10rem]">
-            <label class="text-[11px] font-medium text-slate-400">{{ t('operations.emergency_title_label') }}</label>
-            <input
-              v-model="emergencyTitle"
-              type="text"
-              class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200 outline-none transition focus:border-emerald-500/50"
-            />
-          </div>
-          <div class="min-w-[9rem]">
-            <label class="text-[11px] font-medium text-slate-400">{{ t('operations.emergency_type_label') }}</label>
-            <select
-              v-model="emergencyType"
-              class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200 outline-none transition focus:border-emerald-500/50"
-            >
-              <option value="medical">🏥 Medica</option>
-              <option value="altercation">⚔️ Altercado</option>
-              <option value="mass_casualty">💥 Victimas masivas</option>
-            </select>
-          </div>
-          <div class="w-full">
-            <label class="text-[11px] font-medium text-slate-400">Descripcion (contexto para la IA)</label>
-            <textarea
-              v-model="emergencyDescription"
-              rows="2"
-              :placeholder="t('operations.emergency_desc_placeholder')"
-              class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200 outline-none transition focus:border-emerald-500/50 resize-none"
-            />
-          </div>
-        </div>
-        <div v-if="currentBuilderTool === 'add_hospital'" class="mt-3 max-w-xs">
-          <label class="text-[11px] font-medium text-slate-400">{{ t('operations.hospital_name_label') }}</label>
-          <input
-            v-model="hospitalName"
-            type="text"
-            :placeholder="t('operations.hospital_name_placeholder')"
-            class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200 outline-none transition focus:border-emerald-500/50"
-          />
-        </div>
-        <div v-if="currentBuilderTool === 'add_gas_station'" class="mt-3 max-w-xs">
-          <label class="text-[11px] font-medium text-slate-400">{{ t('operations.gas_name_label') }}</label>
-          <input
-            v-model="gasStationName"
-            type="text"
-            :placeholder="t('operations.gas_name_placeholder')"
-            class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200 outline-none transition focus:border-emerald-500/50"
-          />
-        </div>
-        <div v-if="currentBuilderTool === 'add_place' && placeEntityId" class="mt-3 max-w-md">
-          <label class="text-[11px] font-medium text-slate-400">Nombre en mapa (tipo personalizado)</label>
-          <input
-            v-model="customPlaceName"
-            type="text"
-            :placeholder="state?.entityTypes?.find((x) => x.id === placeEntityId)?.name ?? t('operations.place_name_placeholder')"
-            class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200 outline-none transition focus:border-emerald-500/50"
-          />
-        </div>
-      </div>
-
-      <!-- Simulation controls -->
-      <div class="shrink-0 border-b border-slate-800/60 bg-slate-950/60 px-3 py-3 lg:px-4">
+      <!-- Barra: simulación + acciones -->
+      <div class="flex flex-wrap items-center gap-3 border-b border-slate-800 px-3 py-2">
         <SimulationControls />
-      </div>
+        <div class="ml-auto flex items-center gap-1.5">
+          <div class="relative">
+            <button
+              type="button"
+              class="flex h-8 items-center gap-1.5 rounded border border-slate-700 px-2.5 text-xs text-slate-200 hover:bg-slate-800"
+              :class="openMenu === 'generate' ? 'bg-slate-800' : ''"
+              :title="t('operations.ai_incidents_tooltip')"
+              @click="toggleMenu('generate')"
+            >
+              {{ t('operations.generate_menu') }}
+              <svg class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M5.5 7.5 10 12l4.5-4.5" stroke="currentColor" stroke-width="1.5" fill="none" /></svg>
+            </button>
+            <div v-if="openMenu === 'generate'" class="menu right-0 w-80 p-3">
+              <div class="mb-3 flex rounded border border-slate-800 p-0.5 text-xs">
+                <button
+                  type="button"
+                  class="flex-1 rounded-sm px-2 py-1"
+                  :class="aiGenTab === 'incidents' ? 'bg-slate-800 text-slate-100' : 'text-slate-500 hover:text-slate-200'"
+                  @click="aiGenTab = 'incidents'"
+                >{{ t('operations.incidents_btn') }}</button>
+                <button
+                  type="button"
+                  class="flex-1 rounded-sm px-2 py-1"
+                  :class="aiGenTab === 'scenario' ? 'bg-slate-800 text-slate-100' : 'text-slate-500 hover:text-slate-200'"
+                  @click="aiGenTab = 'scenario'"
+                >{{ t('operations.full_scenario_btn') }}</button>
+              </div>
 
-      <!-- Map + Telemetry sidebar -->
-      <div
-        class="flex min-h-0 flex-1 flex-col gap-0 lg:flex-row"
-        :class="mapFullscreen ? 'min-h-0 overflow-hidden' : ''"
-      >
-        <!-- Map area -->
-        <div class="relative flex min-h-0 min-w-0 flex-1 flex-col">
+              <div v-if="aiGenTab === 'incidents'">
+                <p class="mb-3 text-xs text-slate-400">{{ t('operations.generate_incidents_desc') }}</p>
+                <div class="flex items-end gap-2">
+                  <label class="flex-1">
+                    <span class="field-label">{{ t('operations.amount') }}</span>
+                    <input v-model.number="incidentCount" type="number" min="1" max="20" class="field font-mono" />
+                  </label>
+                  <button class="btn-primary" :disabled="entities.loading" @click="generateIncidents">
+                    {{ entities.loading ? t('operations.generating') : t('operations.generate') }}
+                  </button>
+                </div>
+              </div>
+
+              <div v-else>
+                <p class="mb-3 text-xs text-slate-400">{{ t('operations.generate_scenario_desc') }}</p>
+                <div class="mb-2 grid grid-cols-2 gap-2">
+                  <label><span class="field-label">{{ t('scenario.hospitals') }}</span><input v-model.number="scenarioForm.hospitals" type="number" min="0" max="20" class="field font-mono" /></label>
+                  <label><span class="field-label">{{ t('scenario.gas_stations') }}</span><input v-model.number="scenarioForm.gasStations" type="number" min="0" max="20" class="field font-mono" /></label>
+                  <label><span class="field-label">{{ t('scenario.ambulances') }}</span><input v-model.number="scenarioForm.ambulances" type="number" min="0" max="30" class="field font-mono" /></label>
+                  <label><span class="field-label">{{ t('scenario.incidents') }}</span><input v-model.number="scenarioForm.incidents" type="number" min="0" max="30" class="field font-mono" /></label>
+                </div>
+                <details v-if="vehicleEntityTypes.some((v) => v.id !== 'ambulance')" class="mb-2 rounded border border-slate-800 text-xs">
+                  <summary class="cursor-pointer px-2 py-1.5 text-slate-400 hover:text-slate-200">{{ t('operations.extra_units') }}</summary>
+                  <div class="max-h-36 space-y-1.5 overflow-y-auto border-t border-slate-800 p-2">
+                    <label
+                      v-for="et in vehicleEntityTypes.filter((v) => v.id !== 'ambulance')"
+                      :key="et.id"
+                      class="flex items-center justify-between gap-2 text-slate-300"
+                    >
+                      <span class="truncate">{{ et.name }}</span>
+                      <input v-model.number="scenarioForm.extraByType[et.id]" type="number" min="0" max="15" placeholder="0" class="field w-16 py-0.5 text-right font-mono" />
+                    </label>
+                  </div>
+                </details>
+                <label class="mb-3 flex items-center gap-2 text-xs text-slate-400">
+                  <input v-model="scenarioForm.clearExisting" type="checkbox" class="h-3.5 w-3.5" />
+                  {{ t('operations.reset_before') }}
+                </label>
+                <button class="btn-primary w-full" :disabled="generatingScenario" @click="generateFullScenario">
+                  {{ generatingScenario ? t('operations.generating_scenario') : t('operations.generate_scenario') }}
+                </button>
+              </div>
+            </div>
+          </div>
           <button
             type="button"
-            class="absolute right-3 top-3 z-[420] flex items-center gap-1.5 rounded-xl border border-slate-600/50 bg-slate-950 px-3 py-1.5 text-xs font-medium text-slate-300 shadow-lg transition hover:bg-slate-800 hover:text-slate-100"
+            class="flex h-8 w-8 items-center justify-center rounded border border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-slate-100"
+            :title="mapFullscreen ? t('operations.fullscreen_exit') : t('operations.fullscreen_expand')"
+            :aria-label="mapFullscreen ? t('operations.fullscreen_exit') : t('operations.fullscreen_expand')"
             @click="toggleMapFullscreen"
           >
             <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
               <path v-if="!mapFullscreen" stroke-linecap="round" stroke-linejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
               <path v-else stroke-linecap="round" stroke-linejoin="round" d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25" />
             </svg>
-            {{ mapFullscreen ? t('operations.fullscreen_exit') : t('operations.fullscreen_expand') }}
           </button>
-          <div class="relative min-h-0 flex-1"
-               :class="mapFullscreen ? '' : ''">
-            <AmbulanceMap
-              :map-tool="mapTool"
-              :fullscreen="mapFullscreen"
-              :class="
-                mapFullscreen
-                  ? 'min-h-0 flex-1 rounded-lg border border-slate-800 h-full'
-                  : 'h-[min(520px,62vh)]'
-              "
-              @map-click="onMapClick"
-              @delete-object="onDeleteObject"
-            />
-            <!-- Panel flotante resultados ⌘ comando -->
-            <div
-              v-if="filteredMatches.length || (Object.keys(uiFilters || {}).length && filterTotal)"
-              class="pointer-events-none absolute bottom-4 left-1/2 z-[400] w-[min(560px,calc(100%-2rem))] -translate-x-1/2"
-            >
-              <div class="pointer-events-auto rounded-2xl border border-purple-500/40 bg-slate-950 shadow-2xl">
-                <div class="flex items-center justify-between gap-3 border-b border-purple-500/20 px-4 py-2">
-                  <div class="flex items-center gap-2">
-                    <span class="relative flex h-2.5 w-2.5">
-                      <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-purple-400 opacity-70"></span>
-                      <span class="relative inline-flex h-2.5 w-2.5 rounded-full bg-purple-500"></span>
-                    </span>
-                    <span class="text-xs font-semibold text-purple-200">
-                      {{ filteredMatches.length }}
-                      <span class="text-purple-400/70">/ {{ filterTotal }}</span>
-                      unidades coinciden
-                    </span>
-                  </div>
-                  <button
-                    class="text-[11px] text-purple-300/80 hover:text-slate-100"
-                    @click="store.clearUiFilters()"
-                  >Limpiar filtro ✕</button>
-                </div>
-                <div class="flex flex-wrap gap-1.5 px-3 py-2 max-h-24 overflow-y-auto">
-                  <button
-                    v-for="a in filteredMatches.slice(0, 30)"
-                    :key="a.id"
-                    type="button"
-                    class="group flex items-center gap-1.5 rounded-lg border border-purple-500/30 bg-purple-600/10 px-2 py-1 text-[11px] transition hover:border-purple-400 hover:bg-purple-500/20"
-                    :class="selectedAmbulanceId === a.id ? 'ring-1 ring-purple-300 bg-purple-500/30' : ''"
-                    @click="focusMatch(a.id)"
-                  >
-                    <span class="font-mono font-semibold text-purple-100">{{ a.displayLabel || a.id.slice(0, 6) }}</span>
-                    <span v-if="energyOf(a, state?.entityTypes).value != null" class="text-[10px] text-purple-300/70">
-                      {{ energyOf(a, state?.entityTypes).icon }}{{ Math.round(energyOf(a, state?.entityTypes).value!) }}%
-                    </span>
-                    <span v-if="a.hasPatient" class="text-[10px] text-rose-300">🚑</span>
-                  </button>
-                  <span v-if="filteredMatches.length > 30" class="self-center px-2 text-[10px] text-purple-400/70">
-                    +{{ filteredMatches.length - 30 }} más
-                  </span>
-                  <span v-if="!filteredMatches.length" class="px-2 py-1 text-[11px] text-purple-300/60 italic">
-                    Ninguna unidad cumple. Ajusta criterios o quita el filtro.
-                  </span>
-                </div>
+        </div>
+      </div>
+
+      <!-- Añadir al mapa -->
+      <div class="flex flex-wrap items-center gap-1.5 border-b border-slate-800 px-3 py-2">
+        <span class="mr-1 text-[11px] text-slate-500">{{ t('operations.scenario_builder') }}</span>
+        <button type="button" class="tool" :class="{ 'tool-active': !currentBuilderTool }" :title="t('operations.tool_navigate_hint')" @click="pickTool('nav')">
+          {{ t('operations.tool_navigate') }}
+        </button>
+        <button type="button" class="tool" :class="{ 'tool-active': currentBuilderTool === 'add_emergency' }" :title="t('operations.tool_emergency_hint')" @click="pickTool('emg')">
+          <span class="h-1.5 w-1.5 rotate-45 bg-red-400" aria-hidden="true" />
+          {{ t('operations.tool_emergency') }}
+        </button>
+
+        <!-- Unidad ▾ -->
+        <div class="relative">
+          <button type="button" class="tool" :class="{ 'tool-active': currentBuilderTool === 'add_vehicle' || currentBuilderTool === 'add_ambulance' }" @click="toggleMenu('unit')">
+            {{ t('operations.tool_vehicles') }}
+            <svg class="h-3 w-3" viewBox="0 0 20 20" aria-hidden="true"><path d="M5.5 7.5 10 12l4.5-4.5" stroke="currentColor" stroke-width="1.5" fill="none" /></svg>
+          </button>
+          <div v-if="openMenu === 'unit'" class="menu left-0 w-72">
+            <div class="flex items-center gap-2 border-b border-slate-800 p-2">
+              <input v-model="objectSearch" type="search" :placeholder="t('operations.search_palette')" class="field flex-1 py-1" />
+              <div class="flex rounded border border-slate-800 p-0.5 text-[11px]">
+                <button type="button" class="rounded-sm px-1.5 py-0.5" :class="placementMode === 'single' ? 'bg-slate-800 text-slate-100' : 'text-slate-500'" :title="t('operations.single_unit')" @click="placementMode = 'single'">1</button>
+                <button type="button" class="rounded-sm px-1.5 py-0.5" :class="placementMode === 'base' ? 'bg-slate-800 text-slate-100' : 'text-slate-500'" :title="t('operations.base_tooltip')" @click="placementMode = 'base'">{{ t('operations.base_unit') }}</button>
               </div>
+              <input
+                v-if="placementMode === 'base'"
+                v-model.number="baseCount"
+                type="number"
+                min="1"
+                max="20"
+                class="field w-12 py-1 text-center font-mono"
+                :title="t('operations.base_count_tooltip')"
+              />
             </div>
+            <ul class="max-h-64 overflow-y-auto py-1">
+              <li v-for="et in filteredVehicleEntities" :key="et.id">
+                <button
+                  type="button"
+                  class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-slate-800"
+                  :class="isVehicleEntityActive(et.id) ? 'text-slate-100' : 'text-slate-300'"
+                  :title="et.description ?? undefined"
+                  @click="pickVehicle(et)"
+                >
+                  <span class="h-2 w-2 shrink-0 rounded-full" :style="{ background: et.color || 'var(--n-500)' }" aria-hidden="true" />
+                  <span class="flex-1 truncate">{{ et.name }}</span>
+                  <span v-if="countFor(et.id) > 0" class="font-mono text-[11px] text-slate-500" :title="t('operations.active_count_tooltip')">{{ countFor(et.id) }}</span>
+                </button>
+              </li>
+              <li v-if="!filteredVehicleEntities.length" class="px-3 py-2 text-xs text-slate-500">{{ t('operations.no_results') }}</li>
+            </ul>
           </div>
         </div>
 
-        <!-- Telemetry sidebar -->
-        <aside
-          class="flex w-full shrink-0 flex-col gap-3 overflow-y-auto border-l border-slate-800/60 bg-slate-900/40 p-4 lg:w-[min(100%,22rem)]"
-          :class="mapFullscreen ? 'max-h-[40vh] min-h-0 lg:max-h-none lg:w-72' : 'min-h-[min(520px,62vh)]'"
-        >
-          <!-- Coste flota total (sticky arriba). Suma activación + runtime
-               de todas las unidades con powertrain catalogado. -->
-          <div
-            v-if="fleetCost.total > 0"
-            class="rounded border border-slate-800 bg-slate-950 px-3 py-2.5"
-          >
-            <div class="flex items-center justify-between">
-              <span class="text-[10px] font-medium uppercase tracking-wider text-slate-500">
-                {{ t('operations.operating_cost_fleet') }}
-              </span>
-              <span class="font-mono text-base font-semibold text-slate-100">
-                {{ fleetCost.total.toFixed(2) }} €
-              </span>
-            </div>
-            <div class="mt-1 flex items-center justify-between font-mono text-[10px] text-slate-500">
-              <span>{{ t('operations.active_units', { n: fleetCost.activeUnits }) }}</span>
-              <span>
-                {{ fleetCost.activation.toFixed(0) }}€ act · {{ fleetCost.runtime.toFixed(2) }}€ tiempo
-              </span>
-            </div>
-          </div>
-
-          <h3 class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-emerald-400/70" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
-            Telemetría rápida
-          </h3>
-
-          <template v-if="state?.ambulances?.length || (state?.companions?.length ?? 0) > 0">
-            <div v-if="state?.ambulances?.length" class="space-y-2">
-              <div>
-                <label class="text-[10px] font-medium text-slate-500">Ambulancia (SVB)</label>
-                <select
-                  :value="selectedAmbulanceId ?? ''"
-                  class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200 outline-none"
-                  @change="onTelemetryAmbulanceChange"
-                >
-                  <option value="">{{ t('operations.no_amb_focus') }}</option>
-                  <option v-for="(a, idx) in state.ambulances" :key="a.id" :value="a.id">
-                    {{ shortId(a.id, idx) }} · {{ a.fsmState ?? "IDLE" }}{{ a.hasPatient ? " · Paciente" : "" }}
-                  </option>
-                </select>
-              </div>
-
-              <div v-if="selectedAmbulance" class="space-y-2.5 border-t border-slate-800/60 pt-3">
-                <p class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{{ t('operations.ops_summary') }}</p>
-                <div class="rounded-lg border border-slate-800/80 bg-slate-950/50 px-2.5 py-2 text-[10px] leading-relaxed text-slate-400">
-                  <p>
-                    <span class="text-slate-500">Unidad:</span>
-                    <span class="ml-1 font-mono text-slate-200">{{
-                      shortId(selectedAmbulance.id, ambIndex(selectedAmbulance.id))
-                    }}</span>
-                  </p>
-                  <p v-if="selectedAmbulance.missionPhase">
-                    <span class="text-slate-500">Fase mision:</span>
-                    <span class="ml-1 text-slate-200">{{
-                      missionPhaseLabel[selectedAmbulance.missionPhase] ?? selectedAmbulance.missionPhase
-                    }}</span>
-                  </p>
-                  <p v-if="selectedAmbulance.missionStatus">
-                    <span class="text-slate-500">Estado mision:</span>
-                    <span class="ml-1 text-slate-200">{{ selectedAmbulance.missionStatus }}</span>
-                  </p>
-                  <p v-if="selectedAmbulance.locationLabel">
-                    <span class="text-slate-500">Ubicacion (motor):</span>
-                    <span class="ml-1 text-slate-200">{{ selectedAmbulance.locationLabel }}</span>
-                  </p>
-                  <p v-if="selectedAmbulance.latitude != null && selectedAmbulance.longitude != null">
-                    <span class="text-slate-500">GPS:</span>
-                    <span class="ml-1 font-mono text-slate-300"
-                      >{{ selectedAmbulance.latitude.toFixed(5) }}, {{ selectedAmbulance.longitude.toFixed(5) }}</span
-                    >
-                  </p>
-                  <p>
-                    <span class="text-slate-500">Enlace simulado:</span>
-                    <span class="ml-1 font-medium text-slate-200">{{ state?.linkState ?? "—" }}</span>
-                  </p>
-                  <div
-                    v-if="companionsForEmergency(selectedAmbulance.assignedEmergencyId).length"
-                    class="mt-2 border-t border-slate-800/60 pt-2"
-                  >
-                    <p class="text-slate-500">{{ t('operations.support_same_incident') }}</p>
-                    <ul class="mt-1 list-inside list-disc text-slate-300">
-                      <li
-                        v-for="c in companionsForEmergency(selectedAmbulance.assignedEmergencyId)"
-                        :key="c.id"
-                        class="font-mono text-[10px]"
-                      >
-                        {{ c.displayLabel ?? c.kind }} · {{ c.typeName ?? c.kind }} ({{ c.status }})
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-
-                <div class="flex flex-wrap items-center gap-2">
-                  <span :class="['fsm-chip', `fsm-${selectedAmbulance.fsmState ?? 'idle'}`]">
-                    <span class="fsm-dot" />
-                    {{ selectedAmbulance.fsmState ?? "idle" }}
-                  </span>
-                  <span
-                    v-if="selectedAmbulance.patientSeverity"
-                    :class="['rounded-md px-2 py-0.5 text-[10px] font-semibold', `severity-${selectedAmbulance.patientSeverity}`]"
-                  >
-                    {{ severityLabel[selectedAmbulance.patientSeverity] ?? selectedAmbulance.patientSeverity }}
-                  </span>
-                </div>
-
-                <p
-                  v-if="!selectedAmbulance.hasPatient || selectedAmbulance.telemetry?.medical == null"
-                  class="rounded-lg border border-dashed border-slate-700 bg-slate-950/60 px-2 py-3 text-center text-[11px] text-slate-500"
-                >
-                  Unidad vacia — sin paciente a bordo
-                </p>
-
-                <template v-else>
-                  <p class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{{ t('operations.vitals') }}</p>
-                  <div class="grid grid-cols-2 gap-2">
-                    <div class="rounded-lg border border-slate-700/50 bg-slate-950/60 px-2.5 py-2">
-                      <p class="text-[9px] font-medium uppercase tracking-wider text-slate-500">BPM</p>
-                      <p class="text-sm font-semibold text-slate-200">{{ selectedAmbulance.telemetry?.medical?.heartRateBpm ?? "—" }}</p>
-                    </div>
-                    <div class="rounded-lg border border-slate-700/50 bg-slate-950/60 px-2.5 py-2">
-                      <p class="text-[9px] font-medium uppercase tracking-wider text-slate-500">SpO2</p>
-                      <p class="text-sm font-semibold" :class="(selectedAmbulance.telemetry?.medical?.spo2Pct ?? 100) < 90 ? 'text-rose-400' : 'text-slate-200'">
-                        {{ selectedAmbulance.telemetry?.medical?.spo2Pct ?? "—" }}%
-                      </p>
-                    </div>
-                  </div>
-                  <div v-if="selectedAmbulance.telemetry?.medical?.gcsScore != null" class="grid grid-cols-2 gap-2">
-                    <div class="rounded-lg border border-slate-700/50 bg-slate-950/60 px-2.5 py-2">
-                      <p class="text-[9px] font-medium uppercase tracking-wider text-slate-500">GCS</p>
-                      <p class="text-sm font-semibold text-slate-200">{{ selectedAmbulance.telemetry.medical.gcsScore }}</p>
-                    </div>
-                    <div class="rounded-lg border border-slate-700/50 bg-slate-950/60 px-2.5 py-2">
-                      <p class="text-[9px] font-medium uppercase tracking-wider text-slate-500">ECG</p>
-                      <p class="text-sm font-semibold text-slate-200">{{ selectedAmbulance.telemetry.medical.ecgRhythm ?? "—" }}</p>
-                    </div>
-                  </div>
-                </template>
-
-                <div class="space-y-1.5 border-t border-slate-800/60 pt-2.5">
-                  <p class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Mecanica / ruta</p>
-                  <div class="flex items-center justify-between text-xs">
-                    <span class="text-slate-500">
-                      {{ energyOf(selectedAmbulance, state?.entityTypes).icon }}
-                      {{ t(energyOf(selectedAmbulance, state?.entityTypes).labelKey) }}
-                    </span>
-                    <span class="font-medium" :class="(energyOf(selectedAmbulance, state?.entityTypes).value ?? 100) < 25 ? 'text-amber-400' : 'text-slate-300'">
-                      {{ energyOf(selectedAmbulance, state?.entityTypes).value?.toFixed(0) ?? "—" }}%
-                    </span>
-                  </div>
-                  <template v-if="operatingCostOf(selectedAmbulance, state?.entityTypes).available">
-                    <div class="flex items-center justify-between text-xs">
-                      <span class="text-slate-500">💶 {{ t('operations.operating_cost') }}</span>
-                      <span class="font-mono font-semibold text-emerald-300">
-                        {{ operatingCostOf(selectedAmbulance, state?.entityTypes).total.toFixed(2) }} €
-                      </span>
-                    </div>
-                    <div class="flex items-center justify-between text-[10px] text-slate-600">
-                      <span>{{ t('operations.active_time') }}: {{ operatingCostOf(selectedAmbulance, state?.entityTypes).activeMinutes.toFixed(1) }} min</span>
-                      <span>
-                        {{ operatingCostOf(selectedAmbulance, state?.entityTypes).activation.toFixed(0) }}€ +
-                        {{ operatingCostOf(selectedAmbulance, state?.entityTypes).ratePerMin.toFixed(2) }}€/min
-                      </span>
-                    </div>
-                  </template>
-                  <div class="flex items-center justify-between text-xs">
-                    <span class="text-slate-500">{{ t('operations.odometer') }}</span>
-                    <span class="font-medium text-slate-300">{{ selectedAmbulance.telemetry?.mechanical?.odometerKm?.toFixed(2) ?? selectedAmbulance.odometerKm?.toFixed(2) ?? "—" }} km</span>
-                  </div>
-                  <div class="flex items-center justify-between text-xs">
-                    <span class="text-slate-500">{{ t('operations.speed') }}</span>
-                    <span class="font-medium text-slate-300">{{ selectedAmbulance.telemetry?.positioning?.speedKmh ?? "—" }} km/h</span>
-                  </div>
-                  <div class="flex items-center justify-between text-xs">
-                    <span class="text-slate-500">{{ t('operations.speed_limit') }}</span>
-                    <span class="font-medium text-slate-300">{{ selectedAmbulance.roadSpeedLimitKmh ?? selectedAmbulance.telemetry?.positioning?.roadSpeedLimitKmh ?? "—" }} km/h</span>
-                  </div>
-                  <div class="flex flex-col gap-0.5 text-xs">
-                    <span class="text-slate-500">Destino / objetivo</span>
-                    <span class="font-medium leading-snug text-slate-300">{{ destinationLabel }}</span>
-                  </div>
-                </div>
-              </div>
-              <p v-else-if="state.ambulances.length" class="text-xs text-slate-500">Elige una ambulancia o haz clic en el mapa.</p>
-            </div>
-
-            <div v-if="state?.companions?.length" class="space-y-2 border-t border-slate-800/60 pt-3">
-              <label class="text-[10px] font-medium text-slate-500">Unidad de apoyo (mapa)</label>
-              <select
-                :value="selectedCompanionId ?? ''"
-                class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200 outline-none"
-                @change="onTelemetryCompanionChange"
-              >
-                <option value="">{{ t('operations.no_companion_focus') }}</option>
-                <option v-for="c in state.companions" :key="c.id" :value="c.id">
-                  {{ c.displayLabel ?? c.kind }} · {{ c.status }} · {{ c.typeName ?? c.kind }}
-                </option>
-              </select>
-              <div v-if="selectedCompanion" class="rounded-lg border border-slate-800/80 bg-slate-950/50 px-2.5 py-2 text-[10px] leading-relaxed text-slate-400">
-                <p class="font-mono text-sm text-emerald-200">{{ selectedCompanion.displayLabel ?? selectedCompanion.kind }}</p>
-                <p>{{ selectedCompanion.typeName ?? selectedCompanion.kind }} — {{ selectedCompanion.status }}</p>
-                <p>Velocidad: {{ selectedCompanion.speedKmh }} km/h</p>
-                <p v-if="state.emergencies.find((e) => e.id === selectedCompanion?.assignedEmergencyId)">
-                  Emergencia:
-                  <span class="text-slate-200">{{
-                    state.emergencies.find((e) => e.id === selectedCompanion?.assignedEmergencyId)?.title
-                  }}</span>
-                </p>
-                <p class="font-mono text-slate-500">
-                  GPS {{ selectedCompanion.latitude.toFixed(5) }}, {{ selectedCompanion.longitude.toFixed(5) }}
-                </p>
-              </div>
-            </div>
-          </template>
-          <p v-else class="text-xs text-slate-500">Anade ambulancias o despacha apoyo para ver telemetria.</p>
-        </aside>
-      </div>
-
-      <!-- Toolbar: solo acciones rápidas (colocación de objetos va en la paleta superior) -->
-      <div
-        class="flex shrink-0 flex-wrap items-center justify-center gap-1.5 border-t border-slate-800/60 bg-slate-950 px-3 py-2.5"
-      >
-        <span class="mr-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">{{ t('operations.quick_actions') }}</span>
-
-        <!-- Incident generator -->
+        <!-- Lugar ▾ -->
         <div class="relative">
           <button
             type="button"
-            :title="t('operations.ai_incidents_tooltip')"
-            class="flex items-center gap-1.5 rounded-xl border border-purple-600/40 px-3 py-2 text-[11px] font-medium text-purple-400 transition-colors hover:bg-purple-950/30"
-            :class="showIncidentGen ? 'bg-purple-950/40 ring-1 ring-purple-500/30' : ''"
-            @click="showIncidentGen = !showIncidentGen"
+            class="tool"
+            :class="{ 'tool-active': ['add_hospital', 'add_gas_station', 'add_place'].includes(currentBuilderTool ?? '') }"
+            @click="toggleMenu('place')"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-            </svg>
-{{ t('operations.generate') }}
+            {{ t('operations.tool_places') }}
+            <svg class="h-3 w-3" viewBox="0 0 20 20" aria-hidden="true"><path d="M5.5 7.5 10 12l4.5-4.5" stroke="currentColor" stroke-width="1.5" fill="none" /></svg>
           </button>
-          <div
-            v-if="showIncidentGen"
-            class="absolute bottom-full right-0 mb-2 z-[500] w-80 rounded-xl border border-slate-700/70 bg-slate-900 p-4 shadow-2xl"
-          >
-            <h4 class="text-xs font-semibold text-purple-400 mb-2">{{ t('controls.generate_scenario') }}</h4>
-            <div class="mb-3 flex rounded-lg border border-slate-700/80 p-0.5 text-[10px] font-medium">
-              <button
-                type="button"
-                class="flex-1 rounded-md px-2 py-1 transition"
-                :class="aiGenTab === 'incidents' ? 'bg-purple-700/40 text-purple-100' : 'text-slate-500 hover:text-slate-300'"
-                @click="aiGenTab = 'incidents'"
-              >{{ t('operations.incidents_btn') }}</button>
-              <button
-                type="button"
-                class="flex-1 rounded-md px-2 py-1 transition"
-                :class="aiGenTab === 'scenario' ? 'bg-purple-700/40 text-purple-100' : 'text-slate-500 hover:text-slate-300'"
-                @click="aiGenTab = 'scenario'"
-              >{{ t('operations.full_scenario_btn') }}</button>
-            </div>
-
-            <div v-if="aiGenTab === 'incidents'">
-              <p class="text-[10px] text-slate-500 mb-3">
-                Crea emergencias realistas y variadas en la zona de simulación.
-              </p>
-              <div class="flex items-end gap-2">
-                <div class="flex-1">
-                  <label class="block text-[10px] font-medium text-slate-400 mb-1">{{ t('operations.amount') }}</label>
-                  <input
-                    v-model.number="incidentCount"
-                    type="number" min="1" max="20"
-                    class="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 focus:border-purple-500 focus:outline-none"
-                  />
-                </div>
+          <div v-if="openMenu === 'place'" class="menu left-0 w-64">
+            <ul class="max-h-64 overflow-y-auto py-1">
+              <li v-for="et in filteredPlaceEntities" :key="et.id">
                 <button
-                  class="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-950 transition hover:bg-slate-300 disabled:opacity-50 whitespace-nowrap"
-                  :disabled="entities.loading"
-                  @click="generateIncidents"
+                  type="button"
+                  class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-slate-800"
+                  :class="isPlacePaletteActive(et.id) ? 'text-slate-100' : 'text-slate-300'"
+                  :title="et.description ?? undefined"
+                  @click="pickPlace(et)"
                 >
-                  {{ entities.loading ? t('operations.generating') : t('operations.generate') }}
+                  <span class="flex-1 truncate">{{ et.name }}</span>
+                  <span v-if="placeCountFor(et.id) > 0" class="font-mono text-[11px] text-slate-500">{{ placeCountFor(et.id) }}</span>
                 </button>
-              </div>
-            </div>
+              </li>
+              <li v-if="!filteredPlaceEntities.length" class="px-3 py-2 text-xs text-slate-500">{{ t('operations.no_results') }}</li>
+            </ul>
+          </div>
+        </div>
 
-            <div v-else>
-              <p class="text-[10px] text-slate-500 mb-3">
-                Genera un escenario entero: estructuras (hospitales, gasolineras…), flota y opcionalmente incidencias iniciales.
-              </p>
-              <div class="grid grid-cols-2 gap-2 mb-2">
-                <label class="block">
-                  <span class="block text-[10px] font-medium text-slate-400 mb-1">{{ t('scenario.hospitals') }}</span>
-                  <input v-model.number="scenarioForm.hospitals" type="number" min="0" max="20"
-                    class="w-full rounded-lg border border-slate-700 bg-slate-800 px-2 py-1.5 text-sm text-slate-200 focus:border-purple-500 focus:outline-none" />
-                </label>
-                <label class="block">
-                  <span class="block text-[10px] font-medium text-slate-400 mb-1">{{ t('scenario.gas_stations') }}</span>
-                  <input v-model.number="scenarioForm.gasStations" type="number" min="0" max="20"
-                    class="w-full rounded-lg border border-slate-700 bg-slate-800 px-2 py-1.5 text-sm text-slate-200 focus:border-purple-500 focus:outline-none" />
-                </label>
-                <label class="block">
-                  <span class="block text-[10px] font-medium text-slate-400 mb-1">{{ t('scenario.ambulances') }}</span>
-                  <input v-model.number="scenarioForm.ambulances" type="number" min="0" max="30"
-                    class="w-full rounded-lg border border-slate-700 bg-slate-800 px-2 py-1.5 text-sm text-slate-200 focus:border-purple-500 focus:outline-none" />
-                </label>
-                <label class="block">
-                  <span class="block text-[10px] font-medium text-slate-400 mb-1">{{ t('scenario.incidents') }}</span>
-                  <input v-model.number="scenarioForm.incidents" type="number" min="0" max="30"
-                    class="w-full rounded-lg border border-slate-700 bg-slate-800 px-2 py-1.5 text-sm text-slate-200 focus:border-purple-500 focus:outline-none" />
-                </label>
+        <button type="button" class="tool" :class="{ 'tool-active': currentBuilderTool === 'add_traffic' }" :title="t('operations.tool_jam_hint')" @click="pickTool('jam')">
+          {{ t('operations.tool_jam') }}
+        </button>
+        <button type="button" class="tool" :class="{ 'tool-danger': currentBuilderTool === 'delete' }" :title="t('operations.tool_delete_hint')" @click="pickTool('del')">
+          {{ t('operations.tool_delete') }}
+        </button>
+
+        <p v-if="currentBuilderTool" class="ml-auto text-[11px] text-slate-500">
+          {{ currentBuilderTool === 'delete' ? t('operations.tool_delete_hint') : t('map.click_to_place') }}
+          · <kbd class="rounded border border-slate-700 px-1 font-mono text-[10px]">Esc</kbd> {{ t('operations.esc_to_cancel') }}
+        </p>
+      </div>
+
+      <!-- Campos según la herramienta -->
+      <div v-if="currentBuilderTool === 'add_emergency'" class="grid gap-3 border-b border-slate-800 px-3 py-3 sm:grid-cols-[1fr_12rem]">
+        <label>
+          <span class="field-label">{{ t('operations.emergency_title_label') }}</span>
+          <input v-model="emergencyTitle" type="text" class="field" />
+        </label>
+        <label>
+          <span class="field-label">{{ t('operations.emergency_type_label') }}</span>
+          <select v-model="emergencyType" class="field">
+            <option value="medical">{{ t('operations.emergency_type_medical') }}</option>
+            <option value="altercation">{{ t('operations.emergency_type_altercation') }}</option>
+            <option value="mass_casualty">{{ t('operations.emergency_type_mass') }}</option>
+          </select>
+        </label>
+        <label class="sm:col-span-2">
+          <span class="field-label">{{ t('operations.emergency_desc_label') }}</span>
+          <textarea v-model="emergencyDescription" rows="2" :placeholder="t('operations.emergency_desc_placeholder')" class="field resize-none" />
+        </label>
+      </div>
+      <div v-else-if="currentBuilderTool === 'add_hospital'" class="border-b border-slate-800 px-3 py-3">
+        <label class="block max-w-xs">
+          <span class="field-label">{{ t('operations.hospital_name_label') }}</span>
+          <input v-model="hospitalName" type="text" :placeholder="t('operations.hospital_name_placeholder')" class="field" />
+        </label>
+      </div>
+      <div v-else-if="currentBuilderTool === 'add_gas_station'" class="border-b border-slate-800 px-3 py-3">
+        <label class="block max-w-xs">
+          <span class="field-label">{{ t('operations.gas_name_label') }}</span>
+          <input v-model="gasStationName" type="text" :placeholder="t('operations.gas_name_placeholder')" class="field" />
+        </label>
+      </div>
+      <div v-else-if="currentBuilderTool === 'add_place' && placeEntityId" class="border-b border-slate-800 px-3 py-3">
+        <label class="block max-w-xs">
+          <span class="field-label">{{ t('operations.custom_place_name') }}</span>
+          <input
+            v-model="customPlaceName"
+            type="text"
+            :placeholder="state?.entityTypes?.find((x) => x.id === placeEntityId)?.name ?? t('operations.place_name_placeholder')"
+            class="field"
+          />
+        </label>
+      </div>
+
+      <!-- Mapa + panel lateral -->
+      <div class="flex min-h-0 flex-1 flex-col lg:flex-row" :class="mapFullscreen ? 'overflow-hidden' : ''">
+        <div class="relative min-h-0 min-w-0 flex-1">
+          <AmbulanceMap
+            :map-tool="mapTool"
+            :fullscreen="mapFullscreen"
+            :class="mapFullscreen ? 'h-full min-h-0 flex-1' : 'h-[min(640px,70vh)]'"
+            @map-click="onMapClick"
+            @delete-object="onDeleteObject"
+          />
+          <!-- Resultados del filtro del asistente -->
+          <div
+            v-if="filteredMatches.length || (Object.keys(uiFilters || {}).length && filterTotal)"
+            class="pointer-events-none absolute bottom-4 left-1/2 z-[400] w-[min(560px,calc(100%-2rem))] -translate-x-1/2"
+          >
+            <div class="pointer-events-auto rounded border border-slate-700 bg-slate-950 shadow-lg">
+              <div class="flex items-center justify-between gap-3 border-b border-slate-800 px-3 py-2">
+                <span class="text-xs text-slate-200">{{ t('operations.matches', { n: filteredMatches.length, total: filterTotal }) }}</span>
+                <button class="text-xs text-slate-400 hover:text-slate-100" @click="store.clearUiFilters()">{{ t('operations.clear_filter') }}</button>
               </div>
-              <details class="mb-2 rounded-lg border border-slate-800/60 bg-slate-950/40 text-[11px]">
-                <summary class="cursor-pointer px-2 py-1.5 text-slate-400 hover:text-slate-200">
-                  Unidades extra (tipos personalizados)
-                </summary>
-                <div class="max-h-36 overflow-y-auto border-t border-slate-800/60 p-2 space-y-1.5">
-                  <div
-                    v-for="et in vehicleEntityTypes.filter(v => v.id !== 'ambulance')"
-                    :key="et.id"
-                    class="flex items-center justify-between gap-2 text-slate-300"
-                  >
-                    <span class="truncate">{{ iconForVehicleType(et.id, et.name) }} {{ et.name }}</span>
-                    <input
-                      v-model.number="scenarioForm.extraByType[et.id]"
-                      type="number" min="0" max="15"
-                      class="w-14 rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-right text-xs text-slate-200 focus:border-purple-500 focus:outline-none"
-                      placeholder="0"
-                    />
-                  </div>
-                  <p v-if="!vehicleEntityTypes.filter(v => v.id !== 'ambulance').length" class="text-center text-[10px] text-slate-600 py-1">
-                    Sin tipos personalizados
-                  </p>
-                </div>
-              </details>
-              <label class="mb-2 flex items-center gap-2 text-[11px] text-slate-400">
-                <input v-model="scenarioForm.clearExisting" type="checkbox"
-                  class="h-3.5 w-3.5 rounded border-slate-600 bg-slate-800 text-purple-500 focus:ring-purple-500/30" />
-                Resetear escenario antes de generar
-              </label>
-              <button
-                class="w-full rounded-lg bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-950 transition hover:bg-slate-300 disabled:opacity-50"
-                :disabled="generatingScenario"
-                @click="generateFullScenario"
-              >
-                {{ generatingScenario ? t('operations.generating_scenario') : t('operations.generate_scenario') }}
-              </button>
+              <div class="flex max-h-24 flex-wrap gap-1.5 overflow-y-auto px-3 py-2">
+                <button
+                  v-for="a in filteredMatches.slice(0, 30)"
+                  :key="a.id"
+                  type="button"
+                  class="flex items-center gap-1.5 rounded border px-2 py-0.5 text-xs"
+                  :class="selectedAmbulanceId === a.id ? 'border-slate-400 text-slate-100' : 'border-slate-700 text-slate-300 hover:border-slate-500'"
+                  @click="focusMatch(a.id)"
+                >
+                  <span class="font-mono">{{ a.displayLabel || a.id.slice(0, 6) }}</span>
+                  <span v-if="energyOf(a, state?.entityTypes).value != null" class="font-mono text-[11px] text-slate-500">
+                    {{ Math.round(energyOf(a, state?.entityTypes).value!) }}%
+                  </span>
+                </button>
+                <span v-if="filteredMatches.length > 30" class="self-center text-[11px] text-slate-500">+{{ filteredMatches.length - 30 }}</span>
+                <span v-if="!filteredMatches.length" class="text-xs text-slate-500">{{ t('operations.no_matches') }}</span>
+              </div>
             </div>
           </div>
         </div>
+
+        <!-- Panel lateral: unidad seleccionada -->
+        <aside
+          class="flex w-full shrink-0 flex-col overflow-y-auto border-t border-slate-800 lg:w-80 lg:border-l lg:border-t-0"
+          :class="mapFullscreen ? 'max-h-[40vh] lg:max-h-none' : 'lg:h-[min(640px,70vh)]'"
+        >
+          <div v-if="fleetCost.total > 0" class="flex items-baseline justify-between border-b border-slate-800 px-4 py-3">
+            <div>
+              <p class="text-[11px] text-slate-500">{{ t('operations.operating_cost_fleet') }}</p>
+              <p class="text-[11px] text-slate-500">{{ t('operations.active_units', { n: fleetCost.activeUnits }) }}</p>
+            </div>
+            <span class="font-mono text-lg text-slate-100">{{ fleetCost.total.toFixed(2) }} €</span>
+          </div>
+
+          <template v-if="state?.ambulances?.length || (state?.companions?.length ?? 0) > 0">
+            <div v-if="state?.ambulances?.length" class="border-b border-slate-800 px-4 py-3">
+              <label class="field-label" for="unit-select">{{ t('operations.ops_summary') }}</label>
+              <select id="unit-select" :value="selectedAmbulanceId ?? ''" class="field" @change="onTelemetryAmbulanceChange">
+                <option value="">{{ t('operations.no_amb_focus') }}</option>
+                <option v-for="(a, idx) in state.ambulances" :key="a.id" :value="a.id">
+                  {{ shortId(a.id, idx) }} · {{ t(`status.${unitStatus(a).key}`) }}
+                </option>
+              </select>
+            </div>
+
+            <div v-if="selectedAmbulance" class="flex flex-col">
+              <!-- Cabecera de la unidad -->
+              <div class="flex items-center justify-between gap-2 border-b border-slate-800 px-4 py-3">
+                <span class="font-mono text-sm text-slate-100">{{ shortId(selectedAmbulance.id, ambIndex(selectedAmbulance.id)) }}</span>
+                <div class="flex items-center gap-1.5">
+                  <span
+                    v-if="selectedAmbulance.patientSeverity"
+                    :class="['rounded-sm px-1.5 py-px text-[11px]', `severity-${selectedAmbulance.patientSeverity}`]"
+                  >{{ severityLabel[selectedAmbulance.patientSeverity] ?? selectedAmbulance.patientSeverity }}</span>
+                  <StatusChip :unit="selectedAmbulance" />
+                </div>
+              </div>
+
+              <!-- Misión -->
+              <dl class="space-y-2 border-b border-slate-800 px-4 py-3 text-xs">
+                <div>
+                  <dt class="text-[11px] text-slate-500">{{ t('operations.destination') }}</dt>
+                  <dd class="text-slate-200">{{ destinationLabel }}</dd>
+                </div>
+                <div v-if="selectedAmbulance.latitude != null && selectedAmbulance.longitude != null">
+                  <dt class="text-[11px] text-slate-500">{{ t('operations.location') }}</dt>
+                  <dd class="font-mono text-slate-300">{{ selectedAmbulance.latitude.toFixed(5) }}, {{ selectedAmbulance.longitude.toFixed(5) }}</dd>
+                </div>
+                <div v-if="companionsForEmergency(selectedAmbulance.assignedEmergencyId).length">
+                  <dt class="text-[11px] text-slate-500">{{ t('operations.support_same_incident') }}</dt>
+                  <dd>
+                    <ul class="text-slate-300">
+                      <li v-for="c in companionsForEmergency(selectedAmbulance.assignedEmergencyId)" :key="c.id">
+                        <span class="font-mono">{{ c.displayLabel ?? c.kind }}</span> · {{ c.typeName ?? c.kind }}
+                      </li>
+                    </ul>
+                  </dd>
+                </div>
+              </dl>
+
+              <!-- Paciente -->
+              <div class="border-b border-slate-800 px-4 py-3">
+                <p class="field-label">{{ t('operations.vitals') }}</p>
+                <p v-if="!selectedAmbulance.hasPatient || selectedAmbulance.telemetry?.medical == null" class="text-xs text-slate-500">
+                  {{ t('operations.no_patient') }}
+                </p>
+                <div v-else class="grid grid-cols-2 gap-px overflow-hidden rounded border border-slate-800 bg-slate-800">
+                  <div class="bg-slate-900 px-2.5 py-2">
+                    <p class="text-[11px] text-slate-500">{{ t('operations.pulse') }}</p>
+                    <p class="font-mono text-sm text-slate-100">{{ selectedAmbulance.telemetry?.medical?.heartRateBpm ?? '—' }} <span class="text-[11px] text-slate-500">{{ t('operations.bpm') }}</span></p>
+                  </div>
+                  <div class="bg-slate-900 px-2.5 py-2">
+                    <p class="text-[11px] text-slate-500">SpO₂</p>
+                    <p class="font-mono text-sm" :class="(selectedAmbulance.telemetry?.medical?.spo2Pct ?? 100) < 90 ? 'text-red-300' : 'text-slate-100'">
+                      {{ selectedAmbulance.telemetry?.medical?.spo2Pct ?? '—' }} <span class="text-[11px] text-slate-500">%</span>
+                    </p>
+                  </div>
+                  <template v-if="selectedAmbulance.telemetry?.medical?.gcsScore != null">
+                    <div class="bg-slate-900 px-2.5 py-2">
+                      <p class="text-[11px] text-slate-500">{{ t('operations.glasgow') }}</p>
+                      <p class="font-mono text-sm text-slate-100">{{ selectedAmbulance.telemetry.medical.gcsScore }}</p>
+                    </div>
+                    <div class="bg-slate-900 px-2.5 py-2">
+                      <p class="text-[11px] text-slate-500">ECG</p>
+                      <p class="text-sm text-slate-100">{{ selectedAmbulance.telemetry.medical.ecgRhythm ?? '—' }}</p>
+                    </div>
+                  </template>
+                </div>
+              </div>
+
+              <!-- Vehículo -->
+              <dl class="grid grid-cols-2 gap-x-3 gap-y-2 px-4 py-3 text-xs">
+                <div>
+                  <dt class="text-[11px] text-slate-500">{{ t(energyOf(selectedAmbulance, state?.entityTypes).labelKey) }}</dt>
+                  <dd class="font-mono" :class="(energyOf(selectedAmbulance, state?.entityTypes).value ?? 100) < 25 ? 'text-amber-300' : 'text-slate-100'">
+                    {{ energyOf(selectedAmbulance, state?.entityTypes).value?.toFixed(0) ?? '—' }} %
+                  </dd>
+                </div>
+                <div>
+                  <dt class="text-[11px] text-slate-500">{{ t('operations.speed') }}</dt>
+                  <dd class="font-mono text-slate-100">{{ selectedAmbulance.telemetry?.positioning?.speedKmh != null ? Math.round(selectedAmbulance.telemetry.positioning.speedKmh) : '—' }} <span class="text-slate-500">km/h</span></dd>
+                </div>
+                <div>
+                  <dt class="text-[11px] text-slate-500">{{ t('operations.speed_limit') }}</dt>
+                  <dd class="font-mono text-slate-100">{{ selectedAmbulance.roadSpeedLimitKmh ?? selectedAmbulance.telemetry?.positioning?.roadSpeedLimitKmh ?? '—' }} <span class="text-slate-500">km/h</span></dd>
+                </div>
+                <div>
+                  <dt class="text-[11px] text-slate-500">{{ t('operations.odometer') }}</dt>
+                  <dd class="font-mono text-slate-100">{{ selectedAmbulance.telemetry?.mechanical?.odometerKm?.toFixed(1) ?? selectedAmbulance.odometerKm?.toFixed(1) ?? '—' }} <span class="text-slate-500">km</span></dd>
+                </div>
+                <template v-if="operatingCostOf(selectedAmbulance, state?.entityTypes).available">
+                  <div>
+                    <dt class="text-[11px] text-slate-500">{{ t('operations.operating_cost') }}</dt>
+                    <dd class="font-mono text-slate-100">{{ operatingCostOf(selectedAmbulance, state?.entityTypes).total.toFixed(2) }} €</dd>
+                  </div>
+                  <div>
+                    <dt class="text-[11px] text-slate-500">{{ t('operations.active_time') }}</dt>
+                    <dd class="font-mono text-slate-100">{{ operatingCostOf(selectedAmbulance, state?.entityTypes).activeMinutes.toFixed(1) }} <span class="text-slate-500">min</span></dd>
+                  </div>
+                </template>
+              </dl>
+            </div>
+            <p v-else-if="state?.ambulances?.length" class="px-4 py-3 text-xs text-slate-500">{{ t('operations.pick_unit_hint') }}</p>
+
+            <!-- Unidades de apoyo -->
+            <div v-if="state?.companions?.length" class="border-t border-slate-800 px-4 py-3">
+              <label class="field-label" for="companion-select">{{ t('operations.support_unit') }}</label>
+              <select id="companion-select" :value="selectedCompanionId ?? ''" class="field" @change="onTelemetryCompanionChange">
+                <option value="">{{ t('operations.no_companion_focus') }}</option>
+                <option v-for="c in state.companions" :key="c.id" :value="c.id">
+                  {{ c.displayLabel ?? c.kind }} · {{ c.typeName ?? c.kind }}
+                </option>
+              </select>
+              <dl v-if="selectedCompanion" class="mt-2 space-y-1 text-xs">
+                <div class="flex justify-between"><dt class="text-slate-500">{{ t('operations.speed') }}</dt><dd class="font-mono text-slate-200">{{ selectedCompanion.speedKmh }} km/h</dd></div>
+                <div v-if="state.emergencies.find((e) => e.id === selectedCompanion?.assignedEmergencyId)" class="flex justify-between gap-2">
+                  <dt class="text-slate-500">{{ t('operations.destination') }}</dt>
+                  <dd class="truncate text-slate-200">{{ state.emergencies.find((e) => e.id === selectedCompanion?.assignedEmergencyId)?.title }}</dd>
+                </div>
+              </dl>
+            </div>
+          </template>
+          <p v-else class="px-4 py-6 text-sm text-slate-500">{{ t('operations.empty_sidebar') }}</p>
+        </aside>
       </div>
     </div>
+
+    <!-- Cierra los menús al hacer clic fuera -->
+    <div v-if="openMenu" class="fixed inset-0 z-[440]" aria-hidden="true" @click="openMenu = null" />
   </div>
 </template>
+
+<style scoped>
+.tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  height: 1.75rem;
+  padding: 0 0.625rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  color: var(--text-2);
+}
+.tool:hover { background: var(--surface-2); color: var(--text); }
+.tool-active { border-color: var(--n-400); color: var(--text); background: var(--surface-2); }
+.tool-danger { border-color: color-mix(in oklab, var(--crit) 55%, transparent); color: var(--crit-300); }
+.menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  z-index: 450;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+}
+.field-label {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-size: 11px;
+  color: var(--text-3);
+}
+.field {
+  width: 100%;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  padding: 0.375rem 0.5rem;
+  font-size: 13px;
+  color: var(--text);
+}
+.field:focus { outline: none; border-color: var(--n-400); }
+.btn-primary {
+  border-radius: var(--radius-sm);
+  background: var(--n-100);
+  color: var(--n-950);
+  padding: 0.4rem 0.75rem;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.btn-primary:hover { background: var(--n-300); }
+.btn-primary:disabled { opacity: 0.5; }
+</style>

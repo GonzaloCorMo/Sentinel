@@ -13,7 +13,7 @@ import { addBasemap, type Basemap } from "@/lib/basemap";
 import { useRegionStore } from "@/stores/region";
 import { useSimulationStore } from "@/stores/simulation";
 
-const { t: i18nT } = useI18n();
+const { t: i18nT, te: i18nTe } = useI18n();
 import type { Ambulance, ExternalEvent, WeatherReading, Emergency, EntityType, Jam, MapTool, Poi, Companion } from "@/types/simulation";
 
 type ExternalEventMarker = ExternalEvent;
@@ -253,7 +253,7 @@ function popupHtml(label: string, amb: Ambulance) {
     <p style="color:var(--text-3);margin:0">Estado: <b>${esc(fsm)}</b></p>
     <p style="color:var(--text-3);margin:0">GPS: ${lat.toFixed(5)}, ${lon.toFixed(5)}</p>
     <p style="color:var(--text-3);margin:0">${i18nT("operations.speed")}: ${tel?.positioning?.speedKmh ?? "—"} km/h</p>
-    <p style="color:var(--text-3);margin:2px 0 0">${info.icon} ${energyLabel}: ${v.toFixed(0)}%</p>
+    <p style="color:var(--text-3);margin:2px 0 0">${energyLabel}: ${v.toFixed(0)} %</p>
     ${energyBar}
     ${costRow}
     <p style="color:var(--text-3);margin:4px 0 0">${amb.hasPatient && tel?.medical ? `BPM ${tel.medical.heartRateBpm} · SpO₂ ${tel.medical.spo2Pct}%` : noPatient}</p>
@@ -575,9 +575,7 @@ function syncLayers() {
       const builtIn =
         p.kind === "hospital" ? "hospital" : p.kind === "gas_station" ? "gas_station" : "custom";
       const shortName = p.name.length > 8 ? `${p.name.slice(0, 7)}…` : p.name;
-      const emoji = p.kind === "gas_station" ? "⛽" : p.kind === "hospital" ? "🏥" : "📍";
-      const sourceTag = p.source === "aruba_api" ? " · Aruba API" : "";
-      const tipText = `${emoji} ${esc(p.name)} (${esc(et?.name ?? p.kind)})${sourceTag}`;
+      const tipText = `${esc(p.name)} · ${esc(et?.name ?? p.kind)}`;
       const sig = `${p.latitude}|${p.longitude}|${p.kind}|${shortName}|${et?.iconSvg ?? ""}|${et?.color ?? ""}|${tipText}`;
       const cached = poiMarkerCache.get(p.id);
       if (cached && cached.sig === sig) continue;
@@ -619,9 +617,10 @@ function syncLayers() {
       const isAlert = precip > 5 || wind > 25 || vis < 5;
       const color = isAlert ? palette.crit : palette.muted;
       const radius = isAlert ? 8 : 5;
+      const name = esc(st.name ?? i18nT("map.weather_station"));
       const tip = r
-        ? `${isAlert ? "⚠️ " : "📡 "}${esc(st.name ?? "Weather")} — ${r.temperature_c}°C, precip ${precip}mm, wind ${wind}km/h, vis ${vis}km`
-        : `📡 ${esc(st.name ?? "Weather")} (no reading)`;
+        ? `${isAlert ? `${i18nT("map.weather_alert")} · ` : ""}${name} · ${r.temperature_c} °C · ${i18nT("map.rain")} ${precip} mm · ${i18nT("map.wind")} ${wind} km/h · ${i18nT("map.visibility")} ${vis} km`
+        : `${name} · ${i18nT("map.no_reading")}`;
       L.circleMarker([st.latitude, st.longitude], {
         radius,
         color,
@@ -642,11 +641,10 @@ function syncLayers() {
         emergencyStatus: e.status,
         isPulseSource: isPulse,
       });
-      const typeLabel = (e as Emergency & { emergencyType?: string }).emergencyType;
-      const typeTag = typeLabel && typeLabel !== "medical" ? ` [${typeLabel}]` : "";
-      const sourceTag = isPulse ? " 📡" : "";
+      const statusLabel = i18nT(`map.emergency_status.${e.status}`);
+      const sourceLabel = isPulse ? ` · ${i18nT("map.external_source")}` : "";
       const em = L.marker([e.latitude, e.longitude], { icon, zIndexOffset: 900 })
-        .bindTooltip(`${sourceTag}🚨 ${esc(e.title)}${esc(typeTag)} (${esc(e.status)})`, { permanent: false })
+        .bindTooltip(`${esc(e.title)} · ${esc(statusLabel)}${sourceLabel}`, { permanent: false })
         .addTo(emergencyLayer);
       em.on("click", () => {
         if (isDeleteMode()) emit("deleteObject", "emergency", e.id);
@@ -668,7 +666,7 @@ function syncLayers() {
         .bindTooltip("Atasco / bloqueo", { permanent: false })
         .addTo(jamLayer);
       jp.on("click", () => {
-        if (isDeleteMode() && j.source !== "aruba_api") emit("deleteObject", "jam", j.id);
+        if (isDeleteMode()) emit("deleteObject", "jam", j.id);
       });
     }
   }
@@ -693,7 +691,7 @@ function syncLayers() {
         const m = L.marker([c.latitude, c.longitude], { icon, zIndexOffset: 800 })
           .bindPopup(popup)
           .bindTooltip(
-            `${c.kind === "helicopter" ? "🚁" : c.kind === "police_patrol" ? "🛡️" : "🔷"} ${esc(companionLabel(c))} · ${esc(c.typeName ?? c.kind)} (${esc(c.status)})`,
+            `${esc(companionLabel(c))} · ${esc(c.typeName ?? c.kind)}`,
             { permanent: false },
           );
         m.on("click", () => {
@@ -738,7 +736,7 @@ function syncLayers() {
         fillColor: color,
         fillOpacity: 0.18,
       }).addTo(externalEventsLayer);
-      const tip = `${eventTypeIcon(ev.type)} ${esc(ev.title ?? ev.type)} · ${esc(ev.severity)}`;
+      const tip = `${esc(eventTypeLabel(ev.type))} · ${esc(ev.title ?? "")} · ${esc(eventSeverityLabel(ev.severity))}`;
       circle.bindTooltip(tip, { permanent: false });
       circle.bindPopup(externalEventPopup(ev));
     }
@@ -755,32 +753,26 @@ function severityColor(severity: string | undefined): string {
   }
 }
 
-function eventTypeIcon(type: string | undefined): string {
-  switch ((type ?? "").toLowerCase()) {
-    case "storm": return "⛈️";
-    case "fire": return "🔥";
-    case "flood": return "🌊";
-    case "accident": return "💥";
-    case "lane_closure": return "🚧";
-    case "power_outage": return "⚡";
-    case "medical_emergency": return "🚑";
-    case "hazmat_spill": return "☣️";
-    case "construction": return "🏗️";
-    case "public_event": return "🎪";
-    default: return "📍";
-  }
+function eventTypeLabel(type: string | undefined): string {
+  const key = `events.type.${type ?? ""}`;
+  return i18nTe(key) ? i18nT(key) : String(type ?? "");
+}
+
+function eventSeverityLabel(severity: string | undefined): string {
+  const key = `events.severity.${severity ?? ""}`;
+  return i18nTe(key) ? i18nT(key) : String(severity ?? "");
 }
 
 function externalEventPopup(ev: ExternalEventMarker): string {
   return `
     <div style="min-width:220px;max-width:300px">
-      <div style="font-weight:600">${eventTypeIcon(ev.type)} ${esc(ev.title)}</div>
+      <div style="font-weight:600">${esc(ev.title)}</div>
       <div style="font-size:11px;color:var(--text-4);margin-bottom:4px">
-        ${esc(ev.type)} · severidad ${esc(ev.severity)}
+        ${esc(eventTypeLabel(ev.type))} · ${esc(i18nT("map.severity"))} ${esc(eventSeverityLabel(ev.severity))}
       </div>
       <div style="font-size:12px">${esc(ev.description)}</div>
       <div style="font-size:11px;color:var(--text-4);margin-top:6px">
-        ${esc(ev.started_at)}${ev.radius_m ? ` · radio ${Number(ev.radius_m).toFixed(0)} m` : ""}
+        ${esc(new Date(ev.started_at).toLocaleTimeString())}${ev.radius_m ? ` · ${esc(i18nT("map.radius"))} ${Number(ev.radius_m).toFixed(0)} m` : ""}
       </div>
     </div>
   `;
@@ -814,7 +806,7 @@ onMounted(() => {
     activeRegion,
     (r) => {
       if (!map || !r) return;
-      // flyTo entre regiones lejanas (p. ej. Aruba → Santiago) deja la capa de
+      // flyTo entre regiones lejanas (p. ej. Santiago → Bogotá) deja la capa de
       // teselas con el origen de píxeles corrupto: saltos largos sin animación.
       const far = map.getCenter().distanceTo(r.center) > 50_000;
       if (far) map.setView(r.center, r.zoom, { animate: false });

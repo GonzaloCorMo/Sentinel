@@ -171,15 +171,15 @@ async function runCommand(text: string) {
 
     // Mapa de etiquetas humanas por comando
     const cmdMeta: Record<string, { icon: string; label: string }> = {
-      filter_units:   { icon: "🔎", label: "Filtro aplicado" },
-      reset_filters:  { icon: "🧹", label: "Filtros limpiados" },
-      set_ai_mode:    { icon: "🤖", label: "Modo IA" },
-      focus_unit:     { icon: "🎯", label: "Enfocando unidad" },
-      spawn_units:    { icon: "🚑", label: "Desplegando unidades" },
-      create_emergency: { icon: "🚨", label: "Nueva emergencia" },
-      explain:        { icon: "💬", label: "" },
+      filter_units:   { icon: "", label: "Filtro aplicado" },
+      reset_filters:  { icon: "", label: "Filtros limpiados" },
+      set_ai_mode:    { icon: "", label: "Modo IA" },
+      focus_unit:     { icon: "", label: "Enfocando unidad" },
+      spawn_units:    { icon: "", label: "Desplegando unidades" },
+      create_emergency: { icon: "", label: "Nueva emergencia" },
+      explain:        { icon: "", label: "" },
     };
-    const meta = cmdMeta[cmd] || { icon: "⌘", label: cmd };
+    const meta = cmdMeta[cmd] || { icon: "", label: cmd };
 
     // Ejecuta efecto cliente según comando
     let effectDetail = "";
@@ -236,7 +236,7 @@ async function runCommand(text: string) {
 
     // Mensaje compacto legible — sin JSON pelado
     assistantMsg.content = [
-      `${meta.icon} **${meta.label || cmd}**`,
+      `**${meta.label || cmd}**`,
       summary,
       effectDetail,
     ].filter(Boolean).join("\n\n");
@@ -269,37 +269,27 @@ onMounted(loadHistory);
     <button
       v-if="!expanded"
       class="group relative flex h-10 w-10 items-center justify-center rounded border border-slate-700 bg-slate-100 text-slate-950 transition-colors hover:bg-slate-300"
-      :title="t('chat_panel.title')"
+      :title="t('chat_panel.open')"
+      :aria-label="t('chat_panel.open')"
       @click="expanded = true"
     >
       <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
         <path stroke-linecap="round" stroke-linejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
       </svg>
-      <span
-        v-if="hasMessages"
-        class="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 text-[8px] font-bold text-slate-950 ring-2 ring-slate-950"
-      >
-        AI
-      </span>
+      <span v-if="hasMessages" class="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-slate-100 ring-2 ring-slate-950" aria-hidden="true" />
     </button>
 
     <!-- Expanded panel -->
     <div
       v-if="expanded"
-      class="flex w-[380px] flex-col overflow-hidden rounded-2xl border border-slate-700/80 bg-slate-900 shadow-2xl shadow-black/40"
+      class="flex w-[380px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded border border-slate-700 bg-slate-900 shadow-xl"
       style="max-height: min(520px, 70vh)"
     >
       <!-- Header -->
-      <div class="flex items-center justify-between border-b border-slate-800 bg-slate-950 px-4 py-2.5">
-        <div class="flex items-center gap-2.5">
-          <div class="flex h-7 w-7 items-center justify-center rounded bg-slate-100 text-xs font-bold text-slate-950">AI</div>
-          <div>
-            <span class="text-sm font-semibold text-slate-100">Sentinel AI</span>
-            <span class="ml-2 inline-flex items-center gap-1 text-[10px] text-green-400">
-              <span class="h-1.5 w-1.5 rounded-full bg-green-400" />
-              Online
-            </span>
-          </div>
+      <div class="flex items-center justify-between border-b border-slate-800 px-4 py-2">
+        <div>
+          <p class="text-sm font-medium text-slate-100">{{ t('chat_panel.title') }}</p>
+          <p class="text-[11px] text-slate-500">{{ t('chat_panel.local_model') }}</p>
         </div>
         <div class="flex items-center gap-1">
           <button
@@ -325,14 +315,9 @@ onMounted(loadHistory);
 
       <!-- Messages body -->
       <div ref="chatBody" class="flex-1 overflow-y-auto px-3 py-3 space-y-3" style="min-height: 200px">
-        <div v-if="!messages.length" class="flex h-full flex-col items-center justify-center gap-2 text-center">
-          <div class="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-600/10 text-emerald-400">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z" />
-            </svg>
-          </div>
-          <p class="text-xs text-slate-500">{{ t('chat_panel.empty') }}</p>
-        </div>
+        <p v-if="!messages.length" class="px-2 py-6 text-center text-xs leading-relaxed text-slate-500">
+          {{ commandMode ? t('chat_panel.empty_command') : t('chat_panel.empty') }}
+        </p>
 
         <div
           v-for="(msg, i) in messages"
@@ -341,12 +326,8 @@ onMounted(loadHistory);
           :class="msg.role === 'user' ? 'justify-end' : 'justify-start'"
         >
           <div
-            class="max-w-[85%] rounded-xl px-3 py-2 text-sm leading-relaxed"
-            :class="
-              msg.role === 'user'
-                ? 'bg-slate-100 text-slate-950 rounded-br-sm'
-                : 'bg-slate-800 text-slate-200 rounded-bl-sm border border-slate-700/50'
-            "
+            class="max-w-[85%] rounded px-3 py-2 text-sm leading-relaxed"
+            :class="msg.role === 'user' ? 'bg-slate-100 text-slate-950' : 'border border-slate-800 bg-slate-950 text-slate-200'"
           >
             <div v-if="msg.role === 'assistant'" class="chat-md prose prose-sm prose-invert max-w-none" v-html="renderMd(msg.content || '...')" />
             <span v-else>{{ msg.content }}</span>
@@ -354,42 +335,46 @@ onMounted(loadHistory);
         </div>
 
         <div v-if="streaming" class="flex items-center gap-1.5 text-xs text-slate-500">
-          <span class="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
+          <span class="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-slate-400" />
           {{ t('chat_panel.thinking') }}
         </div>
       </div>
 
       <!-- Input -->
-      <div class="border-t border-slate-800 bg-slate-950/60 px-3 py-2.5">
-        <div class="mb-1.5 flex items-center gap-2">
+      <div class="border-t border-slate-800 px-3 py-2.5">
+        <div class="mb-2 flex rounded border border-slate-800 p-0.5 text-[11px]" role="tablist">
           <button
             type="button"
-            class="rounded-md border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider transition"
-            :class="commandMode
-              ? 'border-purple-500/60 bg-purple-600/20 text-purple-200'
-              : 'border-slate-700/70 text-slate-500 hover:text-slate-300'"
-            :title="commandMode ? 'Modo comando: interpreta y ejecuta' : 'Modo chat: pregunta libre al asistente'"
-            @click="commandMode = !commandMode"
-          >⌘ {{ commandMode ? "comando" : "chat" }}</button>
-          <span v-if="commandMode" class="text-[10px] text-slate-500 italic truncate">
-            ej: "ambulancias con fuel &lt; 30", "modo autónomo", "limpia filtros"
-          </span>
+            role="tab"
+            :aria-selected="!commandMode"
+            class="flex-1 rounded-sm px-2 py-1"
+            :class="!commandMode ? 'bg-slate-800 text-slate-100' : 'text-slate-500 hover:text-slate-200'"
+            :title="t('chat_panel.mode_ask_hint')"
+            @click="commandMode = false"
+          >{{ t('chat_panel.mode_ask') }}</button>
+          <button
+            type="button"
+            role="tab"
+            :aria-selected="commandMode"
+            class="flex-1 rounded-sm px-2 py-1"
+            :class="commandMode ? 'bg-slate-800 text-slate-100' : 'text-slate-500 hover:text-slate-200'"
+            :title="t('chat_panel.mode_command_hint')"
+            @click="commandMode = true"
+          >{{ t('chat_panel.mode_command') }}</button>
         </div>
         <div class="flex items-end gap-2">
           <textarea
             v-model="input"
             rows="1"
-            class="flex-1 resize-none rounded-xl border px-3 py-2 text-sm text-slate-200 placeholder-slate-500 outline-none transition focus:ring-1"
-            :class="commandMode
-              ? 'border-purple-500/40 bg-purple-950/30 focus:border-purple-500/60 focus:ring-purple-500/30'
-              : 'border-slate-700 bg-slate-800/80 focus:border-emerald-500/50 focus:ring-emerald-500/30'"
+            class="flex-1 resize-none rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200 placeholder-slate-500 outline-none focus:border-slate-500"
             :placeholder="commandMode ? t('ai.command_placeholder') : t('chat_panel.placeholder')"
             :disabled="streaming"
             @keydown="handleKeydown"
           />
           <button
             :disabled="streaming || !input.trim()"
-            class="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-950 transition hover:bg-slate-300 disabled:opacity-30 disabled:hover:bg-slate-100"
+            class="flex h-9 w-9 items-center justify-center rounded bg-slate-100 text-slate-950 hover:bg-slate-300 disabled:opacity-30"
+            :aria-label="t('chat_panel.send')"
             @click="sendMessage"
           >
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">

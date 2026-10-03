@@ -27,7 +27,7 @@ interface RegionsResponse {
 
 export const useRegionStore = defineStore("region", () => {
   const regions = ref<RegionInfo[]>([]);
-  const activeId = ref<string>("aruba");
+  const activeId = ref<string>("santiago");
   const loading = ref(false);
   const switching = ref(false);
 

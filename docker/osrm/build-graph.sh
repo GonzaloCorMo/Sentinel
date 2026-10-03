@@ -1,23 +1,22 @@
 #!/usr/bin/env bash
 # Compila grafo OSRM (extract → partition → customize) para una región concreta.
 # Uso desde raíz del repo:
-#   bash docker/osrm/build-graph.sh [aruba|santiago|bogota|mexico]   (default: aruba)
+#   bash docker/osrm/build-graph.sh [santiago|bogota|mexico]   (default: santiago)
 # Variables: PBF_URL=... (override), FORCE=1 (regenerar borrando grafo previo).
 # Requisitos: docker, curl. Tiempo: 1-10 min según extracto.
 
 set -euo pipefail
 
-REGION="${1:-aruba}"
+REGION="${1:-santiago}"
 
 case "$REGION" in
-  aruba)  DEFAULT_PBF="https://download.geofabrik.de/central-america/aruba-latest.osm.pbf" ;;
   # Santiago: no hay extracto de ciudad; se recorta Galicia al área metropolitana.
   santiago) DEFAULT_PBF="https://download.geofabrik.de/europe/spain/galicia-latest.osm.pbf"
             CLIP_BBOX="${BBOX:--8.70,42.80,-8.40,42.97}" ;;
   bogota) DEFAULT_PBF="https://download.bbbike.org/osm/bbbike/Bogota/Bogota.osm.pbf" ;;
   mexico) DEFAULT_PBF="https://download.bbbike.org/osm/bbbike/MexicoCity/MexicoCity.osm.pbf" ;;
   *)
-    echo "ERROR: región desconocida: $REGION (use aruba|santiago|bogota|mexico)"
+    echo "ERROR: región desconocida: $REGION (use santiago|bogota|mexico)"
     exit 1
     ;;
 esac

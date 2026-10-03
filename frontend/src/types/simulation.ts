@@ -206,18 +206,6 @@ export interface OsrmRoutingStatus {
   lastError?: string | null;
 }
 
-export interface ArubaInventoryStatus {
-  enabled?: boolean;
-  ok?: boolean;
-  status: string;
-  lastSyncAt?: string | null;
-  fetchedPois?: number;
-  fetchedRoads?: number;
-  updatedPois?: number;
-  updatedRoads?: number;
-  itemsUpdated?: number;
-}
-
 export type ExternalEventType =
   | "storm"
   | "fire"
@@ -299,7 +287,6 @@ export interface SimulationStatePayload {
   };
   lastHttpIngest?: unknown;
   osrmRouting?: OsrmRoutingStatus;
-  arubaInventory?: ArubaInventoryStatus;
   externalEvents?: ExternalEvent[];
   weatherStations?: Record<string, WeatherReading>;
   eventSourceStatus?: EventSourceStatus;

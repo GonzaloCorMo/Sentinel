@@ -192,67 +192,51 @@ function urgencyBorder(u: string | undefined): string {
 
 <template>
   <div v-if="hasContent || expanded" class="fixed bottom-4 right-4 z-[500] flex flex-col items-end gap-2">
-    <!-- Collapsed button -->
+    <!-- Botón colapsado -->
     <button
       v-if="!expanded"
       type="button"
-      class="group flex items-center gap-2.5 rounded-2xl border border-slate-700/60 bg-slate-900 px-4 py-2.5 text-sm font-medium shadow-2xl shadow-black/30 transition-colors hover:border-emerald-600/40 hover:bg-slate-800"
+      class="flex items-center gap-2 rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm shadow-lg hover:bg-slate-800"
       @click="expanded = true"
     >
-      <div class="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-600/15 text-emerald-400">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-        </svg>
-      </div>
-      <span class="text-slate-300">{{ t('ai.observer') }}</span>
+      <span class="text-slate-200">{{ t('ai.observer') }}</span>
       <span
         v-if="proposals.length"
-        class="flex h-5 min-w-[1.25rem] items-center justify-center rounded-sm px-1.5 text-[10px] font-bold"
-        :class="proposals.some(p => anomalyUrgency[p.anomalyType] === 'critical')
-          ? 'bg-rose-500 text-white animate-pulse'
-          : 'bg-amber-500 text-slate-950'"
-      >
-        {{ proposals.length }}
-      </span>
-      <span
-        v-if="aiMode === 'autonomous'"
-        class="rounded-md bg-cyan-600/30 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-cyan-300"
-      >
-        {{ t('ai.auto') }}
-      </span>
+        class="rounded-sm px-1.5 font-mono text-[11px]"
+        :class="proposals.some(p => anomalyUrgency[p.anomalyType] === 'critical') ? 'bg-red-500/15 text-red-300' : 'bg-slate-800 text-slate-300'"
+      >{{ proposals.length }}</span>
+      <span class="text-[11px] text-slate-500">· {{ aiMode === 'autonomous' ? t('ai.autonomous') : t('ai.hitl') }}</span>
     </button>
 
     <!-- Expanded panel -->
     <div
       v-else
-      class="w-[24rem] max-h-[75vh] overflow-hidden rounded-2xl border border-slate-700/60 bg-slate-900 shadow-2xl shadow-black/30 transition-colors"
+      class="w-[24rem] max-w-[calc(100vw-2rem)] max-h-[75vh] overflow-hidden rounded border border-slate-700 bg-slate-900 shadow-xl"
     >
       <!-- Header -->
-      <div class="flex items-center justify-between border-b border-slate-800/80 bg-slate-950/60 px-4 py-3">
-        <div class="flex items-center gap-2.5">
-          <div class="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-600/15 text-emerald-400">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-            </svg>
-          </div>
-          <h3 class="text-sm font-semibold text-slate-200">{{ t('ai.observer') }}</h3>
-        </div>
+      <div class="flex items-center justify-between gap-2 border-b border-slate-800 px-4 py-2.5">
+        <h3 class="text-sm font-medium text-slate-100">{{ t('ai.observer') }}</h3>
         <div class="flex items-center gap-2">
-          <!-- Mode toggle -->
-          <button
-            type="button"
-            class="flex items-center gap-1.5 rounded-lg px-2 py-1 text-[10px] font-semibold uppercase transition"
-            :class="aiMode === 'autonomous'
-              ? 'bg-cyan-600/20 text-cyan-300 hover:bg-cyan-600/30'
-              : 'bg-amber-600/20 text-amber-300 hover:bg-amber-600/30'"
-            :title="aiMode === 'autonomous' ? t('ai.mode_auto_tooltip') : t('ai.mode_hitl_tooltip')"
-            @click="toggleMode"
-          >
-            <span class="relative flex h-4 w-8 items-center rounded-full transition" :class="aiMode === 'autonomous' ? 'bg-cyan-600' : 'bg-slate-600'">
-              <span class="absolute h-3 w-3 rounded-full bg-white shadow transition-transform" :class="aiMode === 'autonomous' ? 'translate-x-4' : 'translate-x-0.5'" />
-            </span>
-            {{ aiMode === 'autonomous' ? t('ai.auto') : t('ai.hitl_short') }}
-          </button>
+          <div class="flex rounded border border-slate-800 p-0.5 text-[11px]" role="radiogroup" :aria-label="t('ai.mode')">
+            <button
+              type="button"
+              role="radio"
+              :aria-checked="aiMode !== 'autonomous'"
+              class="rounded-sm px-2 py-0.5"
+              :class="aiMode !== 'autonomous' ? 'bg-slate-800 text-slate-100' : 'text-slate-500 hover:text-slate-200'"
+              :title="t('ai.mode_hitl_tooltip')"
+              @click="aiMode === 'autonomous' && toggleMode()"
+            >{{ t('ai.hitl') }}</button>
+            <button
+              type="button"
+              role="radio"
+              :aria-checked="aiMode === 'autonomous'"
+              class="rounded-sm px-2 py-0.5"
+              :class="aiMode === 'autonomous' ? 'bg-slate-800 text-slate-100' : 'text-slate-500 hover:text-slate-200'"
+              :title="t('ai.mode_auto_tooltip')"
+              @click="aiMode !== 'autonomous' && toggleMode()"
+            >{{ t('ai.autonomous') }}</button>
+          </div>
           <button
             type="button"
             class="rounded-lg p-1.5 text-slate-500 transition hover:bg-slate-800 hover:text-slate-300"
@@ -415,7 +399,7 @@ function urgencyBorder(u: string | undefined): string {
                 v-if="p.clientStaleReason"
                 class="mb-2 rounded-lg border border-slate-500/40 bg-slate-800/50 px-2.5 py-1.5 text-[11px] text-slate-300"
               >
-                ⚠️ <span class="font-semibold">{{ t('ai.stale_label') }}</span> {{ p.clientStaleReason }}
+                <span class="font-semibold">{{ t('ai.stale_label') }}</span> {{ p.clientStaleReason }}
               </div>
 
               <!-- Action buttons -->

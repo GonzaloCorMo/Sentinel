@@ -239,7 +239,7 @@ function cancelDelete() {
 <template>
   <div class="space-y-6">
     <div>
-      <h2 class="text-lg font-semibold tracking-tight text-slate-100">{{ t('scenario.config_title') }}</h2>
+      <h1 class="text-lg font-semibold tracking-tight text-slate-100">{{ t('scenario.config_title') }}</h1>
       <p class="mt-1 text-xs text-slate-500">{{ t('scenario.config_subtitle') }}</p>
     </div>
 
@@ -284,7 +284,7 @@ function cancelDelete() {
               </p>
               <p v-if="v.powertrain || v.crewMin != null" class="mt-0.5 flex flex-wrap items-center gap-1.5 text-[10px]">
                 <span v-if="v.powertrain" class="inline-flex items-center gap-1 rounded-md bg-slate-800/80 px-1.5 py-0.5">
-                  <span>{{ v.powertrain === 'electric' ? '⚡' : v.powertrain === 'unique' ? '🛸' : '⛽' }}</span>
+                  
                   <span class="text-slate-300">{{ t('scenario.powertrain_' + v.powertrain) }}</span>
                 </span>
                 <span v-if="v.crewMin != null" class="inline-flex items-center gap-1 rounded-md bg-slate-800/80 px-1.5 py-0.5 text-slate-300">
@@ -337,12 +337,16 @@ function cancelDelete() {
         </div>
       </div>
 
-      <!-- Add vehicle form -->
-      <div class="rounded-xl border border-slate-700/50 bg-slate-900/70 p-5 space-y-4">
-        <h3 class="text-[11px] font-medium uppercase tracking-wider text-slate-400">Nuevo vehiculo / unidad</h3>
+      <!-- Nuevo tipo de unidad -->
+      <details class="panel group">
+        <summary class="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm text-slate-100">
+          {{ t('scenario.new_vehicle_title') }}
+          <span class="text-xs text-slate-500 group-open:hidden">{{ t('common.add') }}</span>
+        </summary>
+        <div class="space-y-4 border-t border-slate-800 p-4">
         <div class="grid gap-4 sm:grid-cols-2">
           <div>
-            <label class="block text-[11px] font-medium text-slate-400 mb-1">Nombre *</label>
+            <label class="block text-[11px] font-medium text-slate-400 mb-1">{{ t('scenario.name_label') }}</label>
             <input
               v-model="newVehicle.name"
               type="text"
@@ -375,7 +379,7 @@ function cancelDelete() {
             <label class="block text-[11px] font-medium text-slate-400 mb-1">Icono SVG (opcional)</label>
             <div class="flex items-center gap-2">
               <label class="cursor-pointer rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs text-slate-400 transition hover:bg-slate-700 hover:text-slate-200">
-                <span>{{ newVehicle.iconSvg ? '✓ SVG cargado' : 'Subir .svg' }}</span>
+                <span>{{ newVehicle.iconSvg ? t('scenario.svg_loaded') : t('scenario.svg_upload') }}</span>
                 <input type="file" accept=".svg,image/svg+xml" class="hidden" @change="readSvgFile($event, 'vehicle')" />
               </label>
               <button
@@ -414,9 +418,9 @@ function cancelDelete() {
               v-model="newVehicle.powertrain"
               class="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 focus:border-emerald-500 focus:outline-none"
             >
-              <option value="combustion">⛽ {{ t('scenario.powertrain_combustion') }}</option>
-              <option value="electric">⚡ {{ t('scenario.powertrain_electric') }}</option>
-              <option value="unique">🛸 {{ t('scenario.powertrain_unique') }}</option>
+              <option value="combustion">{{ t('scenario.powertrain_combustion') }}</option>
+              <option value="electric">{{ t('scenario.powertrain_electric') }}</option>
+              <option value="unique">{{ t('scenario.powertrain_unique') }}</option>
             </select>
           </div>
           <div class="grid grid-cols-2 gap-2">
@@ -458,9 +462,10 @@ function cancelDelete() {
           class="rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-slate-300"
           @click="addVehicle"
         >
-          Añadir vehiculo
+          {{ t('scenario.add_vehicle_btn') }}
         </button>
-      </div>
+        </div>
+      </details>
     </div>
 
     <!-- Place Types Tab -->
@@ -521,12 +526,16 @@ function cancelDelete() {
         </div>
       </div>
 
-      <!-- Add place form -->
-      <div class="rounded-xl border border-slate-700/50 bg-slate-900/70 p-5 space-y-4">
-        <h3 class="text-[11px] font-medium uppercase tracking-wider text-slate-400">{{ t('scenario.new_place_title') }}</h3>
+      <!-- Nuevo tipo de lugar -->
+      <details class="panel group">
+        <summary class="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm text-slate-100">
+          {{ t('scenario.new_place_title') }}
+          <span class="text-xs text-slate-500 group-open:hidden">{{ t('common.add') }}</span>
+        </summary>
+        <div class="space-y-4 border-t border-slate-800 p-4">
         <div class="grid gap-4 sm:grid-cols-2">
           <div>
-            <label class="block text-[11px] font-medium text-slate-400 mb-1">Nombre *</label>
+            <label class="block text-[11px] font-medium text-slate-400 mb-1">{{ t('scenario.name_label') }}</label>
             <input
               v-model="newPlace.name"
               type="text"
@@ -549,7 +558,7 @@ function cancelDelete() {
             <label class="block text-[11px] font-medium text-slate-400 mb-1">Icono SVG (opcional)</label>
             <div class="flex items-center gap-2">
               <label class="cursor-pointer rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs text-slate-400 transition hover:bg-slate-700 hover:text-slate-200">
-                <span>{{ newPlace.iconSvg ? '✓ SVG cargado' : 'Subir .svg' }}</span>
+                <span>{{ newPlace.iconSvg ? t('scenario.svg_loaded') : t('scenario.svg_upload') }}</span>
                 <input type="file" accept=".svg,image/svg+xml" class="hidden" @change="readSvgFile($event, 'place')" />
               </label>
               <button
@@ -587,9 +596,10 @@ function cancelDelete() {
           class="rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-slate-300"
           @click="addPlace"
         >
-          Añadir lugar
+          {{ t('scenario.add_place_btn') }}
         </button>
-      </div>
+        </div>
+      </details>
     </div>
 
     <!-- Editor modal (vehículos / lugares) -->
@@ -608,7 +618,7 @@ function cancelDelete() {
         <div class="p-5 space-y-4">
           <div class="grid gap-4 sm:grid-cols-2">
             <div :class="editor.kind === 'place' ? 'sm:col-span-2' : ''">
-              <label class="block text-[11px] font-medium text-slate-400 mb-1">Nombre *</label>
+              <label class="block text-[11px] font-medium text-slate-400 mb-1">{{ t('scenario.name_label') }}</label>
               <input
                 v-model="editor.name"
                 type="text"
@@ -640,7 +650,7 @@ function cancelDelete() {
               <label class="block text-[11px] font-medium text-slate-400 mb-1">Icono SVG</label>
               <div class="flex items-center gap-2">
                 <label class="cursor-pointer rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs text-slate-400 transition hover:bg-slate-700 hover:text-slate-200">
-                  <span>{{ editor.iconSvg ? "✓ SVG cargado" : "Subir .svg" }}</span>
+                  <span>{{ editor.iconSvg ? t('scenario.svg_loaded') : t('scenario.svg_upload') }}</span>
                   <input type="file" accept=".svg,image/svg+xml" class="hidden" @change="readEditorSvg" />
                 </label>
                 <button
@@ -679,9 +689,9 @@ function cancelDelete() {
                   v-model="editor.powertrain"
                   class="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 focus:border-emerald-500 focus:outline-none"
                 >
-                  <option value="combustion">⛽ {{ t('scenario.powertrain_combustion') }}</option>
-                  <option value="electric">⚡ {{ t('scenario.powertrain_electric') }}</option>
-                  <option value="unique">🛸 {{ t('scenario.powertrain_unique') }}</option>
+                  <option value="combustion">{{ t('scenario.powertrain_combustion') }}</option>
+                  <option value="electric">{{ t('scenario.powertrain_electric') }}</option>
+                  <option value="unique">{{ t('scenario.powertrain_unique') }}</option>
                 </select>
               </div>
               <div class="grid grid-cols-2 gap-2">

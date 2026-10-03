@@ -6,6 +6,7 @@ import type { Ambulance } from "@/types/simulation";
 import { useSimulationStore } from "@/stores/simulation";
 import { displayId } from "@/lib/vehicleId";
 import { energyOf, powertrainOf } from "@/lib/energyDisplay";
+import StatusChip from "@/components/ui/StatusChip.vue";
 
 const props = defineProps<{ amb: Ambulance; selected?: boolean; index?: number }>();
 
@@ -22,13 +23,16 @@ const AUX_BATTERY_MAX_V = 14.8;
 const AUX_BATTERY_WARN_V = 12.2;
 const AUX_BATTERY_CRIT_V = 11.8;
 
-const severityLabel: Record<string, string> = {
-  stable: "Estable",
-  moderate: "Moderado",
-  critical: "Crítico",
-};
+const severityLabel = computed<Record<string, string>>(() => ({
+  stable: t("operations.severity_stable"),
+  moderate: t("operations.severity_moderate"),
+  critical: t("operations.severity_critical"),
+}));
 
 const label = computed(() => displayId(props.amb, props.index, state.value?.entityTypes));
+const typeName = computed(
+  () => state.value?.entityTypes?.find((e) => e.id === (props.amb.entityTypeId || "ambulance"))?.name ?? "",
+);
 
 /** Barras de telemetría: energía primaria, batería auxiliar (solo combustión) y velocidad.
  *  Barras CSS en lugar de gauges en canvas: N tarjetas × 3 instancias de ECharts
@@ -84,20 +88,17 @@ const lowSpo2 = computed(() => (props.amb.telemetry?.medical?.spo2Pct ?? 100) < 
       <div class="flex shrink-0 items-center gap-1.5">
         <span
           v-if="amb.patientSeverity"
-          :class="['rounded-sm px-1.5 py-px font-mono text-[10px] uppercase', `severity-${amb.patientSeverity}`]"
+          :class="['rounded-sm px-1.5 py-px text-[11px]', `severity-${amb.patientSeverity}`]"
         >
           {{ severityLabel[amb.patientSeverity] ?? amb.patientSeverity }}
         </span>
-        <span :class="['fsm-chip', `fsm-${amb.fsmState ?? 'idle'}`]">
-          <span class="fsm-dot" />
-          {{ amb.fsmState ?? "idle" }}
-        </span>
+        <StatusChip :unit="amb" />
       </div>
     </div>
 
-    <!-- Fase + GPS -->
+    <!-- Ubicación + GPS -->
     <div class="flex items-center justify-between gap-2 px-3 pt-2 text-[10px] text-slate-500">
-      <span class="truncate">Fase · <span class="text-slate-300">{{ amb.missionPhase ?? "—" }}</span></span>
+      <span class="truncate">{{ typeName }}</span>
       <span class="font-mono">{{ (amb.latitude ?? 0).toFixed(4) }}, {{ (amb.longitude ?? 0).toFixed(4) }}</span>
     </div>
 
@@ -121,20 +122,20 @@ const lowSpo2 = computed(() => (props.amb.telemetry?.medical?.spo2Pct ?? 100) < 
       </div>
     </dl>
 
-    <!-- Médico / GPS -->
+    <!-- Paciente / rumbo -->
     <div class="grid grid-cols-2 border-t border-slate-800 text-xs">
       <div class="border-r border-slate-800 px-3 py-2">
-        <p class="text-[10px] uppercase tracking-wider text-slate-500">Médico</p>
+        <p class="text-[10px] uppercase tracking-wider text-slate-500">{{ t('vehicle.patient') }}</p>
         <p v-if="amb.hasPatient && amb.telemetry?.medical" class="mt-0.5 font-mono text-slate-200">
           {{ amb.telemetry.medical.heartRateBpm }}<span class="text-[10px] text-slate-500"> bpm</span>
           ·
           <span :class="lowSpo2 ? 'text-red-300' : ''">{{ amb.telemetry.medical.spo2Pct }}%</span>
           <span class="text-[10px] text-slate-500"> SpO₂</span>
         </p>
-        <p v-else class="mt-0.5 text-[11px] text-slate-500">Sin paciente</p>
+        <p v-else class="mt-0.5 text-[11px] text-slate-500">{{ t('operations.no_patient') }}</p>
       </div>
       <div class="px-3 py-2">
-        <p class="text-[10px] uppercase tracking-wider text-slate-500">Rumbo · accel.</p>
+        <p class="text-[10px] uppercase tracking-wider text-slate-500">{{ t('fleet.heading') }}</p>
         <p class="mt-0.5 font-mono text-slate-200">
           {{ amb.telemetry?.positioning?.headingDeg ?? "—" }}°
           · {{ amb.telemetry?.positioning?.accelerationMs2 ?? "—" }}<span class="text-[10px] text-slate-500"> m/s²</span>

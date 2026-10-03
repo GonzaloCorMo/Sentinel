@@ -47,7 +47,8 @@ const router = createRouter({
       redirect: "/map",
       children: [
         { path: "map", name: "map", component: () => import("@/views/MapOperationsView.vue") },
-        { path: "island", name: "island-monitor", component: () => import("@/views/IslandMonitorView.vue") },
+        { path: "overview", name: "overview", component: () => import("@/views/RegionOverviewView.vue") },
+        { path: "island", redirect: "/overview" },
         { path: "fleet", name: "fleet", component: () => import("@/views/FleetTelemetryView.vue") },
         { path: "comms", name: "comms", component: () => import("@/views/CommsDashboardView.vue") },
         { path: "config", name: "config", component: () => import("@/views/ScenarioConfigView.vue") },

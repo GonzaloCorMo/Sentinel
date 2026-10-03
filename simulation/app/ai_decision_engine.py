@@ -28,6 +28,7 @@ from __future__ import annotations
 import asyncio
 import json as _json
 import logging
+import os
 import time
 from typing import Any
 from uuid import uuid4
@@ -70,6 +71,10 @@ class AIDecisionEngine:
         self._resolved_log: list[dict[str, Any]] = []
         self._cooldowns: dict[str, float] = {}
         self._stop = asyncio.Event()
+        # Las llamadas de fondo al LLM se serializan: con un modelo local, decenas
+        # de propuestas simultáneas ocuparían todos los huecos y el chat o los
+        # informes del operador quedarían esperando en cola.
+        self._llm_slot = asyncio.Semaphore(max(1, int(os.environ.get("AI_OBSERVER_LLM_CONCURRENCY", "1") or "1")))
         self.mode: str = "hitl"
 
     def stop(self) -> None:
@@ -541,7 +546,8 @@ class AIDecisionEngine:
         try:
             from . import llm_provider
             if llm_provider.is_llm_available():
-                llm_explanation = await self._generate_reasoning(anomaly_type, detail, matched_content)
+                async with self._llm_slot:
+                    llm_explanation = await self._generate_reasoning(anomaly_type, detail, matched_content)
                 llm_reasoning = llm_explanation.get("text") if isinstance(llm_explanation, dict) else None
         except Exception:
             _logger.exception("LLM reasoning generation failed")
@@ -633,9 +639,10 @@ class AIDecisionEngine:
         try:
             from . import llm_provider
             if llm_provider.is_llm_available() and (em_desc or em_type != "medical" or (eta_seconds and eta_seconds > ETA_EXCEEDED_S)):
-                return await self._llm_decide_dispatch(
-                    em_type, em_title, em_desc, existing_companion_kinds, eta_seconds, vehicle_types,
-                )
+                async with self._llm_slot:
+                    return await self._llm_decide_dispatch(
+                        em_type, em_title, em_desc, existing_companion_kinds, eta_seconds, vehicle_types,
+                    )
         except Exception:
             _logger.exception("LLM smart dispatch evaluation failed, using fallback rules")
 
