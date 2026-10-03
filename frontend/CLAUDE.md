@@ -37,6 +37,12 @@
 - Crea mapas con `await createMap(el, { center: [lat, lon], zoom })`: espera a que el estilo cargue y aplica `ResizeObserver`. El contenedor necesita alto y ancho explícitos (`h-full w-full`, no `absolute inset-0`: MapLibre fuerza `position: relative`).
 - Marcadores: `maplibregl.Marker({ element })`, actualizados en su sitio (no se recrean en cada tick). Líneas y áreas: fuentes GeoJSON con `setGeoJson()`. Tooltips: `createHoverTooltip()`.
 - El mapa base es claro también en tema oscuro, así que marcadores y popups usan colores fijos (`.sentinel-map`, `MAP_COLORS`), no tokens del tema.
+- **Marcadores = nodos tácticos** (`lib/tacticalMarkers.ts`): SVG con contorno de 1,5 px y relleno oscuro al 90 %.
+  - Forma por categoría: cuadrado = infraestructura, rectángulo = vehículo, rombo = emergencia.
+  - Color solo en el borde: cian = operativa, ámbar = aviso, rojo = emergencia, gris = infraestructura o apagada.
+  - Etiquetas `[AMB-001]` en monoespaciada, pegadas a la forma; el nombre completo va en el tooltip.
+  - Sin emoji, imágenes, pines en gota, sombras ni escalados; la única animación es el ping de las emergencias críticas sin asignar.
+  - La agrupación es en píxeles y depende del zoom (`renderNodes`). No vuelvas a una rejilla fija.
 - Si `vite.config.ts` cambia, mantén `optimizeDeps.exclude: ["maplibre-gl"]` y `worker.format: "es"`: el worker de MapLibre 6 se registra con `setWorkerUrl` a partir de `?worker&url`.
 
 ## Gráficos

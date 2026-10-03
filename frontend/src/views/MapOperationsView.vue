@@ -236,10 +236,6 @@ function energyLabelOfAmb(a: { entityTypeId?: string | null }): string {
   return powertrainOfAmb(a) === "electric" ? t("operations.battery") : t("operations.fuel");
 }
 
-function energyIconOfAmb(a: { entityTypeId?: string | null }): string {
-  return powertrainOfAmb(a) === "electric" ? "🔋" : "⛽";
-}
-
 const vehicleEntityTypes = computed(() => entityTypesList.value.filter((e) => e.kind === "vehicle"));
 
 const placeEntityTypes = computed(() => entityTypesList.value.filter((e) => e.kind === "place"));

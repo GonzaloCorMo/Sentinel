@@ -612,8 +612,10 @@
       "assigned": "Unidade en camiño",
       "resolved": "Atendida"
     },
-    "cluster_count": "{n} unidades no mesmo punto",
-    "cluster_hint": "Achega o mapa para velas por separado"
+    "cluster_hint": "Fai clic para achegar",
+    "cluster_units": "unidade | unidades",
+    "cluster_emergencies": "emerxencia | emerxencias",
+    "cluster_places": "lugar | lugares"
   },
   "operations": {
     "title": "Mapa",

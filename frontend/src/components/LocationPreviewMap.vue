@@ -1,6 +1,7 @@
 <script setup lang="ts">
 /** Mini-mapa de solo lectura con un pin: confirma al ciudadano dónde le hemos localizado. */
 import { onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { tacticalNodeHtml } from "@/lib/tacticalMarkers";
 import { createMap, maplibregl, toLngLat } from "@/lib/mapEngine";
 
 const props = defineProps<{ lat: number; lon: number }>();
@@ -12,8 +13,8 @@ let marker: maplibregl.Marker | null = null;
 onMounted(async () => {
   if (!el.value) return;
   map = await createMap(el.value, { center: [props.lat, props.lon], zoom: 16, interactive: false, controls: false });
-  const pin = document.createElement("span");
-  pin.className = "location-pin";
+  const pin = document.createElement("div");
+  pin.innerHTML = tacticalNodeHtml({ shape: "diamond", tone: "crit" });
   marker = new maplibregl.Marker({ element: pin, anchor: "center" }).setLngLat(toLngLat([props.lat, props.lon])).addTo(map);
 });
 
@@ -44,14 +45,5 @@ onBeforeUnmount(() => {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   overflow: hidden;
-}
-.location-preview :deep(.location-pin) {
-  display: block;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: #d93025;
-  border: 3px solid #fff;
-  box-shadow: 0 1px 4px rgb(0 0 0 / 0.4);
 }
 </style>

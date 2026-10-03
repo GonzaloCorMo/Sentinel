@@ -212,152 +212,118 @@
   background: #f2f1ed;
 }
 .maplibregl-map { font-family: var(--font-sans); }
-.maplibregl-ctrl-group {
-  border-radius: var(--radius-lg) !important;
-  box-shadow: 0 1px 4px rgb(0 0 0 / 0.25) !important;
+.maplibregl-map .maplibregl-ctrl-group {
+  border-radius: 0 !important;
+  border: 1px solid #2a2f36;
+  box-shadow: none !important;
+  background: rgb(16 19 23 / 0.9) !important;
 }
-.maplibregl-ctrl-attrib { font-size: 10px; }
+.maplibregl-map .maplibregl-ctrl-group button + button { border-top: 1px solid #2a2f36 !important; }
+.maplibregl-map .maplibregl-ctrl-group button .maplibregl-ctrl-icon { filter: invert(1) brightness(0.9); }
+.maplibregl-map .maplibregl-ctrl-group button:not(:disabled):hover { background: rgb(255 255 255 / 0.08) !important; }
+.maplibregl-map .maplibregl-ctrl-attrib { font-size: 10px; }
 
+/* Nodos tácticos (lib/tacticalMarkers.ts): geometría SVG con contorno
+ * nítido, relleno oscuro al 90 %, sin sombras ni escalados. */
 .map-marker-host { cursor: pointer; }
-.map-marker-icon {
+.tn {
   position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  color: #fff;
-  background: var(--map-ink);
-  border: 2px solid #fff;
-  box-shadow: 0 1px 4px rgb(0 0 0 / 0.35);
-  transition: transform 0.12s ease;
+  display: block;
+  --tn-fill: rgb(16 19 23 / 0.9);
 }
-.map-marker-host:hover .map-marker-icon { transform: scale(1.08); }
-.map-marker-icon svg { display: block; }
-.map-marker-ambulance.has-patient { background: var(--map-warn); }
-.map-marker-ambulance.is-selected,
-.map-marker-generic-vehicle.is-selected {
-  width: 36px;
-  height: 36px;
-  box-shadow: 0 0 0 3px #1a73e8, 0 2px 8px rgb(0 0 0 / 0.35);
-}
-.map-marker-hospital {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  background: #c5221f;
-}
-.map-marker-gas {
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
-  background: #5f6368;
-}
-.map-marker-emergency {
-  width: 28px;
-  height: 28px;
-  border-radius: 4px;
-  transform: rotate(45deg);
-  background: var(--map-crit);
-  animation: marker-pulse-crit 1.6s ease-in-out infinite;
-}
-.map-marker-host:hover .map-marker-emergency { transform: rotate(45deg) scale(1.08); }
-.map-marker-emergency svg { transform: rotate(-45deg); }
-.map-marker-emergency.assigned { background: var(--map-warn); animation: none; }
-.map-marker-emergency.is-pulse-source { outline: 2px dashed var(--map-crit); outline-offset: 3px; }
-.map-marker-helicopter,
-.map-marker-police,
-.map-marker-custom { background: #3c4043; }
-.map-marker-label {
+.tn-geo { position: absolute; inset: 0; overflow: visible; }
+.tn-shape { fill: var(--tn-fill); stroke: var(--tn); stroke-width: 1.5; }
+.tn-glyph { fill: none; stroke: var(--tn); stroke-width: 1; }
+.tn-pip { fill: var(--tn); }
+.tn-frame { fill: none; stroke: var(--tn); stroke-width: 1; opacity: 0.55; }
+.tn-brackets { position: absolute; overflow: visible; pointer-events: none; }
+.tn-brackets path { fill: none; stroke: #101317; stroke-width: 1.5; }
+.tn-brackets-matched path { stroke: #5ec4d6; stroke-dasharray: 2 1.5; }
+.map-marker-host:hover .tn-shape { stroke: #ffffff; }
+.map-marker-host:hover .tn-label { color: #ffffff; }
+
+/* Etiqueta adosada al borde derecho de la geometría, sin caja redondeada. */
+.tn-label {
   position: absolute;
-  top: calc(100% + 3px);
-  left: 50%;
-  transform: translateX(-50%);
-  white-space: nowrap;
+  left: calc(100% + 3px);
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 1px 4px;
+  border-left: 1px solid var(--tn);
+  background: rgb(16 19 23 / 0.9);
+  color: #d7dce2;
   font-family: var(--font-mono);
   font-size: 10px;
-  font-weight: 600;
-  color: var(--map-ink);
-  text-shadow: 0 0 2px #fff, 0 0 2px #fff, 0 0 3px #fff;
+  line-height: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
   pointer-events: none;
 }
-.map-marker-emergency .map-marker-label { transform: rotate(-45deg); }
-@keyframes marker-pulse-crit {
-  0%, 100% { box-shadow: 0 0 0 0 rgb(217 48 37 / 0.5), 0 1px 4px rgb(0 0 0 / 0.35); }
-  50% { box-shadow: 0 0 0 8px rgb(217 48 37 / 0), 0 1px 4px rgb(0 0 0 / 0.35); }
-}
-.map-marker-generic-vehicle {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  border: 2px solid #fff;
-  box-shadow: 0 1px 4px rgb(0 0 0 / 0.35);
-  color: #fff;
-}
-.map-marker-generic-vehicle.has-patient { box-shadow: 0 0 0 3px var(--map-warn), 0 1px 4px rgb(0 0 0 / 0.35); }
-.map-marker-emoji { font-size: 14px; line-height: 1; }
-.map-marker-cluster {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  border: 2px solid #fff;
-  box-shadow: 0 1px 5px rgb(0 0 0 / 0.35);
-}
-.map-marker-cluster-icon { font-size: 17px; line-height: 1; }
-.map-marker-cluster-count {
+.tn-labels-off .tn-label { display: none; }
+
+.tn-count {
   position: absolute;
-  top: -6px;
-  right: -6px;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 4px;
-  border-radius: 9px;
-  background: var(--map-ink);
-  color: #fff;
-  border: 2px solid #fff;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
   font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 600;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
 }
-.map-marker-matched .map-marker-icon,
-.map-marker-matched .map-marker-generic-vehicle { box-shadow: 0 0 0 3px #1a73e8, 0 1px 4px rgb(0 0 0 / 0.35); }
+
+/* Única animación: anillo vectorial que se expande y desaparece (ping). */
+.tn-ping {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
+  border: 1px solid var(--tn);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: tn-ping 1.6s linear infinite;
+}
+@keyframes tn-ping {
+  from { transform: scale(1); opacity: 0.9; }
+  to { transform: scale(2.8); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tn-ping { animation: none; transform: scale(1.6); opacity: 0.6; }
+}
 
 /* Popups y tooltips */
-.maplibregl-popup-content {
+.maplibregl-map .maplibregl-popup-content {
   padding: 8px 10px;
-  border-radius: var(--radius-lg);
-  background: var(--map-surface, #fff);
-  color: #202124;
-  border: 1px solid #dadce0;
-  box-shadow: 0 2px 10px rgb(0 0 0 / 0.18);
+  border-radius: 0;
+  background: rgb(16 19 23 / 0.96);
+  color: #e3e7ec;
+  border: 1px solid #2f353d;
+  box-shadow: none;
   font-size: 12px;
   line-height: 1.45;
 }
-.maplibregl-popup-anchor-bottom .maplibregl-popup-tip { border-top-color: #fff; }
-.maplibregl-popup-anchor-top .maplibregl-popup-tip { border-bottom-color: #fff; }
-.maplibregl-popup-anchor-left .maplibregl-popup-tip { border-right-color: #fff; }
-.maplibregl-popup-anchor-right .maplibregl-popup-tip { border-left-color: #fff; }
+.maplibregl-map .maplibregl-popup-close-button { color: #8a929c; font-size: 14px; }
+.maplibregl-map .maplibregl-popup-close-button:hover { color: #fff; background: transparent; }
+.maplibregl-map .maplibregl-popup-anchor-bottom .maplibregl-popup-tip { border-top-color: #2f353d; }
+.maplibregl-map .maplibregl-popup-anchor-top .maplibregl-popup-tip { border-bottom-color: #2f353d; }
+.maplibregl-map .maplibregl-popup-anchor-left .maplibregl-popup-tip { border-right-color: #2f353d; }
+.maplibregl-map .maplibregl-popup-anchor-right .maplibregl-popup-tip { border-left-color: #2f353d; }
 .map-tooltip { pointer-events: none; }
-.map-tooltip .maplibregl-popup-content { padding: 5px 8px; font-size: 11.5px; }
+.maplibregl-map .map-tooltip .maplibregl-popup-content { padding: 5px 8px; font-size: 11.5px; }
 .mp { min-width: 180px; font-variant-numeric: tabular-nums; }
-.mp-title { margin: 0 0 3px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
-.mp-row { margin: 0; color: #3c4043; }
-.mp-dim { color: #70757a; }
+.mp-title { margin: 0 0 3px; font-weight: 600; display: flex; align-items: center; gap: 6px; color: #fff; }
+.mp-id { font-family: var(--font-mono); font-size: 11px; font-weight: 500; color: #5ec4d6; }
+.mp-row { margin: 0; color: #c3c9d0; }
+.mp-dim { color: #8a929c; }
 .mp-num { font-family: var(--font-mono); }
 .mp-badge { padding: 0 5px; border-radius: 2px; font-size: 10px; font-weight: 500; }
-.mp-bar { height: 3px; margin: 3px 0 4px; background: #e8eaed; overflow: hidden; }
+.mp-bar { height: 2px; margin: 3px 0 4px; background: #2a2f36; overflow: hidden; }
 .mp-bar > div { height: 100%; }
 
 /* ── Toasts (vue-sonner) ──────────────────────────────────────────────── */

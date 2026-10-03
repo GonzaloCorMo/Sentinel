@@ -6,6 +6,8 @@ import { getSupabase } from "@/lib/supabase";
 import { cssVar, useTheme } from "@/composables/useTheme";
 import { createMap, maplibregl, setGeoJson, toLngLat, type LatLon } from "@/lib/mapEngine";
 import { DEFAULT_SPAWN_LAT, DEFAULT_SPAWN_LON } from "@/lib/mapDefaults";
+import { tacticalNodeHtml } from "@/lib/tacticalMarkers";
+import { prefixForType } from "@/lib/vehicleId";
 
 const { t, te } = useI18n();
 const { theme } = useTheme();
@@ -91,16 +93,9 @@ interface VehicleType {
 }
 
 // Fallback icon por id/kind cuando el tipo no tiene iconSvg.
+/** Código corto del tipo (AMB, POL, HELI…) que sustituye a los antiguos emoji. */
 function iconForType(id: string, name?: string): string {
-  const s = `${id} ${name || ""}`.toLowerCase();
-  if (s.includes("drone") || s.includes("dron"))   return "🛸";
-  if (s.includes("heli"))        return "🚁";
-  if (s.includes("civil"))       return "🛻";
-  if (s.includes("police") || s.includes("patrol") || s.includes("polic")) return "🚓";
-  if (s.includes("fire") || s.includes("bomb"))    return "🚒";
-  if (s.includes("moto"))        return "🏍️";
-  if (s.includes("boat") || s.includes("barco"))   return "🚤";
-  return "🚑";
+  return prefixForType(id, name);
 }
 
 // Catálogo de tipos: carga desde /api/fleet/types (incluye builtin, manual y IA).
@@ -194,7 +189,7 @@ async function loadVehicleTypes() {
       form.value.vehicleType = VEHICLE_TYPES.value[0]?.id || "ambulance";
     }
   } catch {
-    VEHICLE_TYPES.value = [{ id: "ambulance", name: "Ambulancia", icon: "🚑", color: DEFAULT_TYPE_COLOR }];
+    VEHICLE_TYPES.value = [{ id: "ambulance", name: "Ambulancia", icon: "AMB", color: DEFAULT_TYPE_COLOR }];
   }
 }
 
@@ -492,28 +487,31 @@ async function initMap(centerLat: number, centerLon: number) {
 }
 
 const vehicleIcon = computed(
-  () => VEHICLE_TYPES.value.find((t) => t.id === (myVehicle.value?.entityTypeId || form.value.vehicleType))?.icon || "🚑",
+  () => VEHICLE_TYPES.value.find((t) => t.id === (myVehicle.value?.entityTypeId || form.value.vehicleType))?.icon || "AMB",
 );
 
 // Marcador del vehículo con flecha de rumbo; pasa a ámbar con incidencia asignada.
 function vehicleMarkerEl(): HTMLDivElement {
   const el = document.createElement("div");
-  el.className = "vh-marker";
-  el.innerHTML = `<div class="vh-marker-pin"></div><div class="vh-marker-arrow"></div>`;
+  el.className = "vh-node";
+  el.innerHTML = `<span class="vh-heading"></span><div class="vh-node-shape"></div>`;
   return el;
 }
-function paintVehicleMarker(el: HTMLElement, icon: string, heading: number, assigned: boolean) {
-  el.classList.toggle("is-assigned", assigned);
-  const pin = el.querySelector(".vh-marker-pin");
-  if (pin && pin.textContent !== icon) pin.textContent = icon;
-  const arrow = el.querySelector<HTMLElement>(".vh-marker-arrow");
-  if (arrow) arrow.style.transform = `rotate(${heading}deg)`;
+function paintVehicleMarker(el: HTMLElement, label: string, heading: number, assigned: boolean) {
+  const shape = el.querySelector<HTMLElement>(".vh-node-shape");
+  const html = tacticalNodeHtml({ shape: "rect", tone: "unit", glyph: assigned ? "pip" : "none", label, selected: true });
+  if (shape && shape.dataset.html !== html) {
+    shape.innerHTML = html;
+    shape.dataset.html = html;
+  }
+  const line = el.querySelector<HTMLElement>(".vh-heading");
+  if (line) line.style.transform = `rotate(${heading}deg)`;
 }
 
 function emergencyMarkerEl(): HTMLDivElement {
   const el = document.createElement("div");
-  el.className = "vh-marker vh-marker-emergency";
-  el.innerHTML = `<div class="vh-marker-pin">!</div>`;
+  el.className = "map-marker-host";
+  el.innerHTML = tacticalNodeHtml({ shape: "diamond", tone: "crit", ping: true, label: "EMR" });
   return el;
 }
 
@@ -653,7 +651,7 @@ function updateMap(autoCenter = false) {
   if (!v) return;
   const vtype = VEHICLE_TYPES.value.find((t) => t.id === v.entityTypeId)
     || VEHICLE_TYPES.value[0]
-    || { id: "ambulance", name: "Ambulancia", icon: "🚑", color: DEFAULT_TYPE_COLOR };
+    || { id: "ambulance", name: "Ambulancia", icon: "AMB", color: DEFAULT_TYPE_COLOR };
   const vPos: [number, number] = [v.latitude, v.longitude];
 
   // Heading desde último coord → actual
@@ -668,7 +666,7 @@ function updateMap(autoCenter = false) {
   } else {
     myMarker.setLngLat(toLngLat(vPos));
   }
-  paintVehicleMarker(myMarker.getElement(), vtype.icon, lastHeading.value, !!assignedEmergency.value);
+  paintVehicleMarker(myMarker.getElement(), v.displayLabel || vtype.icon, lastHeading.value, !!assignedEmergency.value);
 
   // Emergencia
   const em = assignedEmergency.value;
@@ -820,7 +818,7 @@ watch(() => myVehicle.value, () => updateMap(), { deep: true });
         <div v-for="sv in savedVehicles" :key="sv.id" class="vh-saved-item">
           <div class="vh-saved-main" @click="activateSavedVehicle(sv)">
             <div class="vh-saved-icon vh-glyph">
-              {{ VEHICLE_TYPES.find(t => t.id === sv.entityTypeId)?.icon || "🚑" }}
+              {{ VEHICLE_TYPES.find(t => t.id === sv.entityTypeId)?.icon || "AMB" }}
             </div>
             <div class="vh-saved-info">
               <div class="vh-saved-label">{{ sv.displayLabel }}</div>
@@ -985,7 +983,6 @@ watch(() => myVehicle.value, () => updateMap(), { deep: true });
         <div class="vh-status-card" :class="{ assigned: !!assignedEmergency }">
           <div class="vh-status-row">
             <div class="vh-status-badge">
-              <span class="vh-glyph">{{ vehicleIcon }}</span>
               <span class="vh-num">{{ myVehicle?.displayLabel || (myVehicleId?.slice(0, 6)) }}</span>
             </div>
             <div class="vh-status-phase">
@@ -1057,8 +1054,8 @@ watch(() => myVehicle.value, () => updateMap(), { deep: true });
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
-/* Los iconos de tipo son emoji: se neutralizan a escala de grises. */
-.vh-glyph { filter: grayscale(1); }
+/* Código corto del tipo de vehículo (AMB, POL…) en monoespaciada. */
+.vh-glyph { font-family: var(--font-mono); font-size: 10px; font-weight: 500; letter-spacing: 0.02em; }
 
 /* Cabecera */
 .vh-header {
@@ -1144,7 +1141,6 @@ watch(() => myVehicle.value, () => updateMap(), { deep: true });
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   display: flex; align-items: center; justify-content: center;
-  font-size: 15px;
 }
 .vh-type-row-info { flex: 1; min-width: 0; }
 .vh-type-row-name { font-weight: 500; font-size: 13px; color: var(--text); }
@@ -1319,7 +1315,6 @@ textarea.vh-input { height: auto; padding: 8px 10px; resize: vertical; }
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
   display: flex; align-items: center; justify-content: center;
-  font-size: 16px;
   flex-shrink: 0;
 }
 .vh-saved-info { flex: 1; min-width: 0; }
@@ -1508,44 +1503,18 @@ textarea.vh-input { height: auto; padding: 8px 10px; resize: vertical; }
 </style>
 
 <style>
-/* Marcadores del mapa (elementos HTML de MapLibre) */
-.vh-marker { position: relative; }
-.vh-marker-pin {
-  width: 100%; height: 100%;
-  border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  background: var(--n-100);
-  color: var(--n-950);
-  font-size: 18px; font-weight: 700;
-  border: 2px solid var(--n-950);
-  box-shadow: 0 0 0 1px var(--n-500);
-  filter: grayscale(1);
-  position: relative; z-index: 2;
-}
-.vh-marker.is-assigned .vh-marker-pin { background: var(--warn); filter: none; }
-.vh-marker-arrow {
+/* Marcadores del mapa: nodos tácticos (lib/tacticalMarkers.ts) + rumbo. */
+.vh-node { position: relative; width: 22px; height: 12px; }
+.vh-node-shape { position: relative; z-index: 1; }
+.vh-heading {
   position: absolute;
-  top: -6px; left: 50%;
-  margin-left: -7px;
-  width: 0; height: 0;
-  border-left: 7px solid transparent;
-  border-right: 7px solid transparent;
-  border-bottom: 12px solid var(--n-100);
-  transform-origin: 50% calc(100% + 20px);
-  transition: transform 0.4s ease;
-  z-index: 1;
-}
-.vh-marker.is-assigned .vh-marker-arrow { border-bottom-color: var(--warn); }
-.vh-marker-emergency .vh-marker-pin {
-  background: var(--crit);
-  color: var(--n-950);
-  font-family: var(--font-mono);
-  border-radius: var(--radius-sm);
-  filter: none;
-  animation: vh-pulse 1s ease-in-out infinite;
-}
-@keyframes vh-pulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.12); }
+  left: 50%;
+  bottom: 50%;
+  width: 1.5px;
+  height: 22px;
+  margin-left: -0.75px;
+  background: #101317;
+  transform-origin: 50% 100%;
+  transition: transform 0.4s linear;
 }
 </style>

@@ -5,9 +5,9 @@ import { useI18n } from "vue-i18n";
 import { MAP_DEFAULT_CENTER, MAP_DEFAULT_ZOOM, DEFAULT_SPAWN_LAT, DEFAULT_SPAWN_LON } from "@/lib/mapDefaults";
 import { energyOf, operatingCostOf } from "@/lib/energyDisplay";
 import { remainingRouteCoords } from "@/lib/routePolyline";
-import { sanitizeSvg } from "@/lib/sanitize";
 import { unitStatus } from "@/lib/unitStatus";
-import { displayId } from "@/lib/vehicleId";
+import { displayId, prefixForType } from "@/lib/vehicleId";
+import { TONE_RANK, clusterNodeHtml, tacticalNodeHtml, type NodeGlyph, type NodeTone } from "@/lib/tacticalMarkers";
 import {
   circleRing,
   createHoverTooltip,
@@ -47,7 +47,7 @@ let tooltip: ReturnType<typeof createHoverTooltip> | null = null;
 
 /** El mapa base es claro en ambos temas: los trazos usan colores fijos legibles sobre él. */
 const MAP_COLORS = {
-  routeSelected: "#1a73e8",
+  routeSelected: "#0891b2",
   route: "#5f6368",
   warn: "#e37400",
   crit: "#d93025",
@@ -60,91 +60,54 @@ function esc(v: unknown): string {
   return String(v ?? "").replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 }
 
-// ── Iconos ───────────────────────────────────────────────────────────────
-const SVG_AMBULANCE = `<svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M3 13V7a2 2 0 012-2h8l4 4v4h1a2 2 0 012 2v1h-2a3 3 0 01-6 0H9a3 3 0 01-6 0H1v-1a2 2 0 012-2zm3 3.5A1.5 1.5 0 107.5 15 1.5 1.5 0 006 16.5zm9 0a1.5 1.5 0 101.5-1.5 1.5 1.5 0 00-1.5 1.5zM9 7v4h4V7H9zm-1 1H7v2h1V8zm5-1v2h1.59L13 7.41V7z"/></svg>`;
-const SVG_HOSPITAL = `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M18 3H6a2 2 0 00-2 2v16h16V5a2 2 0 00-2-2zm-5 12h-2v-2H9v-2h2V9h2v2h2v2h-2v2z"/></svg>`;
-const SVG_FUEL = `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M19.77 7.23l.01-.01-3.72-3.72L15 4.56l2.11 2.11c-.94.36-1.61 1.26-1.61 2.33a2.5 2.5 0 002.5 2.5c.36 0 .69-.08 1-.21v7.21a1 1 0 01-2 0V14a2 2 0 00-2-2h-1V5a2 2 0 00-2-2H6a2 2 0 00-2 2v16h10v-7.5h1.5v5a2.5 2.5 0 005 0V9c0-.69-.28-1.32-.73-1.77zM12 10H6V5h6v5z"/></svg>`;
-const SVG_ALERT = `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L1 21h22L12 2zm0 4l7.53 13H4.47L12 6zm-1 5v4h2v-4h-2zm0 6v2h2v-2h-2z"/></svg>`;
-const SVG_HELICOPTER = `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M3 4h18v2H3V4zm6 4h4v1h7v2h-7v1H9v-1H2v-2h7V8zm3 5a4 4 0 00-4 4h2a2 2 0 114 0h2a4 4 0 00-4-4zm0 2a2 2 0 00-2 2h4a2 2 0 00-2-2zm-5 4h10v2H7v-2z"/></svg>`;
-const SVG_POLICE = `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 3l6 2.67V11c0 4.24-2.94 8.23-6 9.5-3.06-1.27-6-5.26-6-9.5V6.67L12 4zm-1 5v2H9v2h2v2h2v-2h2v-2h-2V9h-2z"/></svg>`;
-const SVG_PLACE = `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a7 7 0 00-7 7c0 5.1 7 13 7 13s7-7.9 7-13a7 7 0 00-7-7zm0 9.5a2.5 2.5 0 110-5 2.5 2.5 0 010 5z"/></svg>`;
-
-function iconEmojiForType(typeId: string, typeName?: string): string {
-  const s = `${typeId} ${typeName || ""}`.toLowerCase();
-  if (s.includes("heli")) return "🚁";
-  if (s.includes("polic") || s.includes("patrol")) return "🚓";
-  if (s.includes("fire") || s.includes("bomb")) return "🚒";
-  if (s.includes("moto")) return "🏍️";
-  if (s.includes("drone") || s.includes("dron")) return "🛸";
-  if (s.includes("boat") || s.includes("barco")) return "🚤";
-  return "🚑";
+// ── Nodos tácticos ───────────────────────────────────────────────────────
+// Cada objeto del mapa se describe como un nodo; `renderNodes` decide en
+// función del zoom si se pinta solo o agrupado con los que tiene cerca.
+type NodeKind = "unit" | "emergency" | "place";
+interface NodeSpec {
+  group: string;
+  id: string;
+  pos: LatLon;
+  html: string;
+  tone: NodeTone;
+  kind: NodeKind;
+  /** Al agrupar, el nodo de mayor prioridad hace de semilla. */
+  priority: number;
+  ping: boolean;
+  clusterable: boolean;
+  opts: UpsertOpts;
 }
 
-function entityIconHtml(
-  type: string,
-  opts: { selected?: boolean; hasPatient?: boolean; emergencyStatus?: string; label?: string; customSvg?: string | null; customColor?: string | null; external?: boolean } = {},
-): string {
-  let cls = "map-marker-icon";
-  let svg = SVG_PLACE;
-  switch (type) {
-    case "ambulance":
-      cls += " map-marker-ambulance" + (opts.hasPatient ? " has-patient" : "") + (opts.selected ? " is-selected" : "");
-      svg = SVG_AMBULANCE;
-      break;
-    case "hospital":
-      cls += " map-marker-hospital";
-      svg = SVG_HOSPITAL;
-      break;
-    case "gas_station":
-      cls += " map-marker-gas";
-      svg = SVG_FUEL;
-      break;
-    case "emergency":
-      cls += " map-marker-emergency" + (opts.emergencyStatus === "assigned" ? " assigned" : "") + (opts.external ? " is-pulse-source" : "");
-      svg = SVG_ALERT;
-      break;
-    case "helicopter":
-      cls += " map-marker-helicopter";
-      svg = SVG_HELICOPTER;
-      break;
-    case "police_patrol":
-      cls += " map-marker-police";
-      svg = SVG_POLICE;
-      break;
-    default:
-      if (opts.customColor) cls += " map-marker-custom";
-  }
-  if (opts.customSvg) svg = sanitizeSvg(opts.customSvg);
-  const builtIn = ["ambulance", "hospital", "gas_station", "emergency", "helicopter", "police_patrol"].includes(type);
-  const style = opts.customColor && !builtIn ? ` style="background:${esc(opts.customColor)}"` : "";
-  const label = opts.label ? `<span class="map-marker-label">${esc(opts.label)}</span>` : "";
-  return `<div class="${cls}"${style}>${svg}${label}</div>`;
+/** Por debajo de este zoom se ocultan las etiquetas. */
+const LABEL_MIN_ZOOM = 13.5;
+/** A partir de este zoom ya no se agrupa (todo cabe sin solaparse). */
+const CLUSTER_MAX_ZOOM = 17;
+/** Distancia en pantalla por debajo de la cual dos nodos se agrupan. */
+const CLUSTER_RADIUS_PX = 30;
+
+let lastNodes: NodeSpec[] = [];
+
+function unitTone(amb: Ambulance): NodeTone {
+  if (amb.poweredOff) return "off";
+  if (unitStatus(amb).tone === "alert") return "warn";
+  const energy = energyOf(amb, state.value?.entityTypes).value;
+  if (energy != null && energy < 20) return "warn";
+  return "unit";
 }
 
-/** Icono SVG por familia de tipo (ambulancia, policía, bomberos…); null si no hay uno claro. */
-function svgForType(typeId: string, typeName?: string): string | null {
-  const s = `${typeId} ${typeName || ""}`.toLowerCase();
-  if (s.includes("heli")) return SVG_HELICOPTER;
-  if (s.includes("polic") || s.includes("patrol")) return SVG_POLICE;
-  if (s.includes("ambul") || s.includes("bomb") || s.includes("fire") || s.includes("civil")) return SVG_AMBULANCE;
-  return null;
+function unitGlyph(amb: Ambulance): NodeGlyph {
+  if (amb.hasPatient) return "cross";
+  return amb.missionPhase === "to_emergency" ? "pip" : "none";
 }
 
-function customVehicleHtml(typeId: string, typeName: string | undefined, color: string, opts: { selected?: boolean; label?: string; hasPatient?: boolean; customSvg?: string | null }): string {
-  const cls = ["map-marker-icon map-marker-generic-vehicle", opts.selected ? "is-selected" : "", opts.hasPatient ? "has-patient" : ""].filter(Boolean).join(" ");
-  const builtInSvg = svgForType(typeId, typeName);
-  const inner = opts.customSvg
-    ? sanitizeSvg(opts.customSvg)
-    : builtInSvg ?? `<span class="map-marker-emoji">${iconEmojiForType(typeId, typeName)}</span>`;
-  const label = opts.label ? `<span class="map-marker-label">${esc(opts.label)}</span>` : "";
-  return `<div class="${cls}" style="background:${esc(color)}">${inner}${label}</div>`;
+function isCriticalEmergency(e: Emergency): boolean {
+  if (e.status !== "pending") return false;
+  const sev = String(e.severity ?? "").toLowerCase();
+  return sev === "" || sev === "critical" || sev === "high";
 }
 
-function clusterHtml(emoji: string, count: number, color: string): string {
-  return `<div class="map-marker-cluster" style="background:${esc(color)}">
-    <span class="map-marker-cluster-icon">${emoji}</span>
-    <span class="map-marker-cluster-count">${count}</span>
-  </div>`;
+function seq(prefix: string, n: number, pad = 3): string {
+  return `${prefix}-${String(n).padStart(pad, "0")}`;
 }
 
 // ── Popups / tooltips ────────────────────────────────────────────────────
@@ -158,7 +121,7 @@ function companionLabel(c: Companion): string {
 function companionPopupHtml(c: Companion, emergencyTitle: string | null): string {
   const em = emergencyTitle ? `<p class="mp-row">${esc(i18nT("operations.destination"))}: <b>${esc(emergencyTitle)}</b></p>` : "";
   return `<div class="mp">
-    <p class="mp-title">${esc(c.displayLabel ?? companionLabel(c))}</p>
+    <p class="mp-title"><span class="mp-id">[${esc(c.displayLabel ?? companionLabel(c))}]</span></p>
     <p class="mp-row">${esc(c.typeName ?? c.kind)}</p>
     ${em}
     <p class="mp-row">${esc(i18nT("operations.speed"))}: <span class="mp-num">${Math.round(c.speedKmh)} km/h</span></p>
@@ -181,11 +144,11 @@ function ambulancePopupHtml(label: string, amb: Ambulance): string {
     ? `<p class="mp-row">${esc(i18nT("operations.operating_cost"))}: <span class="mp-num">${cost.total.toFixed(2)} €</span></p>`
     : "";
   return `<div class="mp">
-    <p class="mp-title">${esc(label)} ${severity}</p>
+    <p class="mp-title"><span class="mp-id">[${esc(label)}]</span> ${severity}</p>
     <p class="mp-row"><b>${esc(i18nT(`status.${unitStatus(amb).key}`))}</b></p>
     <p class="mp-row">${esc(i18nT("operations.speed"))}: <span class="mp-num">${Math.round(tel?.positioning?.speedKmh ?? 0)} km/h</span></p>
     <p class="mp-row">${esc(i18nT(info.labelKey))}: <span class="mp-num">${v.toFixed(0)} %</span></p>
-    <div class="mp-bar"><div style="width:${Math.max(0, Math.min(100, v))}%;background:${v < 20 ? "var(--crit)" : "var(--n-300)"}"></div></div>
+    <div class="mp-bar"><div style="width:${Math.max(0, Math.min(100, v))}%;background:${v < 20 ? "#ff2a2a" : "#c3c9d0"}"></div></div>
     ${costRow}
     ${patient}
   </div>`;
@@ -348,10 +311,6 @@ function hasActiveUiFilters(): boolean {
   return Object.keys(ui).some((k) => (ui as Record<string, unknown>)[k] !== undefined);
 }
 
-// Unidades del mismo tipo en la misma celda (~140 m) se agrupan en un marcador.
-const CLUSTER_THRESHOLD = 3;
-const CLUSTER_GRID = 800;
-
 // ── Capas vectoriales ────────────────────────────────────────────────────
 function addOverlayLayers(m: maplibregl.Map) {
   for (const id of ["events", "jams", "routes", "companion-routes", "weather"]) setGeoJson(m, id, []);
@@ -440,55 +399,13 @@ function syncLayers() {
   const entityTypeById = new Map<string, EntityType>();
   for (const et of s.entityTypes || []) entityTypeById.set(et.id, et);
 
-  // ── Unidades (con agrupación por celda y tipo) ──
-  const unitSeen = new Set<string>();
+  const nodes: NodeSpec[] = [];
+
+  // ── Unidades ──
   const ambs = s.ambulances;
-  type Cell = { typeId: string; items: Ambulance[]; latSum: number; lonSum: number };
-  const cells = new Map<string, Cell>();
-  for (const amb of ambs) {
-    const typeId = amb.entityTypeId || "ambulance";
-    const lat = amb.latitude ?? 0;
-    const lon = amb.longitude ?? 0;
-    const key = `${typeId}|${Math.round(lat * CLUSTER_GRID)}|${Math.round(lon * CLUSTER_GRID)}`;
-    let c = cells.get(key);
-    if (!c) {
-      c = { typeId, items: [], latSum: 0, lonSum: 0 };
-      cells.set(key, c);
-    }
-    c.items.push(amb);
-    c.latSum += lat;
-    c.lonSum += lon;
-  }
-
-  const singles = new Set<string>();
-  for (const [key, c] of cells) {
-    const selectedInCell = c.items.some((a) => selectedAmbulanceId.value === a.id);
-    if (c.items.length >= CLUSTER_THRESHOLD && !selectedInCell) {
-      const et = entityTypeById.get(c.typeId);
-      const lat = c.latSum / c.items.length;
-      const lon = c.lonSum / c.items.length;
-      const typeName = et?.name || c.typeId;
-      upsertMarker(
-        "cluster",
-        key,
-        [lat, lon],
-        clusterHtml(iconEmojiForType(c.typeId, et?.name), c.items.length, (et?.color as string) || MAP_COLORS.muted),
-        {
-          tip: `<b>${esc(typeName)}</b><br>${esc(i18nT("map.cluster_count", { n: c.items.length }))}<br><span class="mp-dim">${esc(i18nT("map.cluster_hint"))}</span>`,
-          zIndex: 4,
-          onClick: () => map?.easeTo({ center: [lon, lat], zoom: Math.max(map.getZoom() + 2, 16) }),
-        },
-        unitSeen,
-      );
-    } else {
-      for (const amb of c.items) singles.add(amb.id);
-    }
-  }
-
   const filtersActive = hasActiveUiFilters();
   for (let idx = 0; idx < ambs.length; idx++) {
     const amb = ambs[idx];
-    if (!singles.has(amb.id)) continue;
     if (filtersActive && !passesUiFilters(amb)) continue;
     const pos: LatLon = [
       amb.latitude ?? activeRegion.value?.spawn[0] ?? DEFAULT_SPAWN_LAT,
@@ -496,32 +413,29 @@ function syncLayers() {
     ];
     const sel = selectedAmbulanceId.value === amb.id;
     const label = displayId(amb, idx, s.entityTypes);
-    const typeId = amb.entityTypeId || "ambulance";
-    const et = entityTypeById.get(typeId);
-    const builtIn = typeId === "ambulance" || typeId === "helicopter" || typeId === "police_patrol";
-    const html = builtIn
-      ? entityIconHtml(typeId, { selected: sel, hasPatient: !!amb.hasPatient, label })
-      : customVehicleHtml(typeId, et?.name, (et?.color as string) || MAP_COLORS.muted, { selected: sel, hasPatient: !!amb.hasPatient, label, customSvg: et?.iconSvg ?? null });
-    upsertMarker(
-      "unit",
-      amb.id,
+    const tone = unitTone(amb);
+    nodes.push({
+      group: "unit",
+      id: amb.id,
       pos,
-      html,
-      {
+      html: tacticalNodeHtml({ shape: "rect", tone, glyph: unitGlyph(amb), label, selected: sel, matched: filtersActive && !sel }),
+      tone,
+      kind: "unit",
+      priority: 50,
+      ping: false,
+      // La unidad seleccionada nunca se esconde dentro de un grupo.
+      clusterable: !sel,
+      opts: {
         popupHtml: ambulancePopupHtml(label, amb),
         zIndex: sel ? 10 : 5,
         animate: true,
-        matched: filtersActive,
         onClick: () => {
           if (isDeleteMode()) emit("deleteObject", "ambulance", amb.id);
           else store.selectAmbulance(amb.id);
         },
       },
-      unitSeen,
-    );
+    });
   }
-  pruneMarkers("unit", unitSeen);
-  pruneMarkers("cluster", unitSeen);
 
   // Encuadra las unidades que cumplen el filtro del asistente (una vez por filtro).
   if (filtersActive && !selectedAmbulanceId.value) {
@@ -555,28 +469,33 @@ function syncLayers() {
   setGeoJson(m, "routes", routeFeatures);
 
   // ── Lugares (hospitales, gasolineras, tipos personalizados) ──
-  const poiSeen = new Set<string>();
+  const placeSeq = new Map<string, number>();
   for (const p of s.pois as Poi[]) {
     if (p.kind === "weather_station") continue;
     const et = entityTypeById.get(p.kind);
-    const builtIn = p.kind === "hospital" ? "hospital" : p.kind === "gas_station" ? "gas_station" : "custom";
-    const shortName = p.name.length > 14 ? `${p.name.slice(0, 13)}…` : p.name;
-    upsertMarker(
-      "poi",
-      p.id,
-      [p.latitude, p.longitude],
-      entityIconHtml(builtIn, { customSvg: et?.iconSvg ?? undefined, customColor: et?.color ?? undefined, label: shortName }),
-      {
+    const prefix = p.kind === "hospital" ? "HOSP" : p.kind === "gas_station" ? "FUEL" : prefixForType(p.kind, et?.name);
+    const n = (placeSeq.get(prefix) ?? 0) + 1;
+    placeSeq.set(prefix, n);
+    const glyph: NodeGlyph = p.kind === "hospital" ? "cross" : p.kind === "gas_station" ? "dot" : "none";
+    nodes.push({
+      group: "poi",
+      id: p.id,
+      pos: [p.latitude, p.longitude],
+      html: tacticalNodeHtml({ shape: "square", tone: "infra", glyph, label: seq(prefix, n, 2) }),
+      tone: "infra",
+      kind: "place",
+      priority: 10,
+      ping: false,
+      clusterable: true,
+      opts: {
         tip: `<b>${esc(p.name)}</b><br><span class="mp-dim">${esc(et?.name ?? p.kind)}</span>`,
         zIndex: 2,
         onClick: () => {
           if (isDeleteMode()) emit("deleteObject", "poi", p.id);
         },
       },
-      poiSeen,
-    );
+    });
   }
-  pruneMarkers("poi", poiSeen);
 
   // ── Estaciones meteorológicas ──
   const readings = (s.weatherStations ?? {}) as Record<string, WeatherReading>;
@@ -601,26 +520,30 @@ function syncLayers() {
   setGeoJson(m, "weather", weatherFeatures);
 
   // ── Emergencias ──
-  const emSeen = new Set<string>();
-  for (const e of s.emergencies as Emergency[]) {
-    if (e.status === "resolved") continue;
+  (s.emergencies as Emergency[]).forEach((e, i) => {
+    if (e.status === "resolved") return;
     const external = e.source === "external_feed";
-    upsertMarker(
-      "emergency",
-      e.id,
-      [e.latitude, e.longitude],
-      entityIconHtml("emergency", { emergencyStatus: e.status, external }),
-      {
+    const critical = isCriticalEmergency(e);
+    const tone: NodeTone = e.status === "assigned" ? "warn" : "crit";
+    nodes.push({
+      group: "emergency",
+      id: e.id,
+      pos: [e.latitude, e.longitude],
+      html: tacticalNodeHtml({ shape: "diamond", tone, dashed: external, ping: critical, label: seq("EMR", i + 1) }),
+      tone,
+      kind: "emergency",
+      priority: critical ? 100 : 90,
+      ping: critical,
+      clusterable: true,
+      opts: {
         tip: `<b>${esc(e.title)}</b><br><span class="mp-dim">${esc(i18nT(`map.emergency_status.${e.status}`))}${external ? ` · ${esc(i18nT("map.external_source"))}` : ""}</span>`,
         zIndex: 8,
         onClick: () => {
           if (isDeleteMode()) emit("deleteObject", "emergency", e.id);
         },
       },
-      emSeen,
-    );
-  }
-  pruneMarkers("emergency", emSeen);
+    });
+  });
 
   // ── Cortes de tráfico ──
   setGeoJson(
@@ -640,18 +563,21 @@ function syncLayers() {
   );
 
   // ── Unidades de apoyo ──
-  const compSeen = new Set<string>();
   const compRoutes: GeoJSON.Feature[] = [];
   for (const c of s.companions ?? []) {
-    const builtIn = c.kind === "helicopter" || c.kind === "police_patrol";
     const et = entityTypeById.get(c.kind);
     const em = s.emergencies.find((e) => e.id === c.assignedEmergencyId);
-    upsertMarker(
-      "companion",
-      c.id,
-      [c.latitude, c.longitude],
-      entityIconHtml(builtIn ? c.kind : "custom", { label: companionLabel(c), customSvg: et?.iconSvg ?? undefined, customColor: et?.color ?? undefined }),
-      {
+    nodes.push({
+      group: "companion",
+      id: c.id,
+      pos: [c.latitude, c.longitude],
+      html: tacticalNodeHtml({ shape: "rect", tone: "unit", glyph: "dot", label: companionLabel(c) }),
+      tone: "unit",
+      kind: "unit",
+      priority: 45,
+      ping: false,
+      clusterable: true,
+      opts: {
         popupHtml: companionPopupHtml(c, em?.title ?? null),
         zIndex: 6,
         animate: true,
@@ -660,17 +586,15 @@ function syncLayers() {
           else store.selectCompanion(c.id);
         },
       },
-      compSeen,
-    );
+    });
     if (c.routeCoords && c.routeCoords.length >= 2) {
       compRoutes.push({
         type: "Feature",
-        properties: { color: (et?.color as string) || MAP_COLORS.route },
+        properties: { color: MAP_COLORS.route },
         geometry: { type: "LineString", coordinates: c.routeCoords.map((pt) => toLngLat(pt as LatLon)) },
       });
     }
   }
-  pruneMarkers("companion", compSeen);
   setGeoJson(m, "companion-routes", compRoutes);
 
   // ── Incidencias externas (áreas) ──
@@ -692,6 +616,104 @@ function syncLayers() {
         } as GeoJSON.Feature;
       }),
   );
+
+  lastNodes = nodes;
+  renderNodes();
+}
+
+// ── Agrupación en pantalla ───────────────────────────────────────────────
+/** Agrupa nodos a menos de CLUSTER_RADIUS_PX en pantalla (voraz, por prioridad). */
+function clusterNodes(m: maplibregl.Map, list: NodeSpec[]): NodeSpec[][] {
+  const pts = list.map((n) => m.project(toLngLat(n.pos)));
+  const order = list
+    .map((_, i) => i)
+    .sort((a, b) => list[b].priority - list[a].priority || (list[a].id < list[b].id ? -1 : 1));
+  const used = new Uint8Array(list.length);
+  const r2 = CLUSTER_RADIUS_PX * CLUSTER_RADIUS_PX;
+  const groups: NodeSpec[][] = [];
+  for (const i of order) {
+    if (used[i]) continue;
+    used[i] = 1;
+    const g = [list[i]];
+    if (list[i].clusterable) {
+      for (const j of order) {
+        if (used[j] || !list[j].clusterable) continue;
+        const dx = pts[i].x - pts[j].x;
+        const dy = pts[i].y - pts[j].y;
+        if (dx * dx + dy * dy <= r2) {
+          used[j] = 1;
+          g.push(list[j]);
+        }
+      }
+    }
+    groups.push(g);
+  }
+  return groups;
+}
+
+function clusterTip(g: NodeSpec[]): string {
+  const count = (k: NodeKind) => g.filter((n) => n.kind === k).length;
+  const parts = [
+    [count("emergency"), "map.cluster_emergencies"],
+    [count("unit"), "map.cluster_units"],
+    [count("place"), "map.cluster_places"],
+  ] as const;
+  const rows = parts
+    .filter(([n]) => n > 0)
+    .map(([n, key]) => `<span class="mp-num">${n}</span> ${esc(i18nT(key, { n }, n))}`)
+    .join("<br>");
+  return `${rows}<br><span class="mp-dim">${esc(i18nT("map.cluster_hint"))}</span>`;
+}
+
+function renderNodes() {
+  const m = map;
+  if (!m) return;
+  const zoom = m.getZoom();
+  container.value?.classList.toggle("tn-labels-off", zoom < LABEL_MIN_ZOOM);
+  const groups = zoom < CLUSTER_MAX_ZOOM ? clusterNodes(m, lastNodes) : lastNodes.map((n) => [n]);
+  const seen = new Set<string>();
+  for (const g of groups) {
+    const seed = g[0];
+    if (g.length === 1) {
+      upsertMarker(seed.group, seed.id, seed.pos, seed.html, seed.opts, seen);
+      continue;
+    }
+    let tone: NodeTone = "off";
+    let lat = 0;
+    let lon = 0;
+    for (const n of g) {
+      if (TONE_RANK[n.tone] > TONE_RANK[tone]) tone = n.tone;
+      lat += n.pos[0];
+      lon += n.pos[1];
+    }
+    const center: LatLon = [lat / g.length, lon / g.length];
+    upsertMarker(
+      "cluster",
+      `${seed.group}:${seed.id}`,
+      center,
+      clusterNodeHtml(g.length, tone, g.some((n) => n.ping)),
+      {
+        tip: clusterTip(g),
+        zIndex: tone === "crit" ? 9 : 4,
+        onClick: () => {
+          const bounds = new maplibregl.LngLatBounds();
+          for (const n of g) bounds.extend(toLngLat(n.pos));
+          m.fitBounds(bounds, { padding: 80, maxZoom: CLUSTER_MAX_ZOOM + 0.5, duration: 450 });
+        },
+      },
+      seen,
+    );
+  }
+  for (const group of ["unit", "poi", "emergency", "companion", "cluster"]) pruneMarkers(group, seen);
+}
+
+let rafNodes = 0;
+function scheduleNodes() {
+  if (rafNodes) return;
+  rafNodes = requestAnimationFrame(() => {
+    rafNodes = 0;
+    renderNodes();
+  });
 }
 
 let rafSync = 0;
@@ -715,6 +737,7 @@ onMounted(async () => {
   map = m;
   tooltip = createHoverTooltip(m);
   addOverlayLayers(m);
+  m.on("zoom", scheduleNodes);
 
   m.on("click", (e) => {
     const tool = mapToolRef.value;
@@ -742,6 +765,7 @@ onUnmounted(() => {
   stops.forEach((stop) => stop());
   if (animRaf) cancelAnimationFrame(animRaf);
   if (rafSync) cancelAnimationFrame(rafSync);
+  if (rafNodes) cancelAnimationFrame(rafNodes);
   markerAnim.clear();
   htmlMarkers.clear();
   map?.remove();
@@ -761,7 +785,7 @@ onUnmounted(() => {
     <div ref="container" class="h-full w-full" />
     <p
       v-if="mapTool === 'delete'"
-      class="pointer-events-none absolute left-3 top-3 z-[5] rounded border border-red-500/50 bg-white px-3 py-1.5 text-[11px] font-medium text-red-700 shadow"
+      class="pointer-events-none absolute left-3 top-3 z-[5] border border-[#ff2a2a] bg-[#101317]/90 px-3 py-1.5 font-mono text-[11px] text-[#ff2a2a]"
     >
       {{ i18nT('operations.tool_delete_hint') }} · Esc
     </p>
@@ -774,6 +798,6 @@ onUnmounted(() => {
 }
 .map-cursor-delete :deep(.maplibregl-canvas),
 .map-cursor-delete :deep(.map-marker-host) {
-  cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'><circle cx='14' cy='14' r='12' fill='rgba(217,48,37,0.18)' stroke='%23d93025' stroke-width='2'/><path d='M9 9l10 10M19 9l-10 10' stroke='%23d93025' stroke-width='2.5' stroke-linecap='round'/></svg>") 14 14, crosshair;
+  cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'><rect x='4' y='4' width='20' height='20' fill='none' stroke='%23ff2a2a' stroke-width='1.5'/><path d='M9 9l10 10M19 9l-10 10' stroke='%23ff2a2a' stroke-width='1.5'/></svg>") 14 14, crosshair;
 }
 </style>

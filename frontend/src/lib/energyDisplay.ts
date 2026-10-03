@@ -6,7 +6,7 @@
  *   - `electric`/`unique` → muestra **batería** (batteryPct).
  *   - tipo desconocido / vehículo legacy → cae a combustible (compat).
  *
- * Devuelve label localizado + valor + icono unicode + clave i18n usada
+ * Devuelve label localizado + valor + clave i18n usada
  * para que la UI pueda volver a traducir si cambia el idioma sin
  * recomputar el catálogo.
  */
@@ -18,8 +18,6 @@ export interface EnergyInfo {
   kind: EnergyKind;
   /** Valor 0-100 (%). null si no hay telemetría aún. */
   value: number | null;
-  /** Icono unicode (⛽ / ⚡ / 🛸). */
-  icon: string;
   /** Clave i18n del label corto ("operations.fuel" | "operations.battery"). */
   labelKey: string;
   /** Clave i18n del label genérico ("operations.energy"). */
@@ -88,7 +86,6 @@ export function energyOf(
     return {
       kind: "fuel",
       value: v == null ? null : Math.round(v * 10) / 10,
-      icon: "⛽",
       labelKey: "operations.fuel",
       energyKey: "operations.energy",
     };
@@ -98,7 +95,6 @@ export function energyOf(
   return {
     kind: "battery",
     value: v == null ? null : Math.round(v * 10) / 10,
-    icon: pt === "unique" ? "🛸" : "⚡",
     labelKey: "operations.battery",
     energyKey: "operations.energy",
   };

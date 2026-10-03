@@ -612,8 +612,10 @@
       "assigned": "Unit en route",
       "resolved": "Resolved"
     },
-    "cluster_count": "{n} units at the same spot",
-    "cluster_hint": "Zoom in to see them separately"
+    "cluster_hint": "Click to zoom in",
+    "cluster_units": "unit | units",
+    "cluster_emergencies": "emergency | emergencies",
+    "cluster_places": "place | places"
   },
   "operations": {
     "title": "Map",
