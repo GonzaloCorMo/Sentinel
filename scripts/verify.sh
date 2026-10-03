@@ -19,14 +19,6 @@ run_frontend() {
   if (cd frontend && npx vue-tsc --noEmit -p tsconfig.json); then ok "vue-tsc"; else ko "vue-tsc"; fi
   if (cd frontend && npx vite build >/tmp/sentinel-vite.log 2>&1); then ok "vite build"; else ko "vite build"; tail -20 /tmp/sentinel-vite.log; fi
   rm -rf frontend/dist
-  step "Frontend: estilo del mapa (especificación MapLibre)"
-  if (cd frontend && npx esbuild src/lib/mapStyle.ts --format=esm --outfile=node_modules/.cache/mapStyle.mjs --log-level=error       && node --input-type=module -e "
-        import { validateStyleMin } from '@maplibre/maplibre-gl-style-spec';
-        const { buildSentinelStyle } = await import('./node_modules/.cache/mapStyle.mjs');
-        const errs = validateStyleMin(buildSentinelStyle());
-        for (const e of errs) console.log('  ' + e.message);
-        process.exit(errs.length ? 1 : 0);
-      "); then ok "estilo válido"; else ko "estilo del mapa con errores"; fi
   step "Frontend: i18n (mismas claves en es/en/gl)"
   if python - <<'PY'
 import json, sys

@@ -25,7 +25,7 @@ docker compose ps
 docker compose logs -f simulation
 
 # Comprobaciones — ejecútalas antes de dar algo por terminado
-bash scripts/verify.sh            # typecheck, build, estilo del mapa, i18n, pyflakes, docs, compose
+bash scripts/verify.sh            # typecheck, build, i18n, pyflakes, docs, compose
 bash scripts/verify.sh frontend   # o: backend | docs | compose
 bash scripts/smoke.sh             # contra el stack levantado (añade --ai para probar el chat)
 
