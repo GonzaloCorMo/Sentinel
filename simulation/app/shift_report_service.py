@@ -95,7 +95,7 @@ def _compute_kpis(engine_snapshot: dict[str, Any], window_data: dict[str, Any]) 
 
     # Emergencias resueltas/abiertas
     resolved = sum(1 for e in emgs if e.get("status") == "resolved")
-    active = sum(1 for e in emgs if e.get("status") in ("pending", "assigned"))
+    active = sum(1 for e in emgs if e.get("status") in ("pending", "assigned", "on_scene"))
 
     # IA
     approved = sum(1 for p in props if p.get("status") in ("approved", "auto_approved"))

@@ -234,6 +234,12 @@ async function removeType(et: EntityType) {
 function cancelDelete() {
   confirmDeleteId.value = null;
 }
+
+/** Modos de asignación de la primera unidad a una emergencia nueva. */
+const dispatchOptions = [
+  { approval: false, title: "scenario.dispatch_auto_title", desc: "scenario.dispatch_auto_desc" },
+  { approval: true, title: "scenario.dispatch_manual_title", desc: "scenario.dispatch_manual_desc" },
+] as const;
 </script>
 
 <template>
@@ -733,39 +739,35 @@ function cancelDelete() {
       </div>
     </div>
 
-    <!-- Dispatch Config Tab -->
+    <!-- Pestaña Asignación -->
     <div v-if="activeTab === 'dispatch'" class="space-y-4">
-      <div class="rounded-xl border border-slate-700/50 bg-slate-900/70 p-5 space-y-4">
-        <h3 class="text-[11px] font-medium uppercase tracking-wider text-slate-400">{{ t('scenario.dispatch_config') }}</h3>
-        <div class="flex items-start gap-3">
+      <section class="rounded border border-slate-800 bg-slate-900">
+        <header class="border-b border-slate-800 px-4 py-3">
+          <h3 class="text-sm font-semibold text-slate-100">{{ t('scenario.dispatch_config') }}</h3>
+          <p class="mt-0.5 text-xs text-slate-500">{{ t('scenario.dispatch_intro') }}</p>
+        </header>
+        <div class="grid gap-px bg-slate-800 sm:grid-cols-2">
           <button
-            class="relative mt-0.5 inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none"
-            :class="store.dispatchConfig.dispatchRequiresApproval ? 'bg-emerald-500' : 'bg-slate-700'"
-            @click="store.setDispatchConfig(!store.dispatchConfig.dispatchRequiresApproval)"
+            v-for="opt in dispatchOptions"
+            :key="String(opt.approval)"
+            type="button"
+            class="flex flex-col items-start gap-1 bg-slate-900 px-4 py-3 text-left hover:bg-slate-800/60"
+            :class="store.dispatchConfig.dispatchRequiresApproval === opt.approval ? 'ring-1 ring-inset ring-slate-300' : ''"
+            :aria-pressed="store.dispatchConfig.dispatchRequiresApproval === opt.approval"
+            @click="store.setDispatchConfig(opt.approval)"
           >
-            <span
-              class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ease-in-out"
-              :class="store.dispatchConfig.dispatchRequiresApproval ? 'translate-x-5' : 'translate-x-0'"
-            />
+            <span class="flex items-center gap-2 text-sm font-medium text-slate-100">
+              <span
+                class="h-2 w-2 rounded-full border"
+                :class="store.dispatchConfig.dispatchRequiresApproval === opt.approval ? 'border-slate-100 bg-slate-100' : 'border-slate-500'"
+              />
+              {{ t(opt.title) }}
+            </span>
+            <span class="text-xs leading-relaxed text-slate-500">{{ t(opt.desc) }}</span>
           </button>
-          <div>
-            <p class="text-sm font-medium text-slate-200">Despacho requiere aprobacion (HITL)</p>
-            <p class="mt-1 text-xs text-slate-500 leading-relaxed">
-              Cuando esta activo, las nuevas emergencias <strong class="text-slate-400">no</strong> se asignan automaticamente.
-              En su lugar, la IA crea una propuesta que el operador debe aprobar antes de despachar la ambulancia mas cercana.
-              Esto se aplica solo al <em>despacho inicial</em>; las acciones reactivas (helicoptero, policia) siguen el modo IA configurado.
-            </p>
-            <div class="mt-2 inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[10px] font-semibold uppercase"
-              :class="store.dispatchConfig.dispatchRequiresApproval
-                ? 'border-amber-600/40 bg-amber-950/30 text-amber-300'
-                : 'border-green-600/40 bg-green-950/30 text-green-300'"
-            >
-              <span class="h-1.5 w-1.5 rounded-full" :class="store.dispatchConfig.dispatchRequiresApproval ? 'bg-amber-400' : 'bg-green-400'" />
-              {{ store.dispatchConfig.dispatchRequiresApproval ? 'Aprobacion manual' : 'Despacho automatico' }}
-            </div>
-          </div>
         </div>
-      </div>
+        <p class="border-t border-slate-800 px-4 py-3 text-xs leading-relaxed text-slate-500">{{ t('scenario.dispatch_scope_note') }}</p>
+      </section>
     </div>
   </div>
 </template>

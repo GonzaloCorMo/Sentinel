@@ -49,7 +49,7 @@ El motor trata igual un evento del mock que uno recibido por REST:
 - **Emergencias despachables**: los tipos de emergencia (`medical_emergency`, `fire`, `accident`, `hazmat_spill`, `flood`) generan una emergencia en el motor que pasa por el flujo **HITL** (o se despacha directamente en modo autónomo). Los eventos se deduplican por `id` y se ignoran si son demasiado antiguos.
 - **Meteorología**: la última lectura por estación alimenta el motor `environmental` de cada ambulancia, el factor meteorológico de la ETA (`weatherFactor`) y el scoring de asignación. Lluvia intensa, viento fuerte o baja visibilidad degradan la ETA prevista.
 - **IA observer**: eventos de severidad alta cerca de unidades activas pueden levantar propuestas.
-- **Situación de la región**: `GET /api/region/summary` agrega clima, eventos e impacto meteorológico en las misiones.
+- **Panorama de la región**: `GET /api/region/summary` agrega clima, eventos e impacto meteorológico en las misiones.
 
 ## Ingesta REST
 

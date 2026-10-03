@@ -25,7 +25,7 @@ Qué usamos y dónde vive cada pieza.
 ### Operación y simulación
 
 - Mapa de operaciones: `frontend/src/views/MapOperationsView.vue`
-- Situación de la región: `frontend/src/views/RegionOverviewView.vue`
+- Panorama de la región: `frontend/src/views/RegionOverviewView.vue`
 - Telemetría de flota: `frontend/src/views/FleetTelemetryView.vue`
 - Comunicaciones: `frontend/src/views/CommsDashboardView.vue`
 - Configuración de escenario: `frontend/src/views/ScenarioConfigView.vue`

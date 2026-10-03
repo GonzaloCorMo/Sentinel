@@ -85,7 +85,7 @@ function removePill(key: string) {
   store.setUiFilters(current);
 }
 function clearAllPills() { store.clearUiFilters(); }
-const activeEmergencies = computed(() => state.value?.emergencies?.filter((e) => e.status === "pending" || e.status === "assigned").length ?? 0);
+const activeEmergencies = computed(() => state.value?.emergencies?.filter((e) => e.status === "pending" || e.status === "assigned" || e.status === "on_scene").length ?? 0);
 const resolvedCount = computed(() => state.value?.emergencies?.filter((e) => e.status === "resolved").length ?? 0);
 const aiMode = computed(() => state.value?.aiMode ?? "hitl");
 const activeTimezone = computed(() => activeRegion.value?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone);

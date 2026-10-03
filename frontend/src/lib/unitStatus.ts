@@ -11,7 +11,7 @@ export type StatusTone = "neutral" | "active" | "ok" | "alert";
 
 export interface UnitStatus {
   /** Clave i18n bajo `status.*`. */
-  key: "available" | "to_emergency" | "transporting" | "refueling" | "repositioning" | "unavailable" | "off";
+  key: "available" | "to_emergency" | "on_scene" | "transporting" | "handover" | "refueling" | "repositioning" | "unavailable" | "off";
   tone: StatusTone;
 }
 
@@ -21,6 +21,11 @@ export function unitStatus(amb: Pick<Ambulance, "missionPhase" | "fsmState" | "h
   switch (amb.missionPhase) {
     case "to_emergency":
       return { key: "to_emergency", tone: "active" };
+    case "on_scene":
+      return { key: "on_scene", tone: "active" };
+    case "at_hospital":
+      return { key: "handover", tone: "active" };
+    case "refueling":
     case "to_hospital":
       return { key: "transporting", tone: "active" };
     case "to_refuel":

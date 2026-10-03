@@ -28,20 +28,41 @@ class NetworkEngine:
         self._phase.pop(amb_id, None)
         self._rng.pop(amb_id, None)
 
+    def _coverage(self, amb: dict[str, Any], rng: Any) -> tuple[str, float]:
+        """Tipo de red y distancia (km) al centro de la región activa."""
+        from ..regions import get_active_region
+        from ..route_nav import haversine_m
+
+        try:
+            region = get_active_region()
+            d_km = haversine_m(float(amb.get("latitude") or region.center_lat),
+                               float(amb.get("longitude") or region.center_lon),
+                               region.center_lat, region.center_lon) / 1000.0
+        except Exception:
+            return "4G", 0.0
+        if d_km < 3.0:
+            return "5G", d_km
+        if d_km < 8.0:
+            return "4G", d_km
+        if d_km > 11.0 and rng.random() < 0.15:
+            return "none", d_km
+        return "3G", d_km
+
     def tick(self, amb_id: str, tick_index: int, dt: float, amb: dict[str, Any]) -> dict[str, Any]:
         """Genera telemetría de red del tick."""
         phase = self._phase.get(amb_id, 0.0) + dt * 0.5
         self._phase[amb_id] = phase
         rng = self._rng_for(amb_id)
 
-        # Tipo de red fluctúa cada ~30 s
-        net_types = ["5G", "5G", "4G", "4G", "WiFi", "3G"]
-        net_type = net_types[(tick_index // 30) % len(net_types)]
-        signal_base = {"5G": -65, "4G": -75, "WiFi": -55, "3G": -95}.get(net_type, -80)
-        rssi = signal_base + 6 * math.sin(phase * 0.3) + rng.gauss(0, 1.5)
+        # Cobertura según la distancia al centro urbano: 5G en el centro,
+        # 4G en el área metropolitana, 3G en la periferia y zonas de sombra
+        # ocasionales en el extrarradio. Cada unidad tiene su propia red.
+        net_type, dist_km = self._coverage(amb, rng)
+        signal_base = {"5G": -67, "4G": -79, "3G": -97, "none": -118}.get(net_type, -85)
+        rssi = signal_base - 1.2 * dist_km + 6 * math.sin(phase * 0.3) + rng.gauss(0, 1.5)
 
         # Latencia según red
-        lat_base = {"5G": 18, "4G": 35, "WiFi": 12, "3G": 95}.get(net_type, 60)
+        lat_base = {"5G": 18, "4G": 35, "3G": 95, "none": 0}.get(net_type, 60)
         mqtt_ms = max(3.0, lat_base + 10 * math.sin(phase * 0.4) + rng.gauss(0, 3))
         http_ms = max(5.0, mqtt_ms * 1.8 + rng.gauss(0, 4))
         p2p_ms = max(2.0, mqtt_ms * 0.6 + rng.gauss(0, 2))
@@ -53,8 +74,10 @@ class NetworkEngine:
             loss_pct += 3.0
 
         # Throughput Mbps
-        thr_base = {"5G": 320, "4G": 60, "WiFi": 120, "3G": 8}.get(net_type, 30)
-        throughput_mbps = max(0.5, thr_base * (1 - loss_pct / 100) + rng.gauss(0, thr_base * 0.05))
+        if net_type == "none":
+            loss_pct = 100.0
+        thr_base = {"5G": 320, "4G": 60, "3G": 8, "none": 0.0}.get(net_type, 30)
+        throughput_mbps = 0.0 if net_type == "none" else max(0.5, thr_base * (1 - loss_pct / 100) + rng.gauss(0, thr_base * 0.05))
 
         # Active channel sigue lo que use engine (linkState), lo tomamos si está
         link_state = amb.get("linkState") or "mqtt_active"

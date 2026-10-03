@@ -34,8 +34,10 @@ from .schemas.external_events import ExternalEvent, WeatherReading
 
 log = logging.getLogger(__name__)
 
-# Semirradio (grados) del área donde el mock sitúa eventos alrededor del centro de la región.
-_SPREAD_DEG = 0.06
+# Los eventos se reparten algo más que las emergencias (área metropolitana).
+_SPREAD_FACTOR = 1.5
+# Tipos que ocurren en la calzada: se prefieren avenidas y carreteras.
+_ROAD_TYPES = {"accident", "lane_closure", "construction", "hazmat_spill", "flood"}
 
 # (tipo, severidades posibles, peso relativo, títulos)
 _EVENT_CATALOG: list[tuple[str, tuple[str, ...], int, tuple[str, ...]]] = [
@@ -102,18 +104,30 @@ def _iso(dt: datetime | None = None) -> str:
     return (dt or datetime.now(timezone.utc)).isoformat()
 
 
-def build_mock_event(rng: random.Random) -> dict[str, Any]:
-    """Evento sintético válido contra `ExternalEvent`, situado cerca del centro de la región activa."""
+async def build_mock_event(rng: random.Random, http: Any = None) -> dict[str, Any]:
+    """Evento sintético válido contra `ExternalEvent`, situado en una calle real de la región activa."""
+    from .emergency_catalog import is_major_road
+    from .placement import random_road_point
+
     ev_type, severities, _w, titles = rng.choices(_EVENT_CATALOG, weights=[c[2] for c in _EVENT_CATALOG])[0]
-    lat0, lon0 = get_active_region().center
+    region = get_active_region()
+    point = None
+    for _ in range(4 if ev_type in _ROAD_TYPES else 1):
+        point = await random_road_point(http, region.center, region.urban_sigma_m * _SPREAD_FACTOR, rng=rng)
+        if ev_type not in _ROAD_TYPES or is_major_road(point.street):
+            break
+    assert point is not None
+    description = _DESCRIPTIONS.get(ev_type, "Aviso recibido de la red de incidencias.")
+    if point.street:
+        description = f"{description} Ubicación: {point.street}."
     event = ExternalEvent(
         id=f"mock-{uuid4().hex[:12]}",
         type=ev_type,  # type: ignore[arg-type]
         severity=rng.choice(severities),  # type: ignore[arg-type]
         title=rng.choice(titles),
-        description=_DESCRIPTIONS.get(ev_type, "Aviso recibido de la red de incidencias."),
-        latitude=round(lat0 + rng.uniform(-_SPREAD_DEG, _SPREAD_DEG), 6),
-        longitude=round(lon0 + rng.uniform(-_SPREAD_DEG, _SPREAD_DEG), 6),
+        description=description,
+        latitude=round(point.lat, 6),
+        longitude=round(point.lon, 6),
         radius_m=_ROAD_RADIUS_M.get(ev_type),
         started_at=_iso(),
     )
@@ -206,7 +220,7 @@ async def run_event_source(engine: Any, *, seed: int | None = None) -> None:
                 for sid in _station_ids(engine, cfg.weather_stations):
                     await engine.ingest_weather_reading(drift.next(sid))
                 if loop.time() >= next_event_at:
-                    event = build_mock_event(rng)
+                    event = await build_mock_event(rng, getattr(engine, "_http", None))
                     await engine.ingest_external_event(event)
                     # Los eventos se autorresuelven pasado un rato para que el mapa no se sature.
                     task = asyncio.create_task(_resolve_later(engine, event, rng.uniform(120, 420)))

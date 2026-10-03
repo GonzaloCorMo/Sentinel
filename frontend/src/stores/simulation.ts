@@ -245,6 +245,17 @@ export const useSimulationStore = defineStore("simulation", () => {
     await fetchState();
   }
 
+  /** Mensaje de la central a una unidad (``null`` = toda la flota). */
+  async function sendUnitMessage(unitId: string | null, text: string) {
+    const r = await fetch("/api/comms/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ unitId, text }),
+    });
+    await ensureOk(r, "Error enviando el mensaje");
+    await fetchState();
+  }
+
   /** Mapea al mismo contrato que `POST /api/sim/control` (no existe endpoint `/api/sim/motor`). */
   async function setMotorState(motorState: MotorState) {
     if (motorState === "RUNNING") {
@@ -431,6 +442,7 @@ export const useSimulationStore = defineStore("simulation", () => {
     teardownStreams,
     postControl,
     setNetwork,
+    sendUnitMessage,
     setMotorState,
     startSimulation,
     spawnAmbulance,

@@ -8,6 +8,8 @@ import { createMap, currentMapTheme, maplibregl, setGeoJson, toLngLat, type LatL
 import { DEFAULT_SPAWN_LAT, DEFAULT_SPAWN_LON } from "@/lib/mapDefaults";
 import { tacticalNodeHtml } from "@/lib/tacticalMarkers";
 import { prefixForType } from "@/lib/vehicleId";
+import { unitStatus } from "@/lib/unitStatus";
+import type { Ambulance, UnitMessage } from "@/types/simulation";
 
 const { t, te } = useI18n();
 const { theme } = useTheme();
@@ -721,6 +723,17 @@ function updateMap(autoCenter = false) {
   if (navigating.value) recomputeNavMetrics(vPos);
 }
 
+// Mensajes de la central entregados y aún sin confirmar.
+const inbox = ref<UnitMessage[]>([]);
+async function ackMessage(m: UnitMessage) {
+  inbox.value = inbox.value.filter((x) => x.id !== m.id);
+  try {
+    await fetch(`/api/comms/messages/${encodeURIComponent(m.id)}/ack`, { method: "POST" });
+  } catch {
+    /* se reintenta al volver a mostrarse en el siguiente sondeo */
+  }
+}
+
 async function poll() {
   if (!myVehicleId.value) return;
   try {
@@ -730,6 +743,9 @@ async function poll() {
     const ambs: Vehicle[] = s.ambulances || [];
     const v = ambs.find((a) => a.id === myVehicleId.value) || null;
     myVehicle.value = v;
+    inbox.value = ((s.unitMessages || []) as UnitMessage[]).filter(
+      (m) => m.status === "delivered" && (m.unitId === null || m.unitId === myVehicleId.value),
+    );
     if (v?.assignedEmergencyId) {
       const ems: Emergency[] = s.emergencies || [];
       const newEm = ems.find((e) => e.id === v.assignedEmergencyId) || null;
@@ -782,16 +798,10 @@ async function signOut() {
   router.replace("/login");
 }
 
-const phaseLabels: Record<string, string> = {
-  to_emergency: "En ruta",
-  on_scene:     "En escena",
-  to_hospital:  "Hospital",
-  at_hospital:  "En hospital",
-  returning:    "Regresando",
-};
 const currentPhaseLabel = computed(() => {
-  const p = myVehicle.value?.missionPhase;
-  return (p && phaseLabels[p]) || myVehicle.value?.missionStatus || "Disponible";
+  const v = myVehicle.value;
+  if (!v) return t("status.available");
+  return t(`status.${unitStatus({ missionPhase: v.missionPhase as Ambulance["missionPhase"], fsmState: v.fsmState }).key}`);
 });
 
 watch(() => myVehicle.value, () => updateMap(), { deep: true });
@@ -971,6 +981,13 @@ watch(() => myVehicle.value, () => updateMap(), { deep: true });
     <!-- ON DUTY -->
     <section v-else-if="stage === 'on-duty'" class="vh-duty">
       <div id="vehicle-map" class="vh-map" />
+      <div v-if="inbox.length" class="vh-inbox" :class="{ 'vh-inbox-low': navigating }" role="status" aria-live="polite">
+        <div v-for="m in inbox.slice(0, 2)" :key="m.id" class="vh-inbox-item">
+          <div class="vh-inbox-head">{{ t('vehicle.msg_from_dispatch') }}</div>
+          <p class="vh-inbox-text">{{ m.text }}</p>
+          <button type="button" class="vh-inbox-ack" @click="ackMessage(m)">{{ t('vehicle.msg_ack') }}</button>
+        </div>
+      </div>
 
       <!-- MODO NAVEGACIÓN: card superior con siguiente maniobra -->
       <div v-if="navigating" class="vh-nav-top">
@@ -1509,6 +1526,23 @@ textarea.vh-input { height: auto; padding: 8px 10px; resize: vertical; }
 </style>
 
 <style>
+/* Mensajes de la central sobre el mapa. */
+.vh-inbox {
+  position: absolute; left: 12px; right: 12px; top: 12px;
+  z-index: 950; display: flex; flex-direction: column; gap: 8px;
+}
+.vh-inbox-low { top: 110px; }
+.vh-inbox-item {
+  background: var(--surface); border: 1px solid var(--border-strong);
+  border-left: 3px solid var(--warn); padding: 10px 12px;
+}
+.vh-inbox-head { font-size: 11px; color: var(--text-4); text-transform: uppercase; letter-spacing: 0.06em; }
+.vh-inbox-text { margin: 4px 0 8px; font-size: 15px; color: var(--text); }
+.vh-inbox-ack {
+  width: 100%; padding: 8px; border: 1px solid var(--border-strong);
+  background: var(--surface-2); color: var(--text); font-weight: 600;
+}
+
 /* Marcadores del mapa: nodos tácticos (lib/tacticalMarkers.ts) + rumbo. */
 .vh-node { position: relative; width: 22px; height: 12px; }
 .vh-node-shape { position: relative; z-index: 1; }

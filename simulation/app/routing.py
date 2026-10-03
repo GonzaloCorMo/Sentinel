@@ -63,6 +63,40 @@ async def probe_osrm_routing(
         return False, str(e)
 
 
+class RouteCoords(list):
+    """Polilínea ``[(lat, lon), ...]`` con datos de OSRM adjuntos.
+
+    Es una lista normal (se serializa y se recorre igual que antes), pero
+    lleva ``seg_speeds_ms``: velocidad de circulación de cada tramo entre
+    puntos consecutivos según el perfil de coche de OSRM (tipo de vía,
+    límite, giros). El motor la usa para mover las unidades a la velocidad
+    de cada calle en lugar de a una velocidad fija.
+    """
+
+    seg_speeds_ms: list[float] | None = None
+    duration_s: float | None = None
+
+
+def _segment_speeds(r0: dict[str, Any], n_coords: int) -> list[float] | None:
+    """Concatena `annotation.speed` de todas las piernas (uno por tramo)."""
+    speeds: list[float] = []
+    for leg in r0.get("legs") or []:
+        ann = (leg or {}).get("annotation") or {}
+        vals = ann.get("speed")
+        if not isinstance(vals, list):
+            return None
+        speeds.extend(float(v) if isinstance(v, (int, float)) and v > 0 else 0.0 for v in vals)
+    if len(speeds) != n_coords - 1:
+        return None
+    return speeds
+
+
+def typical_limit_kmh(speed_ms: float) -> float:
+    """Velocidad de tramo OSRM → límite de vía orientativo (múltiplo de 10 km/h)."""
+    kmh = speed_ms * 3.6 / 0.8  # el perfil de coche circula ~80 % del límite
+    return float(max(20, min(120, round(kmh / 10.0) * 10)))
+
+
 def _straight_route(waypoints: Sequence[tuple[float, float]], segments_per_leg: int = 8) -> list[tuple[float, float]]:
     """Polilínea simple entre waypoints consecutivos (lat, lon)."""
     if len(waypoints) < 2:
@@ -78,34 +112,6 @@ def _straight_route(waypoints: Sequence[tuple[float, float]], segments_per_leg: 
             lon = a[1] + t * (b[1] - a[1])
             out.append((lat, lon))
     return out
-
-
-def _median_maxspeed_kmh(routes: list[Any]) -> float | None:
-    """Extrae límite de vía (km/h) desde annotation.maxspeed si existe."""
-    if not routes or not isinstance(routes[0], dict):
-        return None
-    r0 = routes[0]
-    legs = r0.get("legs") or []
-    if not legs or not isinstance(legs[0], dict):
-        return None
-    ann = legs[0].get("annotation") or {}
-    maxs = ann.get("maxspeed")
-    if not maxs or not isinstance(maxs, list):
-        return None
-    vals: list[float] = []
-    for v in maxs:
-        if isinstance(v, (int, float)) and float(v) > 0:
-            vals.append(float(v))
-        elif isinstance(v, str):
-            s = v.strip().lower()
-            if s.endswith("kph") or s.endswith("kmh"):
-                s = "".join(ch for ch in s if (ch.isdigit() or ch == "."))
-            if s.replace(".", "", 1).isdigit():
-                vals.append(float(s))
-    if not vals:
-        return None
-    vals.sort()
-    return vals[len(vals) // 2]
 
 
 async def fetch_route_osrm(
@@ -127,7 +133,7 @@ async def fetch_route_osrm(
         "continue_straight": "false",
     }
     param_variants = (
-        {**base_params, "annotations": "maxspeed"},
+        {**base_params, "annotations": "speed"},
         base_params,
     )
     last_err: Exception | None = None
@@ -140,7 +146,6 @@ async def fetch_route_osrm(
                 routes = data.get("routes") or []
                 if not routes:
                     continue
-                lim = _median_maxspeed_kmh(routes)
                 r0 = routes[0] if isinstance(routes[0], dict) else {}
                 geom = r0.get("geometry") or {}
                 gcoords = geom.get("coordinates") or []
@@ -150,7 +155,10 @@ async def fetch_route_osrm(
                 duration: float | None = None
                 if isinstance(duration_raw, (int, float)) and duration_raw >= 0:
                     duration = float(duration_raw)
-                coords = [(float(c[1]), float(c[0])) for c in gcoords if len(c) >= 2]
+                coords = RouteCoords((float(c[1]), float(c[0])) for c in gcoords if len(c) >= 2)
+                coords.seg_speeds_ms = _segment_speeds(r0, len(coords))
+                coords.duration_s = duration
+                lim = typical_limit_kmh(coords.seg_speeds_ms[0]) if coords.seg_speeds_ms else None
                 return coords, lim, duration
             except Exception as e:
                 last_err = e
@@ -232,3 +240,62 @@ def detour_candidates_from_jam(
         (min_lat - p, max_lon + p),
         (min_lat - p, min_lon - p),
     ]
+
+
+async def snap_nearest(
+    client: httpx.AsyncClient | None, lat: float, lon: float, number: int = 1,
+) -> list[dict[str, Any]]:
+    """Puntos de calle más cercanos (OSRM ``/nearest``).
+
+    Devuelve ``[{"lat", "lon", "distance_m", "name"}]`` ordenado por distancia;
+    lista vacía si OSRM no responde.
+    """
+    if client is None:
+        return []
+    url = f"{osrm_base_url().rstrip('/')}/nearest/v1/driving/{lon:.6f},{lat:.6f}"
+    try:
+        r = await client.get(url, params={"number": str(max(1, number))}, timeout=6.0)
+        r.raise_for_status()
+        out = []
+        for w in r.json().get("waypoints") or []:
+            loc = w.get("location") or []
+            if len(loc) >= 2:
+                out.append({
+                    "lat": float(loc[1]),
+                    "lon": float(loc[0]),
+                    "distance_m": float(w.get("distance") or 0.0),
+                    "name": str(w.get("name") or ""),
+                })
+        return out
+    except Exception as e:
+        logger.debug("OSRM nearest falló: %s", e)
+        return []
+
+
+async def table_durations(
+    client: httpx.AsyncClient | None,
+    sources: Sequence[tuple[float, float]],
+    destination: tuple[float, float],
+) -> list[float | None] | None:
+    """Duración (s) de cada origen al destino con OSRM ``/table`` (una sola petición).
+
+    ``None`` si OSRM no responde; ``None`` en una posición si ese par no
+    tiene ruta.
+    """
+    if client is None or not sources:
+        return None
+    pts = list(sources) + [destination]
+    coords = ";".join(f"{lon:.6f},{lat:.6f}" for lat, lon in pts)
+    url = f"{osrm_base_url().rstrip('/')}/table/v1/driving/{coords}"
+    params = {
+        "sources": ";".join(str(i) for i in range(len(sources))),
+        "destinations": str(len(sources)),
+    }
+    try:
+        r = await client.get(url, params=params, timeout=8.0)
+        r.raise_for_status()
+        rows = r.json().get("durations") or []
+        return [float(row[0]) if row and isinstance(row[0], (int, float)) else None for row in rows]
+    except Exception as e:
+        logger.debug("OSRM table falló: %s", e)
+        return None

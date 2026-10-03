@@ -32,9 +32,9 @@ El menú principal tiene seis secciones:
 | Sección | Ruta | Para qué sirve |
 |---|---|---|
 | **Mapa** | `/map` | Operación en directo: ver y colocar unidades, emergencias y lugares, y controlar la simulación. |
-| **Situación** | `/overview` | Resumen de la región activa: clima, eventos, estado de la flota y reparto por zonas. |
+| **Panorama** | `/overview` | Resumen de la región activa: clima, eventos, estado de la flota y reparto por zonas. |
 | **Flota** | `/fleet` | Tarjetas con el estado y la telemetría de cada unidad, con filtros. |
-| **Conectividad** | `/comms` | Estado de los canales de comunicación (MQTT, malla P2P, HTTP) y su actividad. |
+| **Comunicaciones** | `/comms` | Enlace de cada unidad, mensajes de la central a las unidades y canales de datos. |
 | **Informes** | `/reports` | Informes de turno generados por la IA. |
 | **Ajustes** | `/config` | Tipos de unidad y de lugar disponibles en el mapa, y cómo se asignan las emergencias. |
 
@@ -81,7 +81,7 @@ Tarjetas de todas las unidades con indicadores de:
 
 Click en una tarjeta para detalles ampliados.
 
-## 8) Situación (`/overview`)
+## 8) Panorama (`/overview`)
 
 Resumen agregado de la región activa (datos de `GET /api/region/summary`):
 
@@ -91,14 +91,14 @@ Resumen agregado de la región activa (datos de `GET /api/region/summary`):
 - Weather impact: `worstFactor`, `avgFactor`, `affectedMissions`.
 - Reparto por cuadrantes (NW/NE/SW/SE) alrededor del centro de la región.
 
-## 9) Conectividad (`/comms`)
+## 9) Comunicaciones (`/comms`)
 
-Monitorización de los canales:
+Para mantener el contacto con la flota:
 
-- Estado MQTT, P2P mesh, HTTP fallback (toggleable).
-- Métricas: mensajes enviados/recibidos, latencia.
-- Tabla de actividad por unidad.
-- Indicador del canal activo.
+- **Resumen**: canal en uso, unidades con enlace, latencia media y mensajes sin leer.
+- **Enlace por unidad**: red (5G, 4G o 3G según la zona), calidad de señal, latencia, pérdida de paquetes y último contacto. Las unidades sin contacto o con señal débil aparecen primero; pulsa una fila para escribirle.
+- **Mensajes a las unidades**: a una unidad o a toda la flota, con frases rápidas («Confirme su posición», «Regrese a la base»…). Cada mensaje muestra si está *en cola* (sin canal o sin cobertura), *entregado* o *leído*. El conductor lo ve en el panel del vehículo y confirma con «Recibido».
+- **Canales de datos**: principal (MQTT), entre unidades (P2P) y respaldo (HTTP). Puedes apagarlos para comprobar que la flota sigue conectada por el siguiente; con todos apagados, los mensajes esperan en cola.
 
 ## 10) Panel de IA (con aprobación / autónoma)
 

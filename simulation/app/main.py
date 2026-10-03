@@ -45,6 +45,7 @@ from .schemas.external_events import ExternalEvent as ExternalEventIn
 from .schemas.external_events import WeatherReading as WeatherReadingIn
 from .weather_db import upsert_weather_reading
 from .regions import get_active_region, get_active_region_id, list_regions, set_active_region
+from .route_nav import haversine_m
 from .schemas.telemetry import telemetry_schema_json
 from .supabase_client import is_supabase_available
 
@@ -257,6 +258,22 @@ class PoiBody(BaseModel):
     longitude: float
 
 
+class UnitMessageBody(BaseModel):
+    """Mensaje de la central a una unidad (``unitId`` vacío = todas)."""
+
+    model_config = {"extra": "forbid"}
+    unitId: str | None = Field(default=None, max_length=64)
+    text: str = Field(min_length=1, max_length=280)
+
+
+def _station_display_name(station_id: str) -> str:
+    """Nombre legible de una estación sin POI (las simuladas se llaman ``mock-ws-N``)."""
+    sid = str(station_id)
+    if sid.startswith("mock-ws-"):
+        return f"Estación meteorológica {sid.removeprefix('mock-ws-')}"
+    return f"Estación {sid[:8]}"
+
+
 class JamPointBody(BaseModel):
     latitude: float
     longitude: float
@@ -293,7 +310,7 @@ async def _weather_station_rows() -> list[dict[str, Any]]:
             continue
         stations_by_id[sid] = {
             "id": sid,
-            "name": str(poi.get("name") or "Weather station"),
+            "name": str(poi.get("name") or "Estación meteorológica"),
             "latitude": float(poi.get("latitude") or spawn_lat),
             "longitude": float(poi.get("longitude") or spawn_lon),
         }
@@ -306,7 +323,7 @@ async def _weather_station_rows() -> list[dict[str, Any]]:
         if station_id not in stations_by_id:
             stations_by_id[station_id] = {
                 "id": station_id,
-                "name": f"Station {station_id[:8]}",
+                "name": _station_display_name(station_id),
                 "latitude": float(reading.get("latitude") or spawn_lat),
                 "longitude": float(reading.get("longitude") or spawn_lon),
             }
@@ -321,7 +338,7 @@ async def _weather_station_rows() -> list[dict[str, Any]]:
             if station_id not in stations_by_id:
                 stations_by_id[station_id] = {
                     "id": station_id,
-                    "name": f"Station {station_id[:8]}",
+                    "name": _station_display_name(station_id),
                     "latitude": spawn_lat,
                     "longitude": spawn_lon,
                 }
@@ -801,7 +818,7 @@ async def region_summary() -> dict[str, Any]:
 
     ambs = engine.ambulances
     ems = engine.emergencies
-    active = [e for e in ems if e.get("status") in ("pending", "assigned")]
+    active = [e for e in ems if e.get("status") in ("pending", "assigned", "on_scene")]
     fuel_low = sum(1 for a in ambs if float(a.get("fuelLevel") or 100.0) < 25.0)
     etas = [
         float(tr["eta_predicted_s"])
@@ -1046,11 +1063,48 @@ async def create_jam(body: JamBody) -> dict:
     return {"ok": True, "id": jid, "state": _state_merged()}
 
 
+@app.post("/api/comms/messages")
+async def send_unit_message(body: UnitMessageBody) -> dict[str, Any]:
+    """Envía un mensaje de la central a una unidad o a toda la flota."""
+    text = body.text.strip()
+    if not text:
+        raise HTTPException(status_code=422, detail="El mensaje está vacío")
+    try:
+        msg = await engine.send_unit_message(body.unitId or None, text)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    return {"ok": True, "message": msg}
+
+
+@app.get("/api/comms/messages")
+async def list_unit_messages(unitId: str | None = None) -> dict[str, Any]:
+    """Mensajes recientes; con ``unitId`` solo los de esa unidad y los generales."""
+    msgs = [dict(m) for m in engine.unit_messages]
+    if unitId:
+        msgs = [m for m in msgs if m["unitId"] in (None, unitId)]
+    return {"messages": msgs[-100:]}
+
+
+@app.post("/api/comms/messages/{message_id}/ack")
+async def ack_unit_message(message_id: str) -> dict[str, Any]:
+    """La unidad confirma que ha leído el mensaje."""
+    return {"ok": engine.ack_unit_message(message_id)}
+
+
 @app.post("/api/sim/jam/point")
 async def create_jam_point(body: JamPointBody) -> dict:
-    """Crea un atasco cuadrado ``radiusM × radiusM`` centrado en ``(lat, lon)``."""
-    half = body.radiusM / 2.0
-    poly = _square_polygon_around(body.latitude, body.longitude, half)
+    """Corta el tramo de la calle pulsada (unos ``radiusM × 3`` metros a lo largo de la vía).
+
+    Si no hay calle cerca o OSRM no responde, cae al cuadrado clásico
+    ``radiusM × radiusM`` centrado en el punto.
+    """
+    from .placement import road_segment
+
+    seg = await road_segment(engine._http, body.latitude, body.longitude, length_m=max(80.0, body.radiusM * 3.0))
+    if seg is not None:
+        poly = [[a, b] for a, b in seg.polygon]
+    else:
+        poly = _square_polygon_around(body.latitude, body.longitude, body.radiusM / 2.0)
     jid = await engine.add_jam(poly)
     return {"ok": True, "id": jid, "state": _state_merged()}
 
@@ -1280,58 +1334,112 @@ class GenerateScenarioBody(BaseModel):
     areaLonCenter: float | None = None
 
 
+def _callsign_prefix(type_id: str, type_name: str) -> str:
+    """Prefijo corto del indicativo según el tipo de unidad (AMB, BOMB, POL…)."""
+    t = f"{type_id} {type_name}".lower()
+    for keys, prefix in (
+        (("ambul",), "AMB"), (("fire", "bomb"), "BOMB"), (("polic", "patrol"), "POL"),
+        (("civil",), "PC"), (("heli",), "HELI"), (("dron",), "DRON"), (("moto",), "MOTO"),
+    ):
+        if any(k in t for k in keys):
+            return prefix
+    letters = "".join(ch for ch in type_name.upper() if ch.isalnum())
+    return letters[:4] or "UNID"
+
+
 @app.post("/api/sim/generate-scenario")
 async def generate_scenario(body: GenerateScenarioBody) -> dict[str, Any]:
-    """Genera un escenario completo: estructuras + flota + incidencias iniciales."""
+    """Genera un escenario completo con lugares reales y elementos sobre calles.
+
+    - Hospitales y gasolineras: primero los reales de la región
+      (OpenStreetMap); si se piden más, en calles reales cerca del centro.
+    - Unidades: salen de hospitales y bases reales (bomberos del parque de
+      bomberos, policía de comisarías), ajustadas a la calle de salida.
+    - Incidencias: catálogo realista, en calles con nombre.
+    """
     import random as _rnd
+    from .placement import random_road_point, snap_to_road
+    from .regions import region_places
 
     if body.clearExisting:
         await engine.reset_simulation()
 
-    spawn_lat, spawn_lon = default_spawn()
-    lat_c = body.areaLatCenter or spawn_lat
-    lon_c = body.areaLonCenter or spawn_lon
+    region = get_active_region()
+    custom_area = body.areaLatCenter is not None and body.areaLonCenter is not None
+    center = (body.areaLatCenter, body.areaLonCenter) if custom_area else region.center
+    http = engine._http
+    placed: dict[str, Any] = {"hospitals": 0, "gasStations": 0, "ambulances": 0, "incidents": 0, "extras": {}}
 
-    def _rand_pos(spread: float) -> tuple[float, float]:
-        return lat_c + _rnd.uniform(-spread, spread), lon_c + _rnd.uniform(-spread, spread)
+    def _by_distance(rows: list[tuple[str, float, float]]) -> list[tuple[str, float, float]]:
+        return sorted(rows, key=lambda r: haversine_m(center[0], center[1], r[1], r[2]))
 
-    placed = {"hospitals": 0, "gasStations": 0, "ambulances": 0, "incidents": 0, "extras": {}}
+    async def _road_near(lat: float, lon: float, spread_m: float = 0.0) -> tuple[float, float]:
+        """Punto de calle junto a un lugar (con algo de dispersión si se pide)."""
+        if spread_m > 0:
+            p = await random_road_point(http, (lat, lon), spread_m, rng=_rnd, require_named=False, max_snap_m=60.0, tries=8)
+            return p.lat, p.lon
+        p = await snap_to_road(http, lat, lon, max_snap_m=300.0)
+        return (p.lat, p.lon) if p else (lat, lon)
 
-    # Estructuras: primero los hospitales reales de la región (si los hay).
-    known_hospitals = list(get_active_region().hospitals) if body.areaLatCenter is None else []
+    # Estructuras.
+    hospitals = _by_distance(list(region.hospitals)) if not custom_area else []
     for i in range(body.hospitals):
-        if i < len(known_hospitals):
-            name, lat, lon = known_hospitals[i]
+        if i < len(hospitals):
+            name, lat, lon = hospitals[i]
         else:
-            name = f"Hospital {i + 1}"
-            lat, lon = _rand_pos(0.025)
+            pt = await random_road_point(http, center, region.urban_sigma_m, rng=_rnd)
+            name, lat, lon = f"Centro sanitario {i + 1}", pt.lat, pt.lon
         try:
             await engine.add_poi("hospital", name, lat, lon)
             placed["hospitals"] += 1
         except Exception:
             pass
+    fuel = _by_distance(region_places(region.id, "fuel_stations"))
     for i in range(body.gasStations):
-        lat, lon = _rand_pos(0.03)
+        if i < len(fuel):
+            name, lat, lon = fuel[i]
+        else:
+            pt = await random_road_point(http, center, region.urban_sigma_m, rng=_rnd)
+            name, lat, lon = "", pt.lat, pt.lon
         try:
-            await engine.add_poi("gas_station", f"Gasolinera {i + 1}", lat, lon)
+            await engine.add_poi("gas_station", name or f"Gasolinera {i + 1}", lat, lon)
             placed["gasStations"] += 1
         except Exception:
             pass
 
-    # Ambulancias estándar
-    for i in range(body.ambulances):
-        lat, lon = _rand_pos(0.015)
-        try:
-            await engine.spawn_ambulance(
-                lat, lon,
-                entity_type_id=engine.default_ambulance_entity_type_id(),
-                display_label=f"AMB-{i + 1:03d}",
-            )
-            placed["ambulances"] += 1
-        except Exception:
-            pass
+    # Bases de salida de las unidades.
+    placed_hospitals = [(p.get("name", ""), float(p["latitude"]), float(p["longitude"]))
+                        for p in engine.pois if p.get("kind") == "hospital"]
+    ems_bases = placed_hospitals + _by_distance(region_places(region.id, "ambulance_bases"))
+    fire_bases = _by_distance(region_places(region.id, "fire_stations")) or ems_bases
+    police_bases = _by_distance(region_places(region.id, "police_stations"))[:6] or ems_bases
 
-    # Unidades extra por tipo personalizado
+    def _bases_for(type_id: str, type_name: str) -> list[tuple[str, float, float]]:
+        t = f"{type_id} {type_name}".lower()
+        if "fire" in t or "bomb" in t:
+            return fire_bases
+        if "polic" in t or "patrol" in t:
+            return police_bases
+        return ems_bases
+
+    async def _spawn(type_id: str, label: str, bases: list[tuple[str, float, float]], k: int) -> bool:
+        if bases:
+            _, blat, blon = bases[k % len(bases)]
+            # La primera unidad de cada base en la puerta; el resto, en calles próximas.
+            lat, lon = await _road_near(blat, blon, spread_m=0.0 if k < len(bases) else 250.0)
+        else:
+            pt = await random_road_point(http, center, region.urban_sigma_m * 0.5, rng=_rnd)
+            lat, lon = pt.lat, pt.lon
+        try:
+            await engine.spawn_ambulance(lat, lon, entity_type_id=type_id, display_label=label)
+            return True
+        except Exception:
+            return False
+
+    for i in range(body.ambulances):
+        if await _spawn(engine.default_ambulance_entity_type_id(), f"AMB-{i + 1:03d}", ems_bases, i):
+            placed["ambulances"] += 1
+
     if body.extraByType:
         for type_id, count in body.extraByType.items():
             n = int(count or 0)
@@ -1340,129 +1448,35 @@ async def generate_scenario(body: GenerateScenarioBody) -> dict[str, Any]:
             et = next((t for t in engine.get_entity_types() if t["id"] == type_id and t.get("kind") == "vehicle"), None)
             if not et:
                 continue
-            name_prefix = et["name"][:10].upper().replace(" ", "")
+            name_prefix = _callsign_prefix(type_id, et.get("name", ""))
+            bases = _bases_for(type_id, et.get("name", ""))
             for i in range(n):
-                lat, lon = _rand_pos(0.02)
-                try:
-                    await engine.spawn_ambulance(
-                        lat, lon,
-                        entity_type_id=type_id,
-                        display_label=f"{name_prefix}-{i + 1:02d}",
-                    )
+                if await _spawn(type_id, f"{name_prefix}-{i + 1:02d}", bases, i):
                     placed["extras"][type_id] = placed["extras"].get(type_id, 0) + 1
-                except Exception:
-                    pass
 
-    # Incidencias iniciales (reutiliza el generador existente)
     if body.incidents > 0:
-        try:
-            res = await generate_incidents(GenerateIncidentsBody(
-                count=body.incidents,
-                areaLatCenter=lat_c,
-                areaLonCenter=lon_c,
-            ))
-            placed["incidents"] = len(res.get("incidents", []))
-        except Exception:
-            pass
+        res = await generate_incidents(GenerateIncidentsBody(
+            count=body.incidents,
+            areaLatCenter=center[0] if custom_area else None,
+            areaLonCenter=center[1] if custom_area else None,
+        ))
+        placed["incidents"] = len(res.get("incidents", []))
 
     return {"ok": True, "placed": placed, "state": _state_merged()}
 
 
 @app.post("/api/sim/generate-incidents")
 async def generate_incidents(body: GenerateIncidentsBody) -> dict[str, Any]:
-    """Crea ``count`` emergencias realistas (LLM si disponible, sino pool fallback)."""
-    import random as _rnd
-
-    spawn_lat, spawn_lon = default_spawn()
-    lat_c = body.areaLatCenter or spawn_lat
-    lon_c = body.areaLonCenter or spawn_lon
-    count = body.count
-
+    """Crea ``count`` emergencias del catálogo realista, cada una en una calle real."""
+    center = None
+    if body.areaLatCenter is not None and body.areaLonCenter is not None:
+        center = (body.areaLatCenter, body.areaLonCenter)
     incidents: list[dict[str, Any]] = []
-
-    try:
-        from . import llm_provider
-        if llm_provider.is_llm_available():
-            schema = {
-                "type": "object",
-                "properties": {
-                    "incidents": {
-                        "type": "array",
-                        "minItems": 1,
-                        "maxItems": count,
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "title": {"type": "string"},
-                                "description": {"type": "string"},
-                                "emergencyType": {
-                                    "type": "string",
-                                    "enum": ["medical", "altercation", "mass_casualty"],
-                                },
-                                "latOffset": {"type": "number", "minimum": -0.015, "maximum": 0.015},
-                                "lonOffset": {"type": "number", "minimum": -0.015, "maximum": 0.015},
-                            },
-                            "required": ["title", "description", "emergencyType", "latOffset", "lonOffset"],
-                        },
-                    },
-                },
-                "required": ["incidents"],
-            }
-            prompt = (
-                f"Genera exactamente {count} incidencias realistas para una simulación de "
-                f"ambulancias cerca de ({lat_c:.4f}, {lon_c:.4f}). Varía severidad y tipo."
-            )
-            data = await llm_provider.chat_completion_json(
-                [
-                    {"role": "system", "content": "Generador de incidencias de emergencia en español."},
-                    {"role": "user", "content": prompt},
-                ],
-                schema=schema,
-                temperature=0.8,
-                max_tokens=1024,
-            )
-            for item in (data.get("incidents") or [])[:count]:
-                lat = lat_c + float(item.get("latOffset", _rnd.uniform(-0.01, 0.01)))
-                lon = lon_c + float(item.get("lonOffset", _rnd.uniform(-0.01, 0.01)))
-                eid = await engine.add_emergency(
-                    lat, lon,
-                    item.get("title", "Incidencia IA"),
-                    item.get("emergencyType", "medical"),
-                    description=item.get("description"),
-                )
-                incidents.append({
-                    "id": eid,
-                    "title": item.get("title"),
-                    "emergencyType": item.get("emergencyType"),
-                })
-    except Exception:
-        import logging as _log
-        _log.getLogger(__name__).exception("LLM incidents generation failed; using fallback")
-
-    if not incidents:
-        _fallback_titles = [
-            ("Accidente de trafico", "Colision multiple en interseccion concurrida", "medical"),
-            ("Persona inconsciente", "Viandante desplomado en la acera sin respuesta", "medical"),
-            ("Altercado callejero", "Pelea con arma blanca, varios heridos leves", "altercation"),
-            ("Incendio residencial", "Vivienda en llamas con posibles atrapados", "mass_casualty"),
-            ("Atropello peatonal", "Peaton atropellado en paso de cebra", "medical"),
-            ("Caida desde altura", "Trabajador caido desde andamio, traumatismo severo", "medical"),
-            ("Intoxicacion masiva", "Intoxicacion alimentaria en evento con 20+ afectados", "mass_casualty"),
-            ("Riña multitudinaria", "Altercado con heridos en zona de ocio nocturno", "altercation"),
-            ("Paro cardiaco", "Hombre de 55 anios en parada cardiorespiratoria en gimnasio", "medical"),
-            ("Accidente laboral", "Electrocucion en obra, victima inconsciente", "medical"),
-            ("Derrumbe parcial", "Derrumbe de fachada con heridos bajo escombros", "mass_casualty"),
-            ("Agresion con arma", "Disparo en via publica, herido grave", "altercation"),
-        ]
-        selected = _rnd.sample(_fallback_titles, min(count, len(_fallback_titles)))
-        if count > len(selected):
-            selected = selected + [_rnd.choice(_fallback_titles) for _ in range(count - len(selected))]
-        for title, desc, etype in selected[:count]:
-            lat = lat_c + _rnd.uniform(-0.012, 0.012)
-            lon = lon_c + _rnd.uniform(-0.012, 0.012)
-            eid = await engine.add_emergency(lat, lon, title, etype, description=desc)
-            incidents.append({"id": eid, "title": title, "emergencyType": etype})
-
+    for _ in range(body.count):
+        eid = await engine._spawn_catalog_emergency("scenario", center=center)
+        if eid:
+            em = next((e for e in engine.emergencies if e.get("id") == eid), {})
+            incidents.append({"id": eid, "title": em.get("title"), "emergencyType": em.get("emergencyType")})
     return {"ok": True, "generated": len(incidents), "incidents": incidents}
 
 

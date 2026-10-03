@@ -95,7 +95,7 @@ function unitTone(amb: Ambulance): NodeTone {
 
 function unitGlyph(amb: Ambulance): NodeGlyph {
   if (amb.hasPatient) return "cross";
-  return amb.missionPhase === "to_emergency" ? "pip" : "none";
+  return amb.missionPhase === "to_emergency" || amb.missionPhase === "on_scene" ? "pip" : "none";
 }
 
 function isCriticalEmergency(e: Emergency): boolean {
@@ -150,6 +150,17 @@ function ambulancePopupHtml(label: string, amb: Ambulance): string {
     ${costRow}
     ${patient}
   </div>`;
+}
+
+function emergencyTip(e: Emergency, external: boolean): string {
+  const sev = e.severity && i18nTe(`events.severity.${e.severity}`) ? i18nT(`events.severity.${e.severity}`) : "";
+  const meta = [i18nT(`map.emergency_status.${e.status}`), sev ? `${i18nT("map.severity")} ${sev}` : "", external ? i18nT("map.external_source") : ""]
+    .filter(Boolean)
+    .map(esc)
+    .join(" · ");
+  const street = e.street ? `<br>${esc(e.street)}` : "";
+  const desc = e.description ? `<br><span class="mp-dim">${esc(e.description)}</span>` : "";
+  return `<b>${esc(e.title)}</b>${street}<br><span class="mp-dim">${meta}</span>${desc}`;
 }
 
 function eventTypeLabel(type: string | undefined): string {
@@ -523,7 +534,8 @@ function syncLayers() {
     if (e.status === "resolved") return;
     const external = e.source === "external_feed";
     const critical = isCriticalEmergency(e);
-    const tone: NodeTone = e.status === "assigned" ? "warn" : "crit";
+    // Sin asignar → rojo; con unidad en camino o en el lugar → ámbar.
+    const tone: NodeTone = e.status === "pending" ? "crit" : "warn";
     nodes.push({
       group: "emergency",
       id: e.id,
@@ -535,7 +547,7 @@ function syncLayers() {
       ping: critical,
       clusterable: true,
       opts: {
-        tip: `<b>${esc(e.title)}</b><br><span class="mp-dim">${esc(i18nT(`map.emergency_status.${e.status}`))}${external ? ` · ${esc(i18nT("map.external_source"))}` : ""}</span>`,
+        tip: emergencyTip(e, external),
         zIndex: 8,
         onClick: () => {
           if (isDeleteMode()) emit("deleteObject", "emergency", e.id);

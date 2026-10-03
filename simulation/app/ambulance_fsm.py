@@ -22,14 +22,20 @@ class AmbulanceState(str, Enum):
     REFUELING = "REFUELING"
     STAGING = "STAGING"
     TRANSPORTING = "TRANSPORTING"
+    ON_SCENE = "ON_SCENE"
+    HANDOVER = "HANDOVER"
     UNAVAILABLE = "UNAVAILABLE"
 
 
 def infer_fsm_state(amb: dict[str, Any]) -> AmbulanceState:
     """Deriva el estado FSM a partir de ``missionPhase`` (única fuente de verdad)."""
     phase = str(amb.get("missionPhase") or "idle").lower()
-    if phase == "to_refuel":
+    if phase in ("to_refuel", "refueling"):
         return AmbulanceState.REFUELING
+    if phase == "on_scene":
+        return AmbulanceState.ON_SCENE
+    if phase == "at_hospital":
+        return AmbulanceState.HANDOVER
     if phase == "to_emergency":
         return AmbulanceState.RESPONDING
     if phase == "to_hospital":
@@ -40,7 +46,7 @@ def infer_fsm_state(amb: dict[str, Any]) -> AmbulanceState:
 
 
 def fuel_pct_for_round_trip_m(trip_one_way_m: float) -> float:
-    """Heurística: consumo aproximado ida+vuelta (coherente con drenaje ~0.01%/100m del motor)."""
+    """Consumo aproximado ida y vuelta en % (coherente con ~0,22 %/km del motor)."""
     km = trip_one_way_m / 1000.0
     return km * 0.2 * 2.0
 

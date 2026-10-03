@@ -114,7 +114,7 @@ Toda la IA corre en Ollama dentro del stack, sin servicios externos. Para cambia
 | GET | `/api/events` · `/api/events/status` | Eventos recibidos y estado de la fuente |
 | GET | `/api/weather` · `/api/weather/{id}/history` | Últimas lecturas e historial por estación |
 | POST | `/api/weather/override` | Fuerza condiciones meteorológicas (what-if) |
-| GET | `/api/region/summary` | Situación de la región activa (clima + eventos + flota + zonas) |
+| GET | `/api/region/summary` | Panorama de la región activa (clima + eventos + flota + zonas) |
 | GET/POST | `/api/ai/mode` · `/api/ai/proposals/{id}/resolve` | IA HITL / autónomo |
 | POST | `/api/chat` | Chat RAG (SSE) |
 | POST | `/api/ml/predict/fleet-anomaly/all` | Puntuación de anomalía de toda la flota |

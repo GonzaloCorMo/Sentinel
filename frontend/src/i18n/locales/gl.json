@@ -1,6 +1,6 @@
 {
   "island": {
-    "title": "Situación",
+    "title": "Panorama da rexión",
     "generated": "Actualizado",
     "weather": "Tempo",
     "stations": "Estacións",
@@ -23,13 +23,19 @@
     "affectedMissions": "Misións afectadas",
     "map": "Mapa da illa",
     "zones": "Por zona",
-    "subtitle": "Resumo da rexión: tempo, incidencias externas e estado da frota.",
+    "subtitle": "O que pasa agora na rexión: tempo, incidencias na vía pública e estado da frota.",
     "zone_legend": "U = unidades · I = incidencias externas · E = emerxencias",
     "no_impact": "Sen efecto",
     "zone_nw": "Noroeste",
     "zone_ne": "Nordeste",
     "zone_sw": "Suroeste",
-    "zone_se": "Sueste"
+    "zone_se": "Sueste",
+    "alert_kind": {
+      "storm": "Choiva intensa",
+      "wind": "Vento forte",
+      "fog": "Néboa"
+    },
+    "alert_detail": "choiva {rain} mm · vento {wind} km/h · visibilidade {vis} km"
   },
   "common": {
     "loading": "Cargando…",
@@ -95,10 +101,10 @@
   "nav": {
     "operations": "Mapa",
     "telemetry": "Frota",
-    "comms": "Conectividade",
+    "comms": "Comunicacións",
     "reports": "Informes",
     "config": "Axustes",
-    "island": "Situación"
+    "island": "Panorama"
   },
   "filters": {
     "title": "Filtros activos",
@@ -224,7 +230,7 @@
     "speed": "Velocidade",
     "speed_label": "Velocidade ×{value}",
     "scenario_builder": "Construtor de escenario",
-    "generate_scenario": "Xerar escenario IA",
+    "generate_scenario": "Xerar escenario",
     "generate_incidents": "Xerar incidencias",
     "training_mode": "Modo adestramento",
     "training_active": "Adestramento activo",
@@ -300,7 +306,13 @@
     "add_place_btn": "Crear tipo de lugar",
     "name_label": "Nome *",
     "svg_loaded": "Icona cargada",
-    "svg_upload": "Subir icona (.svg)"
+    "svg_upload": "Subir icona (.svg)",
+    "dispatch_intro": "Decide quen escolle a unidade que acode a cada emerxencia nova.",
+    "dispatch_auto_title": "Automática",
+    "dispatch_auto_desc": "O sistema envía no momento a unidade dispoñible que antes pode chegar.",
+    "dispatch_manual_title": "Con aprobación do operador",
+    "dispatch_manual_desc": "A IA propón unha unidade e agarda a que a aprobes en «Suxestións da IA» antes de enviala.",
+    "dispatch_scope_note": "Só afecta á primeira unidade. Os reforzos (helicóptero, policía) seguen o modo da IA escollido na cabeceira. Ao reiniciar o escenario volve a «Automática»."
   },
   "ai": {
     "mode": "Modo IA",
@@ -435,8 +447,8 @@
     "ml_warning": "Vixiar"
   },
   "comms": {
-    "title": "Conectividade",
-    "subtitle": "Como chegan os datos das unidades. Se unha canle cae, úsase a seguinte automaticamente.",
+    "title": "Comunicacións",
+    "subtitle": "Contacto coas unidades: enlace de cada unha, mensaxes da central e canles de datos.",
     "live": "En vivo",
     "channel": "Canle",
     "actor": "Actor",
@@ -469,7 +481,7 @@
     "col_ok": "Entregado",
     "no_events": "Aínda non hai envíos. Inicia a simulación.",
     "errors_warn": "Hai envíos fallidos: revisa a canle apagada ou o servidor de mensaxería.",
-    "log_title": "Últimos envíos",
+    "log_title": "Últimos envíos de datos",
     "ch_mqtt": "Principal (MQTT)",
     "ch_p2p": "Entre unidades (P2P)",
     "ch_http": "Respaldo (HTTP)",
@@ -477,7 +489,45 @@
     "link_p2p_active": "Entre unidades",
     "link_http_active": "Respaldo",
     "link_down": "Sen canle",
-    "batch_units": "{n} unidade | {n} unidades"
+    "batch_units": "{n} unidade | {n} unidades",
+    "kpi_link": "Canle en uso",
+    "kpi_online": "Unidades con enlace",
+    "kpi_latency": "Latencia media",
+    "kpi_unread": "Mensaxes sen ler",
+    "units_title": "Enlace por unidade",
+    "units_help": "Primeiro as que precisan atención. Preme nunha fila para escribirlle.",
+    "col_unit": "Unidade",
+    "col_status": "Estado",
+    "col_network": "Rede",
+    "col_signal": "Sinal",
+    "col_loss": "Perda",
+    "col_last_contact": "Último contacto",
+    "quality_good": "Boa",
+    "quality_fair": "Aceptable",
+    "quality_weak": "Feble",
+    "quality_none": "Sen cobertura",
+    "just_now": "agora",
+    "seconds_ago": "hai {n} s",
+    "unit_no_channel": "sen canle",
+    "no_units": "Non hai unidades no mapa.",
+    "select_to_message": "Escribir a esta unidade",
+    "messages_title": "Mensaxes ás unidades",
+    "messages_help": "Chegan á pantalla do vehículo; se non hai canle, quedan en cola ata que volva.",
+    "to": "Para",
+    "all_units": "Todas as unidades",
+    "message_placeholder": "Escribe unha mensaxe…",
+    "send": "Enviar",
+    "msg_sent": "Mensaxe enviada",
+    "msg_queued": "Sen canle: a mensaxe queda en cola",
+    "msg_error": "Non se puido enviar a mensaxe",
+    "msg_status_queued": "En cola",
+    "msg_status_delivered": "Entregada",
+    "msg_status_read": "Lida",
+    "quick_confirm_position": "Confirme a súa posición",
+    "quick_return_base": "Volva á base",
+    "quick_report_status": "Informe do estado do paciente",
+    "quick_stand_by": "Quede á espera de instrucións",
+    "quick_proceed_hospital": "Diríxase ao hospital asignado"
   },
   "reports": {
     "title": "Informes de quenda",
@@ -587,7 +637,9 @@
     "remaining": "Restante",
     "status": "Estado",
     "end_service": "Rematar servizo",
-    "retry": "Reintentar"
+    "retry": "Reintentar",
+    "msg_from_dispatch": "Mensaxe da central",
+    "msg_ack": "Recibido"
   },
   "map": {
     "tools_title": "Ferramentas",
@@ -610,7 +662,8 @@
     "emergency_status": {
       "pending": "Sen asignar",
       "assigned": "Unidade en camiño",
-      "resolved": "Atendida"
+      "resolved": "Atendida",
+      "on_scene": "Unidade no lugar"
     },
     "cluster_hint": "Fai clic para achegar",
     "cluster_units": "unidade | unidades",
@@ -723,7 +776,7 @@
     "place_hint": "Fai clic no mapa para colocar «{name}»",
     "emergency_desc_label": "Que ocorre (opcional, axuda á IA)",
     "generate_menu": "Xerar",
-    "generate_incidents_desc": "A IA crea emerxencias variadas dentro da rexión.",
+    "generate_incidents_desc": "Crea emerxencias realistas en rúas da rexión: tipo, gravidade e lugar plausibles.",
     "generate_scenario_desc": "Coloca hospitais, gasolineiras e frota, e opcionalmente emerxencias iniciais.",
     "extra_units": "Outras unidades",
     "reset_before": "Baleirar o mapa antes de xerar",
@@ -746,7 +799,8 @@
     "bpm": "lpm",
     "glasgow": "Glasgow",
     "scenario_generated_desc": "{hospitals} hospitais · {stations} gasolineiras · {units} unidades · {incidents} emerxencias",
-    "no_destination": "Sen destino: dispoñible"
+    "no_destination": "Sen destino: dispoñible",
+    "minutes_left": "queda {n} min | quedan {n} min"
   },
   "auth_callback": {
     "verifying": "Verificando…",
@@ -760,7 +814,9 @@
     "refueling": "Repostando",
     "repositioning": "Volvendo á base",
     "unavailable": "Non dispoñible",
-    "off": "Apagada"
+    "off": "Apagada",
+    "on_scene": "No lugar",
+    "handover": "Transferencia no hospital"
   },
   "events": {
     "type": {

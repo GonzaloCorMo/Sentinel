@@ -9,6 +9,9 @@
 - `app/ai_decision_engine.py` — IA observadora: crea propuestas (modo con aprobación o autónomo), con RAG sobre `protocols` en pgvector y explicación generada por el LLM. Sus llamadas al LLM pasan por un semáforo (`AI_OBSERVER_LLM_CONCURRENCY`).
 - `app/llm_provider.py` — cliente OpenAI-compatible (por defecto Ollama `http://ollama:11434/v1`, modelo `qwen2.5:3b`) y embeddings (`nomic-embed-text`, rellenados hasta 1536 dimensiones). Tiempos de espera: `LLM_TIMEOUT_SEC` (60 s) y 5 s de conexión.
 - `app/chat_service.py` (chat RAG en streaming) · `app/command_service.py` (órdenes: vía rápida con expresiones regulares y, si no, tool-calling) · `app/shift_report_service.py` (informes).
+- `app/placement.py` — colocación sobre calles reales (OSRM `/nearest`) y cortes de tráfico como tramos de calle. **Todo punto generado pasa por aquí**: nunca uses posiciones aleatorias en grados.
+- `app/emergency_catalog.py` — tipos de llamada con frecuencia, gravedad, tiempo en el lugar, probabilidad de traslado y demanda por hora.
+- `app/region_data/<región>.json` — lugares reales de OpenStreetMap (gasolineras, bases, bomberos, policía), leídos con `regions.region_places()`.
 - `app/supabase_client.py` — si no hay Supabase, el motor sigue funcionando sin persistencia.
 
 ## Reglas
@@ -19,12 +22,20 @@
 - Mensajes y textos generados para el usuario, en español claro (sin "Pulse", "mock" ni jerga).
 - `python -m pyflakes app` limpio (`bash scripts/verify.sh backend`).
 
+## Modelo de la simulación
+
+Ver `docs/pages/technical/modelo-de-simulacion.md`. En resumen:
+- Las rutas son `RouteCoords` (una lista con `seg_speeds_ms`, la velocidad de cada tramo según OSRM). El tick mueve la unidad con aceleración y frenada hacia la velocidad objetivo (`_target_speed_ms`).
+- Las fases con duración (`on_scene`, `at_hospital`, `refueling`) usan `phaseUntil` en segundos simulados (`sim_time_s`, expuesto como `simTimeS`).
+- Emergencias: `pending` → `assigned` → `on_scene` → `resolved` (al salir del lugar).
+
 ## Probar
 
 ```bash
 docker compose restart simulation          # tras editar (borra el estado en memoria)
 curl -s localhost:8080/api/sim/state | python -m json.tool | head
 bash scripts/smoke.sh --ai
+python scripts/check_realism.py      # todo sobre calles, velocidades y fases plausibles
 ```
 
 Escenario de prueba: `POST /api/sim/generate-scenario {"hospitals":3,"gasStations":2,"ambulances":5,"incidents":3,"clearExisting":true}` y después `POST /api/sim/control {"action":"play"}`.

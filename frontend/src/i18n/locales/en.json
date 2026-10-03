@@ -1,6 +1,6 @@
 {
   "island": {
-    "title": "Overview",
+    "title": "Regional overview",
     "generated": "Updated",
     "weather": "Weather",
     "stations": "Stations",
@@ -23,13 +23,19 @@
     "affectedMissions": "Affected missions",
     "map": "Region map",
     "zones": "By area",
-    "subtitle": "Region summary: weather, external incidents and fleet status.",
-    "zone_legend": "U = units · I = external incidents · E = incidents",
+    "subtitle": "What is happening in the region right now: weather, incidents on public roads and fleet status.",
+    "zone_legend": "U = units · I = external incidents · E = emergencies",
     "no_impact": "No effect",
     "zone_nw": "North-west",
     "zone_ne": "North-east",
     "zone_sw": "South-west",
-    "zone_se": "South-east"
+    "zone_se": "South-east",
+    "alert_kind": {
+      "storm": "Heavy rain",
+      "wind": "Strong wind",
+      "fog": "Fog"
+    },
+    "alert_detail": "rain {rain} mm · wind {wind} km/h · visibility {vis} km"
   },
   "common": {
     "loading": "Loading…",
@@ -95,7 +101,7 @@
   "nav": {
     "operations": "Map",
     "telemetry": "Fleet",
-    "comms": "Connectivity",
+    "comms": "Communications",
     "reports": "Reports",
     "config": "Settings",
     "island": "Overview"
@@ -224,7 +230,7 @@
     "speed": "Speed",
     "speed_label": "Speed ×{value}",
     "scenario_builder": "Scenario builder",
-    "generate_scenario": "AI scenario generator",
+    "generate_scenario": "Generate scenario",
     "generate_incidents": "Generate incidents",
     "training_mode": "Training mode",
     "training_active": "Training active",
@@ -263,7 +269,7 @@
     "config_subtitle": "Unit and place types available on the map, and how incidents are assigned.",
     "tab_vehicles": "Unit types",
     "tab_places": "Place types",
-    "tab_dispatch": "Assignment",
+    "tab_dispatch": "Dispatch",
     "edit": "Edit",
     "delete": "Delete",
     "confirm": "Confirm",
@@ -273,7 +279,7 @@
     "builtin": "Built-in",
     "custom": "Custom",
     "new_place_title": "New place type",
-    "dispatch_config": "Incident assignment",
+    "dispatch_config": "Emergency dispatch",
     "delete_failed": "Delete failed",
     "delete_ok": "«{name}» deleted",
     "create_place_failed": "Place creation failed",
@@ -300,7 +306,13 @@
     "add_place_btn": "Create place type",
     "name_label": "Name *",
     "svg_loaded": "Icon loaded",
-    "svg_upload": "Upload icon (.svg)"
+    "svg_upload": "Upload icon (.svg)",
+    "dispatch_intro": "Choose who picks the unit sent to each new emergency.",
+    "dispatch_auto_title": "Automatic",
+    "dispatch_auto_desc": "The system immediately sends the available unit that can arrive first.",
+    "dispatch_manual_title": "Operator approval",
+    "dispatch_manual_desc": "The AI suggests a unit and waits for your approval in “AI suggestions” before sending it.",
+    "dispatch_scope_note": "Only the first unit is affected. Back-up units (helicopter, police) follow the AI mode chosen in the header. Resetting the scenario switches back to “Automatic”."
   },
   "ai": {
     "mode": "AI mode",
@@ -435,8 +447,8 @@
     "ml_warning": "Watch"
   },
   "comms": {
-    "title": "Connectivity",
-    "subtitle": "How unit data reaches the centre. If a channel fails, the next one takes over.",
+    "title": "Communications",
+    "subtitle": "Contact with the units: each unit's link, dispatch messages and data channels.",
     "live": "Live",
     "channel": "Channel",
     "actor": "Actor",
@@ -469,7 +481,7 @@
     "col_ok": "Delivered",
     "no_events": "No messages yet. Start the simulation.",
     "errors_warn": "Some messages failed: check the disabled channel or the message broker.",
-    "log_title": "Latest messages",
+    "log_title": "Latest data sends",
     "ch_mqtt": "Primary (MQTT)",
     "ch_p2p": "Unit to unit (P2P)",
     "ch_http": "Backup (HTTP)",
@@ -477,7 +489,45 @@
     "link_p2p_active": "Unit to unit",
     "link_http_active": "Backup",
     "link_down": "No channel",
-    "batch_units": "{n} unit | {n} units"
+    "batch_units": "{n} unit | {n} units",
+    "kpi_link": "Channel in use",
+    "kpi_online": "Units connected",
+    "kpi_latency": "Average latency",
+    "kpi_unread": "Unread messages",
+    "units_title": "Link per unit",
+    "units_help": "Units that need attention come first. Click a row to message it.",
+    "col_unit": "Unit",
+    "col_status": "Status",
+    "col_network": "Network",
+    "col_signal": "Signal",
+    "col_loss": "Loss",
+    "col_last_contact": "Last contact",
+    "quality_good": "Good",
+    "quality_fair": "Fair",
+    "quality_weak": "Weak",
+    "quality_none": "No coverage",
+    "just_now": "now",
+    "seconds_ago": "{n} s ago",
+    "unit_no_channel": "no channel",
+    "no_units": "There are no units on the map.",
+    "select_to_message": "Message this unit",
+    "messages_title": "Messages to units",
+    "messages_help": "They appear on the vehicle screen; with no channel they wait in a queue until it is back.",
+    "to": "To",
+    "all_units": "All units",
+    "message_placeholder": "Type a message…",
+    "send": "Send",
+    "msg_sent": "Message sent",
+    "msg_queued": "No channel: the message is queued",
+    "msg_error": "The message could not be sent",
+    "msg_status_queued": "Queued",
+    "msg_status_delivered": "Delivered",
+    "msg_status_read": "Read",
+    "quick_confirm_position": "Confirm your position",
+    "quick_return_base": "Return to base",
+    "quick_report_status": "Report the patient's condition",
+    "quick_stand_by": "Stand by for instructions",
+    "quick_proceed_hospital": "Proceed to the assigned hospital"
   },
   "reports": {
     "title": "Shift reports",
@@ -587,7 +637,9 @@
     "remaining": "Remaining",
     "status": "Status",
     "end_service": "End service",
-    "retry": "Retry"
+    "retry": "Retry",
+    "msg_from_dispatch": "Message from dispatch",
+    "msg_ack": "Acknowledge"
   },
   "map": {
     "tools_title": "Tools",
@@ -610,7 +662,8 @@
     "emergency_status": {
       "pending": "Unassigned",
       "assigned": "Unit en route",
-      "resolved": "Resolved"
+      "resolved": "Resolved",
+      "on_scene": "Unit on scene"
     },
     "cluster_hint": "Click to zoom in",
     "cluster_units": "unit | units",
@@ -723,7 +776,7 @@
     "place_hint": "Click the map to place “{name}”",
     "emergency_desc_label": "What happened (optional, helps the AI)",
     "generate_menu": "Generate",
-    "generate_incidents_desc": "The AI creates varied incidents within the region.",
+    "generate_incidents_desc": "Creates realistic emergencies on streets in the region, with plausible type, severity and place.",
     "generate_scenario_desc": "Places hospitals, fuel stations and fleet, plus optional starting incidents.",
     "extra_units": "Other units",
     "reset_before": "Clear the map first",
@@ -746,7 +799,8 @@
     "bpm": "bpm",
     "glasgow": "GCS",
     "scenario_generated_desc": "{hospitals} hospitals · {stations} fuel stations · {units} units · {incidents} incidents",
-    "no_destination": "No destination: available"
+    "no_destination": "No destination: available",
+    "minutes_left": "{n} min left | {n} min left"
   },
   "auth_callback": {
     "verifying": "Verifying…",
@@ -760,7 +814,9 @@
     "refueling": "Refuelling",
     "repositioning": "Returning to base",
     "unavailable": "Unavailable",
-    "off": "Off"
+    "off": "Off",
+    "on_scene": "On scene",
+    "handover": "Hospital handover"
   },
   "events": {
     "type": {

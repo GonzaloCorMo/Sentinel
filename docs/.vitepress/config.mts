@@ -67,6 +67,7 @@ export default defineConfig({
         text: 'Técnico',
         items: [
           { text: 'API de simulación (HTTP + SSE)', link: '/technical/simulation-api-http-sse' },
+          { text: 'Modelo de simulación', link: '/technical/modelo-de-simulacion' },
           { text: 'Fuente de eventos', link: '/technical/fuente-de-eventos' },
           { text: 'Simulador y despacho', link: '/technical/simulador-global-despacho' },
           { text: 'Base de datos', link: '/technical/base-de-datos' },

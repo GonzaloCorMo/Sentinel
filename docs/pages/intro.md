@@ -4,7 +4,7 @@
 
 ## Componentes
 
-- **Dashboard del operador** (Mapa `/map` · Situación `/overview` · Flota `/fleet` · Conectividad `/comms` · Informes `/reports` · Ajustes `/config`): operación central, resumen de la región y asistente con modos "Preguntar" y "Dar una orden".
+- **Dashboard del operador** (Mapa `/map` · Panorama `/overview` · Flota `/fleet` · Comunicaciones `/comms` · Informes `/reports` · Ajustes `/config`): operación central, resumen de la región y asistente con modos "Preguntar" y "Dar una orden".
 - **PWA ciudadana** (`/message-alert`, alias `/m`): reportar una emergencia desde el móvil con voz y geolocalización.
 - **Panel del vehículo** (`/vehicle`): el piloto registra su unidad, recibe la asignación y ve la ruta OSRM con indicaciones paso a paso. El login con rol `vehicle` redirige aquí por defecto.
 - **Motor de simulación** (`simulation/`): FastAPI con bucle asyncio, cinco motores de telemetría por unidad, ETA dinámica y scoring de asignación.

@@ -1,6 +1,6 @@
 {
   "island": {
-    "title": "Situación",
+    "title": "Panorama de la región",
     "generated": "Actualizado",
     "weather": "Tiempo",
     "stations": "Estaciones",
@@ -23,13 +23,19 @@
     "affectedMissions": "Misiones afectadas",
     "map": "Mapa de la región",
     "zones": "Por zona",
-    "subtitle": "Resumen de la región: tiempo, incidencias externas y estado de la flota.",
+    "subtitle": "Lo que pasa ahora en la región: tiempo, incidencias en la vía pública y estado de la flota.",
     "zone_legend": "U = unidades · I = incidencias externas · E = emergencias",
     "no_impact": "Sin efecto",
     "zone_nw": "Noroeste",
     "zone_ne": "Noreste",
     "zone_sw": "Suroeste",
-    "zone_se": "Sureste"
+    "zone_se": "Sureste",
+    "alert_kind": {
+      "storm": "Lluvia intensa",
+      "wind": "Viento fuerte",
+      "fog": "Niebla"
+    },
+    "alert_detail": "lluvia {rain} mm · viento {wind} km/h · visibilidad {vis} km"
   },
   "common": {
     "loading": "Cargando…",
@@ -95,10 +101,10 @@
   "nav": {
     "operations": "Mapa",
     "telemetry": "Flota",
-    "comms": "Conectividad",
+    "comms": "Comunicaciones",
     "reports": "Informes",
     "config": "Ajustes",
-    "island": "Situación"
+    "island": "Panorama"
   },
   "filters": {
     "title": "Filtros activos",
@@ -224,7 +230,7 @@
     "speed": "Velocidad",
     "speed_label": "Velocidad ×{value}",
     "scenario_builder": "Constructor de escenario",
-    "generate_scenario": "Generar escenario IA",
+    "generate_scenario": "Generar escenario",
     "generate_incidents": "Generar incidencias",
     "training_mode": "Modo entrenamiento",
     "training_active": "Entrenamiento activo",
@@ -300,7 +306,13 @@
     "add_place_btn": "Crear tipo de lugar",
     "name_label": "Nombre *",
     "svg_loaded": "Icono cargado",
-    "svg_upload": "Subir icono (.svg)"
+    "svg_upload": "Subir icono (.svg)",
+    "dispatch_intro": "Decide quién elige la unidad que acude a cada emergencia nueva.",
+    "dispatch_auto_title": "Automática",
+    "dispatch_auto_desc": "El sistema envía al momento la unidad disponible que antes puede llegar.",
+    "dispatch_manual_title": "Con aprobación del operador",
+    "dispatch_manual_desc": "La IA propone una unidad y espera a que la apruebes en «Sugerencias de la IA» antes de enviarla.",
+    "dispatch_scope_note": "Solo afecta a la primera unidad. Los refuerzos (helicóptero, policía) siguen el modo de la IA elegido en la cabecera. Al reiniciar el escenario vuelve a «Automática»."
   },
   "ai": {
     "mode": "Modo IA",
@@ -435,8 +447,8 @@
     "ml_warning": "Vigilar"
   },
   "comms": {
-    "title": "Conectividad",
-    "subtitle": "Cómo llegan los datos de las unidades. Si un canal cae, se usa el siguiente automáticamente.",
+    "title": "Comunicaciones",
+    "subtitle": "Contacto con las unidades: enlace de cada una, mensajes de la central y canales de datos.",
     "live": "En vivo",
     "channel": "Canal",
     "actor": "Actor",
@@ -469,7 +481,7 @@
     "col_ok": "Entregado",
     "no_events": "Aún no hay envíos. Inicia la simulación.",
     "errors_warn": "Hay envíos fallidos: revisa el canal apagado o el servidor de mensajería.",
-    "log_title": "Últimos envíos",
+    "log_title": "Últimos envíos de datos",
     "ch_mqtt": "Principal (MQTT)",
     "ch_p2p": "Entre unidades (P2P)",
     "ch_http": "Respaldo (HTTP)",
@@ -477,7 +489,45 @@
     "link_p2p_active": "Entre unidades",
     "link_http_active": "Respaldo",
     "link_down": "Sin canal",
-    "batch_units": "{n} unidad | {n} unidades"
+    "batch_units": "{n} unidad | {n} unidades",
+    "kpi_link": "Canal en uso",
+    "kpi_online": "Unidades con enlace",
+    "kpi_latency": "Latencia media",
+    "kpi_unread": "Mensajes sin leer",
+    "units_title": "Enlace por unidad",
+    "units_help": "Primero las que necesitan atención. Pulsa una fila para escribirle.",
+    "col_unit": "Unidad",
+    "col_status": "Estado",
+    "col_network": "Red",
+    "col_signal": "Señal",
+    "col_loss": "Pérdida",
+    "col_last_contact": "Último contacto",
+    "quality_good": "Buena",
+    "quality_fair": "Aceptable",
+    "quality_weak": "Débil",
+    "quality_none": "Sin cobertura",
+    "just_now": "ahora",
+    "seconds_ago": "hace {n} s",
+    "unit_no_channel": "sin canal",
+    "no_units": "No hay unidades en el mapa.",
+    "select_to_message": "Escribir a esta unidad",
+    "messages_title": "Mensajes a las unidades",
+    "messages_help": "Llegan a la pantalla del vehículo; si no hay canal, quedan en cola hasta que vuelva.",
+    "to": "Para",
+    "all_units": "Todas las unidades",
+    "message_placeholder": "Escribe un mensaje…",
+    "send": "Enviar",
+    "msg_sent": "Mensaje enviado",
+    "msg_queued": "Sin canal: el mensaje queda en cola",
+    "msg_error": "No se pudo enviar el mensaje",
+    "msg_status_queued": "En cola",
+    "msg_status_delivered": "Entregado",
+    "msg_status_read": "Leído",
+    "quick_confirm_position": "Confirme su posición",
+    "quick_return_base": "Regrese a la base",
+    "quick_report_status": "Informe del estado del paciente",
+    "quick_stand_by": "Quede a la espera de instrucciones",
+    "quick_proceed_hospital": "Diríjase al hospital asignado"
   },
   "reports": {
     "title": "Informes de turno",
@@ -587,7 +637,9 @@
     "remaining": "Restante",
     "status": "Estado",
     "end_service": "Finalizar servicio",
-    "retry": "Reintentar"
+    "retry": "Reintentar",
+    "msg_from_dispatch": "Mensaje de la central",
+    "msg_ack": "Recibido"
   },
   "map": {
     "tools_title": "Herramientas",
@@ -610,7 +662,8 @@
     "emergency_status": {
       "pending": "Sin asignar",
       "assigned": "Unidad en camino",
-      "resolved": "Atendida"
+      "resolved": "Atendida",
+      "on_scene": "Unidad en el lugar"
     },
     "cluster_hint": "Haz clic para acercar",
     "cluster_units": "unidad | unidades",
@@ -723,7 +776,7 @@
     "place_hint": "Haz clic en el mapa para colocar «{name}»",
     "emergency_desc_label": "Qué ocurre (opcional, ayuda a la IA)",
     "generate_menu": "Generar",
-    "generate_incidents_desc": "La IA crea emergencias variadas dentro de la región.",
+    "generate_incidents_desc": "Crea emergencias realistas en calles de la región: tipo, gravedad y lugar plausibles.",
     "generate_scenario_desc": "Coloca hospitales, gasolineras y flota, y opcionalmente emergencias iniciales.",
     "extra_units": "Otras unidades",
     "reset_before": "Vaciar el mapa antes de generar",
@@ -746,7 +799,8 @@
     "bpm": "lpm",
     "glasgow": "Glasgow",
     "scenario_generated_desc": "{hospitals} hospitales · {stations} gasolineras · {units} unidades · {incidents} emergencias",
-    "no_destination": "Sin destino: disponible"
+    "no_destination": "Sin destino: disponible",
+    "minutes_left": "queda {n} min | quedan {n} min"
   },
   "auth_callback": {
     "verifying": "Verificando…",
@@ -760,7 +814,9 @@
     "refueling": "Repostando",
     "repositioning": "Volviendo a base",
     "unavailable": "No disponible",
-    "off": "Apagada"
+    "off": "Apagada",
+    "on_scene": "En el lugar",
+    "handover": "Transferencia en hospital"
   },
   "events": {
     "type": {

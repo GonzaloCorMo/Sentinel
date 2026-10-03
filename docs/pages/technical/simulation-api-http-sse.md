@@ -74,7 +74,7 @@ La cadencia SSE es **fija**: `speedMultiplier` solo afecta al motor interno, no 
 ## Generación de escenarios
 
 - `POST /api/sim/generate-scenario`: crea hospitales, gasolineras, ambulancias y emergencias en un radio alrededor del centro indicado. Admite `extraByType` para mezclar tipos custom (p. ej. ambulancia eléctrica + helicóptero). Si están presentes `ambulance_combustion` y `ambulance_electric`, el reparto es 60/40.
-- `POST /api/sim/generate-incidents`: N emergencias realistas (generadas por el LLM si está disponible; pool de respaldo si no).
+- `POST /api/sim/generate-incidents`: N emergencias del catálogo realista (`emergency_catalog.py`), cada una en una calle real de la región.
 - `POST /api/sim/crisis`: demos rápidas `altercation`, `mass_casualty`, `eta_exceeded`.
 
 ## Modo de entrenamiento autónomo

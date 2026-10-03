@@ -334,7 +334,17 @@ const missionPhaseLabel = computed<Record<string, string>>(() => ({
   to_refuel: t("operations.phase_to_refuel"),
   to_staging: t("operations.phase_to_staging"),
   to_hospital: t("operations.phase_to_hospital"),
+  on_scene: t("status.on_scene"),
+  at_hospital: t("status.handover"),
+  refueling: t("status.refueling"),
 }));
+
+/** Minutos simulados que faltan para terminar la fase actual (en el lugar, transferencia, repostaje). */
+function phaseMinutesLeft(amb: { phaseUntil?: number | null }): number | null {
+  const now = state.value?.simTimeS;
+  if (amb.phaseUntil == null || now == null) return null;
+  return Math.max(1, Math.ceil((amb.phaseUntil - now) / 60));
+}
 
 function companionsForEmergency(emergencyId: string | null | undefined) {
   if (!emergencyId) return [];
@@ -366,6 +376,19 @@ const destinationLabel = computed(() => {
   if (phase === "to_emergency" && amb.assignedEmergencyId) {
     const e = s.emergencies.find((x) => x.id === amb.assignedEmergencyId);
     return e ? e.title : String(amb.assignedEmergencyId);
+  }
+  const left = phaseMinutesLeft(amb);
+  const leftTxt = left != null ? ` · ${t("operations.minutes_left", { n: left }, left)}` : "";
+  if (phase === "on_scene") {
+    const e = s.emergencies.find((x) => x.id === amb.assignedEmergencyId);
+    return `${t("status.on_scene")}${e ? `: ${e.title}` : ""}${leftTxt}`;
+  }
+  if (phase === "at_hospital") {
+    const p = s.pois.find((x) => x.id === amb.stagingHospitalId);
+    return `${t("status.handover")}${p ? `: ${p.name}` : ""}${leftTxt}`;
+  }
+  if (phase === "refueling") {
+    return `${t("status.refueling")}${leftTxt}`;
   }
   if (phase === "to_refuel" && amb.refuelPoiId) {
     const p = s.pois.find((x) => x.id === amb.refuelPoiId);

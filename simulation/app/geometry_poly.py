@@ -53,3 +53,22 @@ def polyline_intersects_polygon(
             if segments_intersect(a, b, c, d):
                 return True
     return False
+
+
+def point_in_polygon(pt: tuple[float, float], polygon: list[tuple[float, float]]) -> bool:
+    """¿Está ``pt`` (lat, lon) dentro del polígono? (ray casting, borde incluido aprox.)."""
+    y, x = pt
+    inside = False
+    n = len(polygon)
+    if n < 3:
+        return False
+    j = n - 1
+    for i in range(n):
+        yi, xi = polygon[i]
+        yj, xj = polygon[j]
+        if (yi > y) != (yj > y):
+            x_cross = xi + (y - yi) * (xj - xi) / ((yj - yi) or 1e-12)
+            if x < x_cross:
+                inside = not inside
+        j = i
+    return inside

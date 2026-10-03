@@ -6,7 +6,7 @@ El chatbot de Sentinel es un asistente inteligente que responde preguntas sobre 
 
 ## Cómo acceder
 
-El chatbot aparece como un **panel flotante** en la esquina inferior izquierda de la aplicación. Está disponible en todas las secciones (Mapa, Situación, Flota, Conectividad, Informes).
+El chatbot aparece como un **panel flotante** en la esquina inferior izquierda de la aplicación. Está disponible en todas las secciones (Mapa, Panorama, Flota, Comunicaciones, Informes).
 
 - **Abrir**: haz clic en el botón circular con el icono de chat.
 - **Cerrar**: haz clic en la "X" del panel o en el botón circular de nuevo.

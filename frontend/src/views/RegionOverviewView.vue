@@ -160,9 +160,9 @@ function formatDuration(sec: number | null | undefined): string {
           <div class="text-slate-400">{{ t("island.alerts") }}: {{ summary.weather.alerts.length }}</div>
           <ul class="mt-1 max-h-40 overflow-y-auto space-y-1">
             <li v-for="a in summary.weather.alerts" :key="a.stationId" class="rounded-sm border border-red-500/30 px-2 py-1">
-              <span class="font-mono text-red-300">{{ a.kind.toUpperCase() }}</span>
+              <span class="font-medium text-red-300">{{ te(`island.alert_kind.${a.kind}`) ? t(`island.alert_kind.${a.kind}`) : a.kind }}</span>
               <span class="ml-1">{{ a.stationName }}</span>
-              <span class="ml-1 text-slate-400">— precip {{ a.precipMm }}mm, wind {{ a.windKmh }}km/h, vis {{ a.visibilityKm }}km</span>
+              <span class="ml-1 font-mono text-slate-400">{{ t("island.alert_detail", { rain: a.precipMm, wind: a.windKmh, vis: a.visibilityKm }) }}</span>
             </li>
             <li v-if="summary.weather.alerts.length === 0" class="text-slate-500">{{ t("island.allClear") }}</li>
           </ul>

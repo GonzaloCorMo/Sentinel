@@ -1,0 +1,262 @@
+{
+ "_source": "OpenStreetMap (© colaboradores de OSM, ODbL), extracto de la región Santiago",
+ "_generated": "2026-10-04",
+ "fuel_stations": [
+  {
+   "name": "Moeve",
+   "lat": 42.964223,
+   "lon": -8.45018
+  },
+  {
+   "name": "Avia",
+   "lat": 42.80342,
+   "lon": -8.54686
+  },
+  {
+   "name": "Estación de Servizo Novo Milladoiro",
+   "lat": 42.849674,
+   "lon": -8.582706
+  },
+  {
+   "name": "Gasóleos San Benito",
+   "lat": 42.837417,
+   "lon": -8.443278
+  },
+  {
+   "name": "Repsol",
+   "lat": 42.96019,
+   "lon": -8.646953
+  },
+  {
+   "name": "Shell",
+   "lat": 42.898846,
+   "lon": -8.423243
+  },
+  {
+   "name": "Moeve",
+   "lat": 42.909926,
+   "lon": -8.492512
+  },
+  {
+   "name": "Plenergy Santiago de Compostela III",
+   "lat": 42.909214,
+   "lon": -8.491846
+  },
+  {
+   "name": "A Galuresa",
+   "lat": 42.854848,
+   "lon": -8.571344
+  },
+  {
+   "name": "Los Ángeles Gas - Moeve",
+   "lat": 42.901841,
+   "lon": -8.512138
+  },
+  {
+   "name": "Galp",
+   "lat": 42.811344,
+   "lon": -8.58592
+  },
+  {
+   "name": "Galp",
+   "lat": 42.876034,
+   "lon": -8.548475
+  },
+  {
+   "name": "Repsol Gas",
+   "lat": 42.906277,
+   "lon": -8.516058
+  },
+  {
+   "name": "SBC",
+   "lat": 42.902391,
+   "lon": -8.52029
+  },
+  {
+   "name": "Repsol",
+   "lat": 42.911806,
+   "lon": -8.513801
+  },
+  {
+   "name": "Star Oil",
+   "lat": 42.917989,
+   "lon": -8.526496
+  },
+  {
+   "name": "Repsol",
+   "lat": 42.898822,
+   "lon": -8.527579
+  },
+  {
+   "name": "Repsol",
+   "lat": 42.892103,
+   "lon": -8.532702
+  },
+  {
+   "name": "Valcarce",
+   "lat": 42.910247,
+   "lon": -8.517878
+  },
+  {
+   "name": "Plenergy",
+   "lat": 42.902573,
+   "lon": -8.509012
+  },
+  {
+   "name": "Galp",
+   "lat": 42.864464,
+   "lon": -8.628869
+  },
+  {
+   "name": "La Carabela",
+   "lat": 42.900226,
+   "lon": -8.437998
+  },
+  {
+   "name": "Galp",
+   "lat": 42.903058,
+   "lon": -8.500963
+  },
+  {
+   "name": "Estación de Servizo Santa Lucía S.L.",
+   "lat": 42.843338,
+   "lon": -8.522683
+  },
+  {
+   "name": "Galp",
+   "lat": 42.853884,
+   "lon": -8.6713
+  },
+  {
+   "name": "Repsol",
+   "lat": 42.873161,
+   "lon": -8.622731
+  },
+  {
+   "name": "Petroprix",
+   "lat": 42.904781,
+   "lon": -8.513602
+  },
+  {
+   "name": "Galuresa",
+   "lat": 42.861763,
+   "lon": -8.541857
+  },
+  {
+   "name": "Moeve",
+   "lat": 42.836496,
+   "lon": -8.544822
+  },
+  {
+   "name": "Estación de Servizo Galuresa",
+   "lat": 42.869962,
+   "lon": -8.548284
+  },
+  {
+   "name": "Moeve",
+   "lat": 42.821591,
+   "lon": -8.612041
+  },
+  {
+   "name": "Plenergy",
+   "lat": 42.914256,
+   "lon": -8.528826
+  },
+  {
+   "name": "Carbugal",
+   "lat": 42.901956,
+   "lon": -8.507573
+  },
+  {
+   "name": "GV Oil",
+   "lat": 42.853817,
+   "lon": -8.539749
+  },
+  {
+   "name": "Galp",
+   "lat": 42.922732,
+   "lon": -8.487148
+  },
+  {
+   "name": "Galp",
+   "lat": 42.804595,
+   "lon": -8.63629
+  },
+  {
+   "name": "Repsol Galuresa Brins",
+   "lat": 42.924862,
+   "lon": -8.575796
+  }
+ ],
+ "ambulance_bases": [
+  {
+   "name": "Nordés Ambulancias",
+   "lat": 42.885707,
+   "lon": -8.533436
+  }
+ ],
+ "fire_stations": [
+  {
+   "name": "Parque de Bombeiros de Santiago de Compostela",
+   "lat": 42.886935,
+   "lon": -8.533451
+  }
+ ],
+ "police_stations": [
+  {
+   "name": "Policía Local de Santiago de Compostela",
+   "lat": 42.880491,
+   "lon": -8.546435
+  },
+  {
+   "name": "Oficina Local da Dirección Xeral de Tráfico",
+   "lat": 42.875144,
+   "lon": -8.551625
+  },
+  {
+   "name": "Policía Local de Oroso",
+   "lat": 42.969265,
+   "lon": -8.441816
+  },
+  {
+   "name": "Garda Civil de Brión",
+   "lat": 42.863775,
+   "lon": -8.678594
+  },
+  {
+   "name": "Policía Local de Brión",
+   "lat": 42.866688,
+   "lon": -8.677412
+  },
+  {
+   "name": "Policía Local",
+   "lat": 42.859437,
+   "lon": -8.651306
+  },
+  {
+   "name": "Policía Nacional de Santiago de Compostela",
+   "lat": 42.878508,
+   "lon": -8.54641
+  },
+  {
+   "name": "Policía Autonómica Galega",
+   "lat": 42.885596,
+   "lon": -8.522952
+  },
+  {
+   "name": "Garda Civil de Santiago de Compostela",
+   "lat": 42.891052,
+   "lon": -8.523759
+  },
+  {
+   "name": "Garda Civil do Milladoiro",
+   "lat": 42.842842,
+   "lon": -8.575383
+  },
+  {
+   "name": "Garda Civil de Sigüeiro",
+   "lat": 42.959992,
+   "lon": -8.453861
+  }
+ ]
+}

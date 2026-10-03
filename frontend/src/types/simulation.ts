@@ -45,11 +45,35 @@ export interface MedicalTelemetry {
   respiratoryRatePerMin?: number;
 }
 
+export interface NetworkTelemetry {
+  /** 5G / 4G / 3G según la zona; "none" en zonas sin cobertura. */
+  networkType: "5G" | "4G" | "3G" | "none" | string;
+  rssiDbm: number;
+  latencyMs: { mqtt: number; http: number; p2p: number };
+  jitterMs?: number;
+  packetLossPct: number;
+  throughputMbps?: number;
+}
+
 export interface AmbulanceTelemetry {
   positioning: PositioningTelemetry;
   mechanical: MechanicalTelemetry;
   /** Null cuando la unidad no transporta paciente (motor médico apagado). */
   medical: MedicalTelemetry | null;
+  network?: NetworkTelemetry;
+}
+
+/** Mensaje de la central a una unidad (``unitId`` null = toda la flota). */
+export interface UnitMessage {
+  id: string;
+  unitId: string | null;
+  unitLabel?: string | null;
+  text: string;
+  status: "queued" | "delivered" | "read";
+  createdAt: string;
+  deliveredAt?: string | null;
+  readAt?: string | null;
+  channel?: string | null;
 }
 
 export interface EntityType {
@@ -91,8 +115,9 @@ export interface Jam {
   source?: string;
 }
 
-export type EmergencyStatus = "pending" | "assigned" | "resolved";
-export type EmergencyType = "medical" | "altercation" | "mass_casualty";
+/** pending → assigned (unidad en camino) → on_scene (asistiendo) → resolved. */
+export type EmergencyStatus = "pending" | "assigned" | "on_scene" | "resolved";
+export type EmergencyType = "medical" | "trauma" | "fire" | "hazmat" | "flood" | "altercation" | "mass_casualty";
 
 export type EmergencySource = "training" | "manual" | "external_feed" | "citizen";
 
@@ -107,6 +132,10 @@ export interface Emergency {
   assignedAmbulanceId?: string | null;
   source?: EmergencySource | string;
   severity?: ExternalEventSeverity | string;
+  /** Calle a la que se ajustó la dirección del aviso. */
+  street?: string;
+  /** Tipo concreto del catálogo de emergencias del motor. */
+  kindKey?: string;
   createdAt?: string;
 }
 
@@ -150,7 +179,12 @@ export interface Ambulance {
     | "to_emergency"
     | "to_refuel"
     | "to_staging"
-    | "to_hospital";
+    | "to_hospital"
+    | "on_scene"
+    | "at_hospital"
+    | "refueling";
+  /** Fin de la fase con duración (en el lugar, transferencia, repostaje), en segundos simulados. */
+  phaseUntil?: number | null;
   fsmState?: FsmState | string;
   speedKmh?: number;
   fuelLevel?: number;
@@ -166,6 +200,8 @@ export interface Ambulance {
   odometerKm?: number;
   updatedAt?: string;
   telemetry?: AmbulanceTelemetry;
+  /** Último envío de datos recibido de la unidad (ISO). */
+  lastContactAt?: string;
   routeCoords?: [number, number][] | null;
   routeProgressM?: number;
   roadSpeedLimitKmh?: number | null;
@@ -268,6 +304,8 @@ export interface SimulationStatePayload {
   isSimulating: boolean;
   motorState?: MotorState;
   paused?: boolean;
+  /** Segundos simulados desde el arranque del motor (referencia de `phaseUntil`). */
+  simTimeS?: number;
   networkStatus: { mqtt: boolean; p2p: boolean; http: boolean };
   linkState: LinkState | string;
   ambulances: Ambulance[];
@@ -278,6 +316,7 @@ export interface SimulationStatePayload {
   entityTypes?: EntityType[];
   dispatchRequiresApproval?: boolean;
   commsRecent?: CommsLogEntry[];
+  unitMessages?: UnitMessage[];
   stats: {
     totalAmbulances: number;
     activeEmergencies: number;

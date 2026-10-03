@@ -49,7 +49,7 @@ from .channels import ChannelRouter
 from .engines import TelemetryComposite
 from .event_writer import EventWriter
 from .telemetry_writer import FLUSH_EVERY_N_TICKS, TelemetryWriter
-from .geometry_poly import polyline_intersects_polygon
+from .geometry_poly import point_in_polygon, polyline_intersects_polygon
 from .route_nav import advance_along_polyline, haversine_m, heading_deg_towards, remaining_route_coords
 from .dispatch_scoring import (
     ScoringContext,
@@ -57,15 +57,32 @@ from .dispatch_scoring import (
     compute_weather_factor,
     default_registry,
 )
-from .synthetic_titles import SYNTHETIC_TITLES
-from .routing import detour_candidates_from_jam, fetch_route, osrm_base_url
+from . import emergency_catalog as ecat
+from .regions import get_active_region
+from .placement import random_road_point, road_segment, snap_to_road
+from .routing import detour_candidates_from_jam, fetch_route, osrm_base_url, table_durations, typical_limit_kmh
 
 FUEL_LOW_PCT = 25.0
 IDLE_REFUEL_FUEL_PCT = 20.0
 IDLE_REFUEL_COOLDOWN_TICKS = 120
 ROUTE_SPEED_MS = 12.0
-FUEL_DRAIN_PCT_PER_M = 0.0032
-BATTERY_DRAIN_PCT_PER_M = 0.0038
+# Consumo realista: depósito de ~80 L y ~16 L/100 km → ~0,2 % por km;
+# batería de ambulancia eléctrica con ~200 km de autonomía → 0,5 % por km.
+FUEL_DRAIN_PCT_PER_M = 0.00022
+BATTERY_DRAIN_PCT_PER_M = 0.0005
+# En parado el motor sigue encendido para el equipamiento sanitario.
+FUEL_IDLE_PCT_PER_S = 0.0004
+BATTERY_IDLE_PCT_PER_S = 0.0008
+# Dinámica del vehículo.
+FALLBACK_SPEED_MS = 9.0          # sin datos de vía (ruta en línea recta)
+ACCEL_MS2 = 2.0                  # aceleración cómoda de una furgoneta cargada
+DECEL_MS2 = 3.0                  # frenada de servicio
+TURN_SPEED_MS = 6.0              # ~22 km/h en giros cerrados
+JAM_SPEED_MS = 2.5               # circulación dentro de un atasco
+JAM_SPEED_URGENT_MS = 5.0        # con sirena, abriéndose paso
+REFUEL_SECONDS = 300.0           # repostar o recargar en la estación
+# Fases con duración fija: la unidad está parada hasta `phaseUntil` (s simulados).
+TIMED_PHASES = ("on_scene", "at_hospital", "refueling")
 JAM_REROUTE_COOLDOWN_TICKS = 15
 STAGING_RADIUS_M = 1200.0
 STAGING_COOLDOWN_TICKS = 100
@@ -146,7 +163,10 @@ class SimulationEngine:
         self.pois: list[dict[str, Any]] = default_pois_copy()
         self.jams: list[dict[str, Any]] = []
         self.external_jams: list[dict[str, Any]] = []
+        self._training_spawning = 0
         self.tick = 0
+        # Segundos simulados desde el arranque (tiempos en el lugar, entregas…).
+        self.sim_time_s = 0.0
         self.dispatch_requires_approval: bool = False
         self._ai_engine: Any = None
         self.entity_types: list[dict[str, Any]] = [
@@ -163,6 +183,8 @@ class SimulationEngine:
             {"id": "gas_station", "kind": "place", "name": "Gasolinera", "color": "#0ea5e9", "iconSvg": None, "builtIn": True},
         ]
         self._comms_log: deque[dict[str, Any]] = deque(maxlen=400)
+        # Mensajes de la central a las unidades (más recientes al final).
+        self.unit_messages: deque[dict[str, Any]] = deque(maxlen=200)
         self._comms_seq = 0
         self.channels = ChannelRouter(comms_callback=self._record_comms)
         self._telemetry = TelemetryComposite()
@@ -563,6 +585,7 @@ class SimulationEngine:
             "updatedAt": _iso(),
             "isSimulating": self._running,
             "paused": self.paused,
+            "simTimeS": round(self.sim_time_s, 1),
             "motorState": "RUNNING" if not self.paused else "PAUSED",
             "networkStatus": self.network.copy(),
             "linkState": self.channels.active_link.value,
@@ -572,6 +595,7 @@ class SimulationEngine:
             "jams": [j.copy() for j in self.jams] + [j.copy() for j in self.external_jams],
             "companions": [c.copy() for c in self.companions],
             "commsRecent": list(self._comms_log)[-80:],
+            "unitMessages": list(self.unit_messages)[-60:],
             "stats": {
                 "totalAmbulances": len(self.ambulances),
                 "activeEmergencies": sum(1 for e in self.emergencies if e.get("status") != "resolved"),
@@ -599,7 +623,7 @@ class SimulationEngine:
         return max(0.05, 0.5 / max(self.speed_multiplier, 0.1))
 
     def _has_active_emergency_work(self) -> bool:
-        return any(e.get("status") in ("pending", "assigned") for e in self.emergencies)
+        return any(e.get("status") in ("pending", "assigned", "on_scene") for e in self.emergencies)
 
     def _nearest_poi(self, amb: dict[str, Any], kind: str) -> dict[str, Any] | None:
         lat0 = float(amb.get("latitude") or 0.0)
@@ -720,7 +744,50 @@ class SimulationEngine:
             coords, lim, duration = best_coords, best_lim, best_duration
             route_pts = [(float(c[0]), float(c[1])) for c in coords]
 
-        return best_coords, best_lim
+        return best_coords, best_lim, best_duration
+
+    async def _rank_by_eta(
+        self,
+        scored: list[tuple[float, dict[str, float], dict[str, Any]]],
+        dest: tuple[float, float],
+        top_n: int = 6,
+    ) -> list[tuple[float, dict[str, float], dict[str, Any]]]:
+        """Reordena las mejores candidatas por tiempo real de llegada (OSRM ``/table``).
+
+        La puntuación previa (distancia en línea recta, tiempo, atascos)
+        preselecciona ``top_n``; entre ellas gana la que antes llega por
+        carretera. Si OSRM no responde, se mantiene el orden previo.
+        """
+        if len(scored) < 2:
+            return scored
+        head, tail = scored[:top_n], scored[top_n:]
+        sources = [(float(a["latitude"]), float(a["longitude"])) for _, _, a in head]
+        durations = await table_durations(self._http, sources, dest)
+        if not durations:
+            return scored
+        ranked = sorted(
+            zip(head, durations),
+            key=lambda pair: pair[1] if pair[1] is not None else float("inf"),
+        )
+        for (_, breakdown, _), dur in ranked:
+            if dur is not None:
+                breakdown["eta_s"] = round(dur, 1)
+        return [c for c, _ in ranked] + tail
+
+    async def _best_hospital(self, amb: dict[str, Any]) -> dict[str, Any] | None:
+        """Hospital al que antes se llega por carretera (``/table``); el más cercano si falla."""
+        hospitals = [p for p in self.pois if p.get("kind") == "hospital"]
+        if len(hospitals) <= 1:
+            return hospitals[0] if hospitals else None
+        start = (float(amb["latitude"]), float(amb["longitude"]))
+        durations = await table_durations(
+            self._http, [(float(h["latitude"]), float(h["longitude"])) for h in hospitals], start,
+        )
+        # `/table` mide hospital → unidad; en ciudad la asimetría es pequeña.
+        if durations and any(d is not None for d in durations):
+            best = min(zip(hospitals, durations), key=lambda hd: hd[1] if hd[1] is not None else float("inf"))
+            return best[0]
+        return self._nearest_poi(amb, "hospital")
 
     async def _dispatch_emergency(self, eid: str) -> None:
         """Asigna la unidad IDLE más adecuada a una emergencia pending.
@@ -752,6 +819,7 @@ class SimulationEngine:
             total, breakdown = self.dispatch_scoring.score_candidate(amb, em, ctx)
             scored.append((total, breakdown, amb))
         scored.sort(key=lambda x: x[0], reverse=True)
+        scored = await self._rank_by_eta(scored, dest)
         for total, breakdown, amb in scored:
             start = (float(amb["latitude"]), float(amb["longitude"]))
             trip_m = await estimate_trip_m(self._http, start, dest)
@@ -769,6 +837,7 @@ class SimulationEngine:
                     amb["roadSpeedLimitKmh"] = rlim
                 amb["routeProgressM"] = 0.0
                 amb["routeSpeedMs"] = ROUTE_SPEED_MS
+                amb["routeDurationS"] = route_duration_s
                 amb["refuelPending"] = False
                 amb["pendingEmergencyId"] = None
                 tr = self._mission_tracking.setdefault(eid, {})
@@ -1243,117 +1312,20 @@ class SimulationEngine:
                 ``mechanical.fuelLevelPct`` cuando aplica).
         """
         phase = amb.get("missionPhase")
+        amb["_prevSpeedMs"] = 0.0
+        amb["speedKmh"] = 0.0
         if phase == "to_refuel":
-            self._apply_energy_refill(amb, tele)
-            amb["refuelPoiId"] = None
-            amb["refuelPending"] = False
-            pe = amb.pop("pendingEmergencyId", None)
-            amb["assignedEmergencyId"] = pe
+            # Repostar lleva unos minutos: la unidad queda parada en la estación.
+            amb["missionPhase"] = "refueling"
+            amb["missionStatus"] = "REFUELING"
+            amb["fsmState"] = AmbulanceState.REFUELING.value
             amb["routeCoords"] = None
             amb["routeProgressM"] = 0.0
-            if pe:
-                amb["missionPhase"] = "to_emergency"
-                e = self._emergency_by_id(str(pe))
-                if e:
-                    e["status"] = "assigned"
-                    e["assignedAmbulanceId"] = amb["id"]
-                    start = (float(amb["latitude"]), float(amb["longitude"]))
-                    dest = (float(e["latitude"]), float(e["longitude"]))
-                    route, rlim, route_duration_s = await self._route_with_jam_avoidance(start, dest)
-                    if len(route) < 2:
-                        route = [start, dest]
-                    amb["routeCoords"] = route
-                    if rlim is not None:
-                        amb["roadSpeedLimitKmh"] = rlim
-                    amb["routeSpeedMs"] = ROUTE_SPEED_MS
-                    amb["fsmState"] = AmbulanceState.RESPONDING.value
-                else:
-                    amb["assignedEmergencyId"] = None
-                    amb["missionPhase"] = "idle"
-                    amb["missionStatus"] = "INACTIVE"
-                    amb["fsmState"] = AmbulanceState.IDLE.value
-                    amb["_idleRefuelCooldown"] = self.tick + IDLE_REFUEL_COOLDOWN_TICKS
-                    await self._try_assign_pending_emergency_to_ambulance(amb)
-                    if infer_fsm_state(amb) == AmbulanceState.IDLE and not amb.get("routeCoords"):
-                        hosp = self._pick_staging_hospital(amb)
-                        if hosp:
-                            await self._start_staging(amb, hosp)
-                            amb["_stagingCooldown"] = self.tick + STAGING_COOLDOWN_TICKS
-            else:
-                amb["missionPhase"] = "idle"
-                amb["missionStatus"] = "INACTIVE"
-                amb["fsmState"] = AmbulanceState.IDLE.value
-                amb["_idleRefuelCooldown"] = self.tick + IDLE_REFUEL_COOLDOWN_TICKS
-                assigned = await self._try_assign_pending_emergency_to_ambulance(amb)
-                if not assigned and infer_fsm_state(amb) == AmbulanceState.IDLE:
-                    hosp = self._pick_staging_hospital(amb)
-                    if hosp:
-                        await self._start_staging(amb, hosp)
-                        amb["_stagingCooldown"] = self.tick + STAGING_COOLDOWN_TICKS
+            amb["phaseUntil"] = self.sim_time_s + REFUEL_SECONDS
         elif phase == "to_emergency":
-            eid = amb.get("assignedEmergencyId")
-            if eid:
-                e = self._emergency_by_id(str(eid))
-                if e:
-                    e["status"] = "resolved"
-                    self._resolved_emergencies += 1
-                tr = self._mission_tracking.get(str(eid))
-                if tr is not None:
-                    tr["arrived_on_scene_at"] = _iso()
-                self._events.emit_event(
-                    "emergency", str(eid), "phase_change",
-                    payload={"phase": "on_scene"}, actor="engine", tick=self.tick,
-                )
-                # Recuerda el eid para cerrar el outcome cuando llegue al hospital.
-                amb["_lastEmergencyId"] = str(eid)
-            amb["assignedEmergencyId"] = None
-            amb["hasPatient"] = True
-            import random as _rng
-            amb["patientSeverity"] = _rng.choices(
-                ["stable", "moderate", "critical"], weights=[0.5, 0.3, 0.2],
-            )[0]
-            hosp = self._nearest_poi(amb, "hospital")
-            if hosp:
-                amb["missionPhase"] = "to_hospital"
-                amb["stagingHospitalId"] = hosp["id"]
-                amb["missionStatus"] = "EN_ROUTE"
-                amb["fsmState"] = AmbulanceState.TRANSPORTING.value
-                start = (float(amb["latitude"]), float(amb["longitude"]))
-                dest = (float(hosp["latitude"]), float(hosp["longitude"]))
-                route, rlim, route_duration_s = await self._route_with_jam_avoidance(start, dest)
-                amb["routeCoords"] = route if len(route) >= 2 else None
-                if rlim is not None:
-                    amb["roadSpeedLimitKmh"] = rlim
-                amb["routeProgressM"] = 0.0
-                amb["routeSpeedMs"] = ROUTE_SPEED_MS
-            else:
-                amb["hasPatient"] = False
-                amb["patientSeverity"] = None
-                amb["missionPhase"] = "idle"
-                amb["routeCoords"] = None
-                amb["routeProgressM"] = 0.0
-                amb["missionStatus"] = "INACTIVE"
-                amb["fsmState"] = AmbulanceState.IDLE.value
-                await self._try_assign_pending_emergency_to_ambulance(amb)
+            await self._arrive_on_scene(amb)
         elif phase == "to_hospital":
-            # Cierra outcome de la misión (label ML) y emite evento resolved.
-            eid_done = amb.pop("_lastEmergencyId", None)
-            if eid_done:
-                self._emit_mission_outcome(eid_done, amb)
-                self._events.emit_event(
-                    "emergency", eid_done, "resolved",
-                    payload={"ambulanceId": str(amb["id"])},
-                    actor="engine", tick=self.tick,
-                )
-            amb["hasPatient"] = False
-            amb["patientSeverity"] = None
-            amb["missionPhase"] = "idle"
-            amb["stagingHospitalId"] = None
-            amb["routeCoords"] = None
-            amb["routeProgressM"] = 0.0
-            amb["missionStatus"] = "INACTIVE"
-            amb["fsmState"] = AmbulanceState.IDLE.value
-            await self._try_assign_pending_emergency_to_ambulance(amb)
+            await self._arrive_at_hospital(amb)
         elif phase == "to_staging":
             self._apply_energy_refill(amb, tele)
             amb["missionPhase"] = "idle"
@@ -1363,6 +1335,269 @@ class SimulationEngine:
             amb["missionStatus"] = "INACTIVE"
             amb["fsmState"] = AmbulanceState.IDLE.value
             await self._try_assign_pending_emergency_to_ambulance(amb)
+
+    async def _finish_refuel(self, amb: dict[str, Any], tele: dict[str, Any]) -> None:
+        """Fin del repostaje: llena el depósito y retoma la emergencia pendiente o queda libre."""
+        self._apply_energy_refill(amb, tele)
+        amb["refuelPoiId"] = None
+        amb["refuelPending"] = False
+        pe = amb.pop("pendingEmergencyId", None)
+        amb["assignedEmergencyId"] = pe
+        amb["routeCoords"] = None
+        amb["routeProgressM"] = 0.0
+        if pe:
+            amb["missionPhase"] = "to_emergency"
+            e = self._emergency_by_id(str(pe))
+            if e:
+                e["status"] = "assigned"
+                e["assignedAmbulanceId"] = amb["id"]
+                start = (float(amb["latitude"]), float(amb["longitude"]))
+                dest = (float(e["latitude"]), float(e["longitude"]))
+                route, rlim, route_duration_s = await self._route_with_jam_avoidance(start, dest)
+                if len(route) < 2:
+                    route = [start, dest]
+                amb["routeCoords"] = route
+                if rlim is not None:
+                    amb["roadSpeedLimitKmh"] = rlim
+                amb["routeSpeedMs"] = ROUTE_SPEED_MS
+                amb["fsmState"] = AmbulanceState.RESPONDING.value
+            else:
+                amb["assignedEmergencyId"] = None
+                amb["missionPhase"] = "idle"
+                amb["missionStatus"] = "INACTIVE"
+                amb["fsmState"] = AmbulanceState.IDLE.value
+                amb["_idleRefuelCooldown"] = self.tick + IDLE_REFUEL_COOLDOWN_TICKS
+                await self._try_assign_pending_emergency_to_ambulance(amb)
+                if infer_fsm_state(amb) == AmbulanceState.IDLE and not amb.get("routeCoords"):
+                    hosp = self._pick_staging_hospital(amb)
+                    if hosp:
+                        await self._start_staging(amb, hosp)
+                        amb["_stagingCooldown"] = self.tick + STAGING_COOLDOWN_TICKS
+        else:
+            amb["missionPhase"] = "idle"
+            amb["missionStatus"] = "INACTIVE"
+            amb["fsmState"] = AmbulanceState.IDLE.value
+            amb["_idleRefuelCooldown"] = self.tick + IDLE_REFUEL_COOLDOWN_TICKS
+            assigned = await self._try_assign_pending_emergency_to_ambulance(amb)
+            if not assigned and infer_fsm_state(amb) == AmbulanceState.IDLE:
+                hosp = self._pick_staging_hospital(amb)
+                if hosp:
+                    await self._start_staging(amb, hosp)
+                    amb["_stagingCooldown"] = self.tick + STAGING_COOLDOWN_TICKS
+
+    def _local_hour(self) -> int:
+        try:
+            from zoneinfo import ZoneInfo
+            return datetime.now(ZoneInfo(get_active_region().timezone)).hour
+        except Exception:
+            return datetime.now().hour
+
+    def _emergency_kind(self, em: dict[str, Any]) -> ecat.EmergencyKind:
+        """Tipo del catálogo de una emergencia; se fija la primera vez que se pide."""
+        kind = ecat.kind_by_key(em.get("kindKey"))
+        if kind is None:
+            import random as _rng
+            kind = ecat.kind_for_type(_rng, em.get("emergencyType"), self._local_hour())
+            em["kindKey"] = kind.key
+        if not em.get("severity"):
+            import random as _rng
+            em["severity"] = ecat.pick_severity(_rng, kind)
+        return kind
+
+    async def _arrive_on_scene(self, amb: dict[str, Any]) -> None:
+        """La unidad llega al lugar: asistencia durante un tiempo según el tipo y la gravedad."""
+        import random as _rng
+        eid = amb.get("assignedEmergencyId")
+        e = self._emergency_by_id(str(eid)) if eid else None
+        amb["routeCoords"] = None
+        amb["routeProgressM"] = 0.0
+        if not e:
+            amb["assignedEmergencyId"] = None
+            self._set_idle(amb)
+            await self._try_assign_pending_emergency_to_ambulance(amb)
+            return
+        kind = self._emergency_kind(e)
+        severity = str(e.get("severity") or "medium")
+        e["status"] = "on_scene"
+        tr = self._mission_tracking.get(str(eid))
+        if tr is not None:
+            tr["arrived_on_scene_at"] = _iso()
+        self._events.emit_event(
+            "emergency", str(eid), "phase_change",
+            payload={"phase": "on_scene", "ambulanceId": str(amb["id"])}, actor="engine", tick=self.tick,
+        )
+        amb["_lastEmergencyId"] = str(eid)
+        amb["missionPhase"] = "on_scene"
+        amb["missionStatus"] = "ON_SCENE"
+        amb["fsmState"] = AmbulanceState.ON_SCENE.value
+        amb["phaseUntil"] = self.sim_time_s + ecat.on_scene_seconds(_rng, kind, severity)
+        amb["_transportNeeded"] = ecat.needs_transport(_rng, kind, severity)
+        amb["_emSeverity"] = severity
+
+    async def _leave_scene(self, amb: dict[str, Any]) -> None:
+        """Fin de la asistencia: traslado al hospital o alta en el lugar."""
+        eid = str(amb.get("assignedEmergencyId") or amb.get("_lastEmergencyId") or "")
+        e = self._emergency_by_id(eid) if eid else None
+        if e and e.get("status") != "resolved":
+            e["status"] = "resolved"
+            self._resolved_emergencies += 1
+        tr = self._mission_tracking.get(eid)
+        if tr is not None:
+            tr["left_scene_at"] = _iso()
+        amb["assignedEmergencyId"] = None
+        severity = str(amb.pop("_emSeverity", "medium"))
+        transport = bool(amb.pop("_transportNeeded", True))
+        hosp = await self._best_hospital(amb) if transport else None
+        if hosp:
+            amb["hasPatient"] = True
+            amb["patientSeverity"] = ecat.patient_severity(severity)
+            amb["missionPhase"] = "to_hospital"
+            amb["stagingHospitalId"] = hosp["id"]
+            amb["missionStatus"] = "EN_ROUTE"
+            amb["fsmState"] = AmbulanceState.TRANSPORTING.value
+            start = (float(amb["latitude"]), float(amb["longitude"]))
+            dest = (float(hosp["latitude"]), float(hosp["longitude"]))
+            route, rlim, route_duration_s = await self._route_with_jam_avoidance(start, dest)
+            amb["routeCoords"] = route if len(route) >= 2 else None
+            if rlim is not None:
+                amb["roadSpeedLimitKmh"] = rlim
+            amb["routeProgressM"] = 0.0
+            amb["routeSpeedMs"] = ROUTE_SPEED_MS
+            amb["routeDurationS"] = route_duration_s
+            return
+        # Atendido en el lugar sin traslado (o sin hospitales en el mapa).
+        eid_done = amb.pop("_lastEmergencyId", None)
+        if eid_done:
+            self._emit_mission_outcome(eid_done, amb)
+            self._events.emit_event(
+                "emergency", eid_done, "resolved",
+                payload={"ambulanceId": str(amb["id"]), "transported": False},
+                actor="engine", tick=self.tick,
+            )
+        amb["hasPatient"] = False
+        amb["patientSeverity"] = None
+        self._set_idle(amb)
+        await self._try_assign_pending_emergency_to_ambulance(amb)
+
+    async def _arrive_at_hospital(self, amb: dict[str, Any]) -> None:
+        """Llegada a urgencias: transferencia del paciente durante unos minutos."""
+        import random as _rng
+        amb["routeCoords"] = None
+        amb["routeProgressM"] = 0.0
+        severity = {"critical": "critical", "moderate": "high", "stable": "low"}.get(
+            str(amb.get("patientSeverity") or ""), "medium"
+        )
+        amb["missionPhase"] = "at_hospital"
+        amb["missionStatus"] = "HANDOVER"
+        amb["fsmState"] = AmbulanceState.HANDOVER.value
+        amb["phaseUntil"] = self.sim_time_s + ecat.handover_seconds(_rng, severity)
+
+    async def _finish_handover(self, amb: dict[str, Any]) -> None:
+        eid_done = amb.pop("_lastEmergencyId", None)
+        if eid_done:
+            self._emit_mission_outcome(eid_done, amb)
+            self._events.emit_event(
+                "emergency", eid_done, "resolved",
+                payload={"ambulanceId": str(amb["id"]), "transported": True},
+                actor="engine", tick=self.tick,
+            )
+        amb["hasPatient"] = False
+        amb["patientSeverity"] = None
+        amb["stagingHospitalId"] = None
+        self._set_idle(amb)
+        await self._try_assign_pending_emergency_to_ambulance(amb)
+
+    def _set_idle(self, amb: dict[str, Any]) -> None:
+        amb["missionPhase"] = "idle"
+        amb["missionStatus"] = "INACTIVE"
+        amb["fsmState"] = AmbulanceState.IDLE.value
+        amb["routeCoords"] = None
+        amb["routeProgressM"] = 0.0
+        amb.pop("phaseUntil", None)
+
+    async def _complete_timed_phase(self, amb: dict[str, Any], tele: dict[str, Any]) -> None:
+        phase = amb.get("missionPhase")
+        amb.pop("phaseUntil", None)
+        if phase == "on_scene":
+            await self._leave_scene(amb)
+        elif phase == "at_hospital":
+            await self._finish_handover(amb)
+        elif phase == "refueling":
+            await self._finish_refuel(amb, tele)
+
+    # ── Dinámica del vehículo ─────────────────────────────────────────
+    @staticmethod
+    def _route_cumulative(coords: Any) -> list[float]:
+        cached = getattr(coords, "_cum", None)
+        if cached is not None and len(cached) == len(coords):
+            return cached
+        cum = [0.0]
+        for a, b in zip(coords, coords[1:]):
+            cum.append(cum[-1] + haversine_m(float(a[0]), float(a[1]), float(b[0]), float(b[1])))
+        try:
+            coords._cum = cum  # RouteCoords admite atributos; una lista normal no
+        except AttributeError:
+            pass
+        return cum
+
+    def _vehicle_max_ms(self, amb: dict[str, Any]) -> float:
+        et = self._entity_type_by_id(str(amb.get("entityTypeId") or ""))
+        try:
+            kmh = float((et or {}).get("speedKmh") or 120.0)
+        except (TypeError, ValueError):
+            kmh = 120.0
+        return max(10.0, kmh) / 3.6
+
+    def _target_speed_ms(self, amb: dict[str, Any], coords: Any, prog: float, lat: float, lon: float) -> float:
+        """Velocidad objetivo en la posición actual de la ruta.
+
+        Parte de la velocidad de la vía (perfil de coche de OSRM), la sube
+        con sirena en servicio urgente, la recorta por meteorología, giros
+        cerrados próximos, atascos y la distancia de frenada hasta el destino.
+        """
+        cum = self._route_cumulative(coords)
+        n = len(cum)
+        idx = 0
+        lo, hi = 0, n - 1
+        while lo < hi:  # tramo actual por búsqueda binaria
+            mid = (lo + hi) // 2
+            if cum[mid + 1] <= prog:
+                lo = mid + 1
+            else:
+                hi = mid
+        idx = min(lo, n - 2)
+        speeds = getattr(coords, "seg_speeds_ms", None)
+        base = float(speeds[idx]) if speeds and idx < len(speeds) and speeds[idx] > 0 else FALLBACK_SPEED_MS
+        amb["roadSpeedLimitKmh"] = typical_limit_kmh(base) if speeds else None
+        phase = amb.get("missionPhase")
+        urgent = phase == "to_emergency" or (phase == "to_hospital" and amb.get("patientSeverity") in ("critical", "moderate"))
+        target = base * (1.3 if base < 10.0 else 1.2) if urgent else base
+        target = min(target, self._vehicle_max_ms(amb))
+        try:
+            wf = self.weather_speed_factor(lat, lon)
+            amb["weatherFactor"] = round(wf, 3)
+            target *= wf
+        except Exception:
+            pass
+        # Giro cerrado en los próximos ~30 m → reducir a velocidad de giro.
+        if idx + 2 < n:
+            h0 = heading_deg_towards(float(coords[idx][0]), float(coords[idx][1]), float(coords[idx + 1][0]), float(coords[idx + 1][1]))
+            k = idx + 1
+            while k + 1 < n and cum[k] - prog < 30.0:
+                h1 = heading_deg_towards(float(coords[k][0]), float(coords[k][1]), float(coords[k + 1][0]), float(coords[k + 1][1]))
+                if abs(_heading_delta_deg(h0, h1)) > 50.0:
+                    target = min(target, TURN_SPEED_MS)
+                    break
+                k += 1
+        # Dentro de un atasco.
+        for poly in self._jam_tuples():
+            if point_in_polygon((lat, lon), poly):
+                target = min(target, JAM_SPEED_URGENT_MS if urgent else JAM_SPEED_MS)
+                break
+        # Frenada para detenerse en el destino.
+        remaining = max(0.0, cum[-1] - prog)
+        target = min(target, math.sqrt(2.0 * DECEL_MS2 * remaining) + 0.5)
+        return max(0.5, target)
 
     async def _tick_one_ambulance(
         self, amb: dict[str, Any], _dt_real: float, dt_sim: float
@@ -1451,34 +1686,19 @@ class SimulationEngine:
 
         coords = amb.get("routeCoords")
         if coords and len(coords) >= 2:
-            local_limit_kmh = self._road_limit_for_position(
-                float(amb.get("latitude") or coords[0][0]),
-                float(amb.get("longitude") or coords[0][1]),
-            )
-            if local_limit_kmh is not None:
-                amb["roadSpeedLimitKmh"] = local_limit_kmh
-            speed_ms = float(amb.get("routeSpeedMs", ROUTE_SPEED_MS))
-            road_limit_kmh = amb.get("roadSpeedLimitKmh")
-            if road_limit_kmh is not None:
-                try:
-                    speed_ms = min(speed_ms, max(2.5, float(road_limit_kmh) / 3.6))
-                except Exception:
-                    pass
-            try:
-                weather_factor = self.weather_speed_factor(
-                    float(amb.get("latitude") or coords[0][0]),
-                    float(amb.get("longitude") or coords[0][1]),
-                )
-                amb["weatherFactor"] = round(weather_factor, 3)
-                speed_ms = max(2.5, speed_ms * weather_factor)
-            except Exception:
-                pass
+            cur_lat = float(amb.get("latitude") or coords[0][0])
+            cur_lon = float(amb.get("longitude") or coords[0][1])
+            target_ms = self._target_speed_ms(amb, coords, float(amb.get("routeProgressM", 0.0)), cur_lat, cur_lon)
+            v_prev = float(amb.get("_prevSpeedMs", 0.0))
+            dv = target_ms - v_prev
+            dv = max(-DECEL_MS2 * dt_sim, min(ACCEL_MS2 * dt_sim, dv))
+            speed_ms = max(0.0, v_prev + dv)
             dt_s = max(dt_sim, 1e-6)
-            delta_m = speed_ms * dt_sim
+            delta_m = 0.5 * (v_prev + speed_ms) * dt_sim
             prev_lat = float(amb.get("latitude") or coords[0][0])
             prev_lon = float(amb.get("longitude") or coords[0][1])
             prog = float(amb.get("routeProgressM", 0.0))
-            prev_speed = float(amb.get("_prevSpeedMs", speed_ms))
+            prev_speed = v_prev
             prev_hdg = amb.get("_prevHeadingDeg")
             prev_hdg_f = float(prev_hdg) if isinstance(prev_hdg, (int, float)) else None
             lat, lon, new_prog, done = advance_along_polyline(coords, prog, delta_m)
@@ -1506,12 +1726,12 @@ class SimulationEngine:
             if pt == "electric":
                 b = float(amb.get("batteryLevel", tele["mechanical"]["batteryPct"]))
                 # Descarga visible en simulación: prioriza distancia real recorrida.
-                b = max(0.0, b - (delta_m * BATTERY_DRAIN_PCT_PER_M) - (abs(long_accel) * 0.012))
+                b = max(0.0, b - (delta_m * BATTERY_DRAIN_PCT_PER_M) - (max(0.0, long_accel) * dt_sim * 0.0004))
                 tele["mechanical"]["batteryPct"] = round(b, 1)
                 amb["batteryLevel"] = tele["mechanical"]["batteryPct"]
             else:
                 fu = float(amb.get("fuelLevel", tele["mechanical"]["fuelLevelPct"]))
-                fu = max(0.0, fu - (delta_m * FUEL_DRAIN_PCT_PER_M) - (abs(long_accel) * 0.01))
+                fu = max(0.0, fu - (delta_m * FUEL_DRAIN_PCT_PER_M) - (max(0.0, long_accel) * dt_sim * 0.0003))
                 tele["mechanical"]["fuelLevelPct"] = round(fu, 1)
                 amb["fuelLevel"] = tele["mechanical"]["fuelLevelPct"]
             self._normalize_energy_by_powertrain(amb, tele)
@@ -1535,17 +1755,22 @@ class SimulationEngine:
             "on_route": False,
             "road_speed_limit_kmh": amb.get("roadSpeedLimitKmh"),
         }
+        amb["_prevSpeedMs"] = 0.0
         tele = self._telemetry.tick(aid, self.tick, dt_sim, amb)
+        if amb.get("missionPhase") in TIMED_PHASES:
+            until = amb.get("phaseUntil")
+            if until is None or self.sim_time_s >= float(until):
+                await self._complete_timed_phase(amb, tele)
         pt = self._powertrain_of(amb)
         if pt == "electric":
             b = float(amb.get("batteryLevel", tele["mechanical"]["batteryPct"]))
             # Consumo basal en reposo.
-            b = max(0.0, b - dt_sim * 0.003)
+            b = max(0.0, b - dt_sim * BATTERY_IDLE_PCT_PER_S)
             tele["mechanical"]["batteryPct"] = round(b, 1)
             amb["batteryLevel"] = tele["mechanical"]["batteryPct"]
         else:
             f = float(amb.get("fuelLevel", tele["mechanical"]["fuelLevelPct"]))
-            f = max(0.0, f - dt_sim * 0.002)
+            f = max(0.0, f - dt_sim * FUEL_IDLE_PCT_PER_S)
             tele["mechanical"]["fuelLevelPct"] = round(f, 1)
             amb["fuelLevel"] = tele["mechanical"]["fuelLevelPct"]
         self._normalize_energy_by_powertrain(amb, tele)
@@ -1711,6 +1936,7 @@ class SimulationEngine:
             async with self._lock:
                 self.tick += 1
                 dt_sim = dt_real * self.speed_multiplier
+                self.sim_time_s += dt_sim
                 for amb in self.ambulances:
                     if infer_fsm_state(amb) == AmbulanceState.IDLE and not amb.get(
                         "routeCoords"
@@ -1735,7 +1961,7 @@ class SimulationEngine:
                     )
                 self._tick_companions(dt_sim)
                 if self.training_mode:
-                    await self._training_mode_tick()
+                    await self._training_mode_tick(dt_sim)
                 if self.tick % FLUSH_EVERY_N_TICKS == 0:
                     await self._tele_writer.flush()
                     await self._events.maybe_flush()
@@ -1745,7 +1971,75 @@ class SimulationEngine:
                     "telemetryBatch": payload_units,
                 }
             await self.channels.route_payload(self.network, payload, self.tick)
+            self._after_comms_round()
         self._running = False
+
+    # ── Comunicaciones con las unidades ───────────────────────────────
+    def _unit_reachable(self, amb: dict[str, Any]) -> bool:
+        net = ((amb.get("telemetry") or {}).get("network") or {})
+        return net.get("networkType") != "none"
+
+    def _after_comms_round(self) -> None:
+        """Tras cada envío: último contacto por unidad y entrega de mensajes en cola."""
+        from .channels import LinkState
+        link = self.channels.active_link
+        if link == LinkState.DEGRADED:
+            return
+        now = _iso()
+        channel = {"mqtt_active": "mqtt", "p2p_active": "p2p", "http_fallback": "http"}.get(link.value, link.value)
+        reachable: set[str] = set()
+        for amb in self.ambulances:
+            if self._unit_reachable(amb):
+                amb["lastContactAt"] = now
+                reachable.add(str(amb["id"]))
+        for msg in self.unit_messages:
+            if msg["status"] != "queued":
+                continue
+            if msg["unitId"] is None or msg["unitId"] in reachable:
+                msg["status"] = "delivered"
+                msg["deliveredAt"] = now
+                msg["channel"] = channel
+
+    async def send_unit_message(self, unit_id: str | None, text: str) -> dict[str, Any]:
+        """Encola un mensaje de la central para una unidad (o todas con ``None``).
+
+        Se entrega en la siguiente ronda de comunicaciones si hay algún
+        canal activo y la unidad tiene cobertura; si no, queda en cola.
+        """
+        if unit_id is not None and not any(str(a.get("id")) == unit_id for a in self.ambulances):
+            raise ValueError("unidad desconocida")
+        label = None
+        if unit_id is not None:
+            amb = next(a for a in self.ambulances if str(a.get("id")) == unit_id)
+            label = amb.get("displayLabel")
+        msg = {
+            "id": str(uuid4()),
+            "unitId": unit_id,
+            "unitLabel": label,
+            "text": text,
+            "status": "queued",
+            "createdAt": _iso(),
+            "deliveredAt": None,
+            "readAt": None,
+            "channel": None,
+        }
+        self.unit_messages.append(msg)
+        self._events.emit_event(
+            "comms", msg["id"], "message_sent",
+            payload={"unitId": unit_id, "text": text}, actor="operator", tick=self.tick,
+        )
+        return dict(msg)
+
+    def ack_unit_message(self, message_id: str) -> bool:
+        """La unidad confirma la lectura de un mensaje entregado."""
+        for msg in self.unit_messages:
+            if msg["id"] == message_id:
+                if msg["status"] == "queued":
+                    return False
+                msg["status"] = "read"
+                msg["readAt"] = _iso()
+                return True
+        return False
 
     def get_comms_since(self, after_seq: int) -> list[dict[str, Any]]:
         return [dict(x) for x in self._comms_log if int(x.get("seq", 0)) > after_seq]
@@ -1931,115 +2225,151 @@ class SimulationEngine:
             await self._try_assign_pending_emergency_to_ambulance(amb)
             return {"ok": True, "phase": amb.get("missionPhase") or "idle"}
 
-    async def _training_mode_tick(self) -> None:
-        """Genera emergencias periódicas mientras ``training_mode`` está activo.
+    async def _training_mode_tick(self, dt_sim: float) -> None:
+        """Genera emergencias automáticas mientras ``training_mode`` está activo.
 
-        Objetivo: alimentar el pipeline ML sin intervención humana. Cadencia
-        controlada por ``training_emergencies_per_min``. Si no hay POIs
-        (hospitales/gasolineras) los crea automáticamente. Si no hay
-        ambulancias libres, spawnea más hasta un tope razonable.
+        Las llegadas siguen un proceso de Poisson cuya tasa media es la
+        configurada (emergencias por minuto simulado), modulada por la hora
+        local: menos de madrugada, picos a media mañana y por la tarde. Cada
+        emergencia sale del catálogo realista y se sitúa en una calle real.
+        Si falta infraestructura, se coloca la real de la región.
         """
         import random as _rng
-        # Bootstrap infra si falta.
-        hospitals = [p for p in self.pois if p.get("kind") == "hospital"]
-        gas = [p for p in self.pois if p.get("kind") == "gas_station"]
-        spawn_lat, spawn_lon = default_spawn()
-        if not hospitals:
-            for i in range(2):
-                lat = spawn_lat + _rng.uniform(-0.02, 0.02)
-                lon = spawn_lon + _rng.uniform(-0.02, 0.02)
-                pid = str(uuid4())
-                self.pois.append({
-                    "id": pid, "kind": "hospital",
-                    "name": f"Hospital Auto {i + 1}",
-                    "latitude": lat, "longitude": lon,
-                })
-                self._events.emit_event(
-                    "poi", pid, "created",
-                    payload={"kind": "hospital", "auto": True, "lat": lat, "lon": lon},
-                    actor="engine", tick=self.tick,
-                )
-        if not gas:
-            for i in range(2):
-                lat = spawn_lat + _rng.uniform(-0.025, 0.025)
-                lon = spawn_lon + _rng.uniform(-0.025, 0.025)
-                pid = str(uuid4())
-                self.pois.append({
-                    "id": pid, "kind": "gas_station",
-                    "name": f"Gasolinera Auto {i + 1}",
-                    "latitude": lat, "longitude": lon,
-                })
-                self._events.emit_event(
-                    "poi", pid, "created",
-                    payload={"kind": "gas_station", "auto": True, "lat": lat, "lon": lon},
-                    actor="engine", tick=self.tick,
-                )
-        # Flota mínima: 3 ambulancias activas para generar variedad.
+        await self._ensure_region_infrastructure()
         if len(self.ambulances) < 3:
-            aid = str(uuid4())
-            row: dict[str, Any] = {
-                "id": aid,
-                "missionStatus": "INACTIVE",
-                "speedKmh": 0.0,
-                "fuelLevel": 100.0,
-                "patientStatus": "none",
-                "locationLabel": "AutoFleet",
-                "latitude": spawn_lat + _rng.uniform(-0.003, 0.003),
-                "longitude": spawn_lon + _rng.uniform(-0.003, 0.003),
-                "updatedAt": _iso(),
-                "entityTypeId": self.default_ambulance_entity_type_id(),
-                "displayLabel": f"AUTO-{len(self.ambulances) + 1:03d}",
-            }
-            row.update(self._default_amb_fields())
-            self.ambulances.append(row)
-            self._events.emit_event(
-                "ambulance", aid, "created",
-                payload={"auto": True, "displayLabel": row["displayLabel"]},
-                actor="engine", tick=self.tick,
-            )
-        # Hybrid spawner: external-feed events count toward target; synthetic fills gap.
-        # External rate is wall-clock; sim ticks at sim-time → scale it by 1/speed_mul
-        # so accelerated sims still get a full target rate of synthetic emergencies.
+            await self._spawn_unit_at_base()
         target_rate = max(self.training_emergencies_per_min, 0.1)
         ext_wall_per_min = self._recent_external_emergency_rate_per_min()
         ext_sim_per_min = ext_wall_per_min / max(self.speed_multiplier, 0.1)
-        synth_rate = max(0.1, target_rate - ext_sim_per_min)
-        ticks_per_sec = max(self.speed_multiplier * 2.0, 1.0)
-        ticks_between = max(1, int(60.0 * ticks_per_sec / synth_rate))
-        if self.tick - self._training_last_spawn_tick < ticks_between:
+        rate_per_min = max(0.0, target_rate - ext_sim_per_min) * ecat.demand_factor(self._local_hour())
+        if _rng.random() >= rate_per_min / 60.0 * dt_sim:
             return
-        self._training_last_spawn_tick = self.tick
-        # Crea emergencia random cerca del hub
-        etypes = ["medical", "medical", "medical", "altercation", "mass_casualty"]
-        etype = _rng.choice(etypes)
-        lat = spawn_lat + _rng.uniform(-0.02, 0.02)
-        lon = spawn_lon + _rng.uniform(-0.02, 0.02)
-        eid = str(uuid4())
-        now_iso = _iso()
-        title = _rng.choice(SYNTHETIC_TITLES.get(etype, SYNTHETIC_TITLES["medical"]))
-        self.emergencies.append({
-            "id": eid, "title": title,
-            "description": "Emergencia generada en modo entrenamiento",
-            "latitude": lat, "longitude": lon,
-            "status": "pending", "assignedAmbulanceId": None,
-            "emergencyType": etype,
-            "severity": "medium",
-            "source": "training",
-            "createdAt": now_iso,
-        })
-        self._mission_tracking[eid] = {
-            "created_at": now_iso, "emergency_type": etype,
-            "lat": lat, "lon": lon,
-            "jams_crossed": 0, "rerouted_times": 0, "companions_dispatched": [],
-            "source": "training",
-        }
+        if self._training_spawning >= 3:
+            return  # no acumular colocaciones pendientes si OSRM va lento
+        self._training_spawning += 1
+        asyncio.create_task(self._spawn_catalog_emergency("training"))
+
+    async def _spawn_catalog_emergency(
+        self, source: str, center: tuple[float, float] | None = None,
+    ) -> str | None:
+        """Crea una emergencia del catálogo en una calle real y la despacha.
+
+        Las de ``training`` se asignan directamente; el resto pasa por la
+        misma puerta que una emergencia manual (aprobación o IA autónoma).
+        """
+        import random as _rng
+        try:
+            region = get_active_region()
+            hour = self._local_hour()
+            kind = ecat.pick_kind(_rng, hour)
+            severity = ecat.pick_severity(_rng, kind)
+            point = None
+            for _ in range(4 if kind.major_road else 1):
+                point = await random_road_point(self._http, center or region.center, region.urban_sigma_m, rng=_rng)
+                if not kind.major_road or ecat.is_major_road(point.street):
+                    break
+            assert point is not None
+            eid = str(uuid4())
+            now_iso = _iso()
+            row = {
+                "id": eid,
+                "title": kind.title,
+                "description": ecat.describe(_rng, kind),
+                "latitude": point.lat,
+                "longitude": point.lon,
+                "street": point.street,
+                "status": "pending",
+                "assignedAmbulanceId": None,
+                "emergencyType": kind.type,
+                "kindKey": kind.key,
+                "severity": severity,
+                "source": source,
+                "createdAt": now_iso,
+            }
+            async with self._lock:
+                self.emergencies.append(row)
+                self._mission_tracking[eid] = {
+                    "created_at": now_iso, "emergency_type": kind.type,
+                    "lat": point.lat, "lon": point.lon,
+                    "jams_crossed": 0, "rerouted_times": 0, "companions_dispatched": [],
+                    "source": source,
+                }
+            self._events.emit_event(
+                "emergency", eid, "created",
+                payload={"source": source, "emergencyType": kind.type, "severity": severity,
+                         "lat": point.lat, "lon": point.lon, "title": kind.title},
+                actor="engine", tick=self.tick,
+            )
+            if source == "training":
+                await self._dispatch_emergency_safe(eid)
+            else:
+                await self._route_external_emergency_through_hitl(eid)
+            return eid
+        except Exception:
+            _logger.exception("No se pudo generar una emergencia automática")
+            return None
+        finally:
+            if source == "training":
+                self._training_spawning = max(0, self._training_spawning - 1)
+
+    async def _ensure_region_infrastructure(self) -> None:
+        """Si no hay hospitales o gasolineras, coloca los reales de la región."""
+        from .regions import region_places
+        region = get_active_region()
+        if not any(p.get("kind") == "hospital" for p in self.pois):
+            for name, lat, lon in region.hospitals[:3]:
+                self._add_auto_poi("hospital", name, lat, lon)
+        if not any(p.get("kind") == "gas_station" for p in self.pois):
+            stations = sorted(
+                region_places(region.id, "fuel_stations"),
+                key=lambda r: haversine_m(region.center_lat, region.center_lon, r[1], r[2]),
+            )
+            for name, lat, lon in stations[:3]:
+                self._add_auto_poi("gas_station", name or "Gasolinera", lat, lon)
+
+    def _add_auto_poi(self, kind: str, name: str, lat: float, lon: float) -> None:
+        pid = str(uuid4())
+        self.pois.append({"id": pid, "kind": kind, "name": name, "latitude": lat, "longitude": lon})
         self._events.emit_event(
-            "emergency", eid, "created",
-            payload={"source": "training", "emergencyType": etype, "lat": lat, "lon": lon, "title": title},
+            "poi", pid, "created",
+            payload={"kind": kind, "auto": True, "lat": lat, "lon": lon},
             actor="engine", tick=self.tick,
         )
-        # Dispatch inmediato (bypass de HITL en training mode)
-        asyncio.create_task(self._dispatch_emergency_safe(eid))
+
+    async def _spawn_unit_at_base(self) -> None:
+        """Añade una unidad en un hospital o base real, ajustada a la calle de salida."""
+        import random as _rng
+        from .regions import region_places
+        region = get_active_region()
+        bases = [(n, la, lo) for n, la, lo in region.hospitals] + region_places(region.id, "ambulance_bases")
+        if bases:
+            _, lat, lon = _rng.choice(bases)
+        else:
+            lat, lon = default_spawn()
+        point = await snap_to_road(self._http, lat, lon, max_snap_m=300.0)
+        if point is not None:
+            lat, lon = point.lat, point.lon
+        aid = str(uuid4())
+        row: dict[str, Any] = {
+            "id": aid,
+            "missionStatus": "INACTIVE",
+            "speedKmh": 0.0,
+            "fuelLevel": 100.0,
+            "patientStatus": "none",
+            "locationLabel": "Base",
+            "latitude": lat,
+            "longitude": lon,
+            "updatedAt": _iso(),
+            "entityTypeId": self.default_ambulance_entity_type_id(),
+            "displayLabel": f"AMB-{len(self.ambulances) + 1:03d}",
+        }
+        row.update(self._default_amb_fields())
+        self.ambulances.append(row)
+        self._events.emit_event(
+            "ambulance", aid, "created",
+            payload={"auto": True, "displayLabel": row["displayLabel"]},
+            actor="engine", tick=self.tick,
+        )
 
     def _recent_external_emergency_rate_per_min(self) -> float:
         """Wall-clock rate of external-feed emergencies created in last 60s."""
@@ -2130,6 +2460,7 @@ class SimulationEngine:
             self.tick = 0
             self._resolved_emergencies = 0
             self._comms_log.clear()
+            self.unit_messages.clear()
             self.paused = True
         await self.seed_default_fleet_if_empty()
 
@@ -2216,6 +2547,10 @@ class SimulationEngine:
                 self.external_jams = [j for j in self.external_jams if j.get("id") != jam_id]
                 self.external_jams.append(jam_entry)
                 self._external_event_jam_ids.add(eid)
+                # El cuadrado es provisional: se sustituye por el tramo real de calle.
+                asyncio.create_task(self._refine_external_jam(
+                    jam_id, float(stored["latitude"]), float(stored["longitude"]), max(120.0, half_side * 2),
+                ))
             elif eid in self._external_event_jam_ids:
                 self._external_event_jam_ids.discard(eid)
                 self.external_jams = [j for j in self.external_jams if j.get("id") != jam_id]
@@ -2234,6 +2569,22 @@ class SimulationEngine:
 
         if new_emergency_id is not None:
             await self._route_external_emergency_through_hitl(new_emergency_id)
+
+    async def _refine_external_jam(self, jam_id: str, lat: float, lon: float, length_m: float) -> None:
+        """Convierte el corte provisional (cuadrado) en un tramo de la calle real."""
+        try:
+            seg = await road_segment(self._http, lat, lon, length_m=min(400.0, length_m))
+        except Exception:
+            _logger.debug("No se pudo trazar el corte %s sobre la calle", jam_id, exc_info=True)
+            return
+        if seg is None:
+            return
+        async with self._lock:
+            for jam in self.external_jams:
+                if jam.get("id") == jam_id:
+                    jam["polygon"] = [[a, b] for a, b in seg.polygon]
+                    jam["street"] = seg.street
+                    break
 
     def _maybe_create_emergency_from_external_event(
         self, event: dict[str, Any]
@@ -2443,6 +2794,7 @@ class SimulationEngine:
                 self.tick = 0
                 self._resolved_emergencies = 0
                 self._comms_log.clear()
+                self.unit_messages.clear()
                 self.paused = True
                 did_reset = True
             if speed is not None:
@@ -2479,22 +2831,28 @@ class SimulationEngine:
         Returns:
             UUID de la emergencia creada.
         """
+        # La dirección del aviso: se ajusta a la calle más cercana (máx. 80 m).
+        snapped = await snap_to_road(self._http, lat, lon, max_snap_m=80.0)
+        if snapped is not None and snapped.snapped:
+            lat, lon = snapped.lat, snapped.lon
         async with self._lock:
             eid = str(uuid4())
             now_iso = _iso()
-            self.emergencies.append(
-                {
-                    "id": eid,
-                    "title": title or "Emergencia",
-                    "description": description,
-                    "latitude": lat,
-                    "longitude": lon,
-                    "status": "pending",
-                    "assignedAmbulanceId": None,
-                    "emergencyType": emergency_type or "medical",
-                    "createdAt": now_iso,
-                }
-            )
+            em_row: dict[str, Any] = {
+                "id": eid,
+                "title": title or "Emergencia",
+                "description": description,
+                "latitude": lat,
+                "longitude": lon,
+                "status": "pending",
+                "assignedAmbulanceId": None,
+                "emergencyType": emergency_type or "medical",
+                "createdAt": now_iso,
+            }
+            if snapped is not None and snapped.street:
+                em_row["street"] = snapped.street
+            self._emergency_kind(em_row)
+            self.emergencies.append(em_row)
             self._mission_tracking[eid] = {
                 "created_at": now_iso,
                 "emergency_type": emergency_type or "medical",

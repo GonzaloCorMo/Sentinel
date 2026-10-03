@@ -449,7 +449,7 @@ class AIDecisionEngine:
                             )
                             self._set_cooldown(key)
 
-            if em_status in ("pending", "assigned"):
+            if em_status in ("pending", "assigned", "on_scene"):
                 key = f"{eid}:smart_dispatch"
                 if not self._on_cooldown(key):
                     existing_kinds = {

@@ -11,9 +11,12 @@ solo el de la región activa recibe queries — los demás quedan idle.
 """
 from __future__ import annotations
 
+import json
 import os
 import threading
 from dataclasses import dataclass, field
+from functools import lru_cache
+from pathlib import Path
 
 
 @dataclass(frozen=True)
@@ -36,6 +39,10 @@ class RegionConfig:
     # Hospitales reales (nombre, lat, lon) que el generador de escenarios coloca
     # antes de recurrir a posiciones aleatorias. Fuente: OpenStreetMap.
     hospitals: tuple[tuple[str, float, float], ...] = field(default_factory=tuple)
+    # Dispersión (m) de la actividad alrededor del centro urbano: el
+    # generador muestrea emergencias con una normal de esta desviación, así
+    # la densidad cae hacia la periferia como en una ciudad real.
+    urban_sigma_m: float = 2200.0
 
     @property
     def spawn(self) -> tuple[float, float]:
@@ -64,6 +71,35 @@ class RegionConfig:
             "zoom": self.zoom,
             "spawn": [self.spawn_lat, self.spawn_lon],
         }
+
+
+_DATA_DIR = Path(__file__).parent / "region_data"
+
+
+@lru_cache(maxsize=16)
+def _region_data(region_id: str) -> dict:
+    path = _DATA_DIR / f"{region_id}.json"
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def region_places(region_id: str, key: str) -> list[tuple[str, float, float]]:
+    """Lugares reales de la región (OpenStreetMap) como ``(nombre, lat, lon)``.
+
+    ``key``: ``fuel_stations`` | ``ambulance_bases`` | ``fire_stations`` |
+    ``police_stations``. Lista vacía si la región no tiene datos.
+    """
+    out: list[tuple[str, float, float]] = []
+    for row in _region_data(region_id).get(key) or []:
+        try:
+            out.append((str(row.get("name") or ""), float(row["lat"]), float(row["lon"])))
+        except (KeyError, TypeError, ValueError):
+            continue
+    return out
 
 
 def _osrm_url(region: str, default_host: str, default_port: int) -> str:
