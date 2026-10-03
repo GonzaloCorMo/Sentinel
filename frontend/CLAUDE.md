@@ -33,7 +33,7 @@
 
 ## Mapas (`lib/mapEngine.ts`)
 
-- MapLibre GL nativo con teselas vectoriales de OpenFreeMap (sin API key) y **un único estilo para ambos temas** (paleta tipo Google: edificios desde z14, calles con borde, POIs menores ocultos).
+- MapLibre GL nativo con el estilo **Liberty de OpenFreeMap usado tal cual** (sin API key), igual en ambos temas. No lo recolorees ni escribas un estilo propio: se decidió usar un tema existente para minimizar errores.
 - Crea mapas con `await createMap(el, { center: [lat, lon], zoom })`: espera a que el estilo cargue y aplica `ResizeObserver`. El contenedor necesita alto y ancho explícitos (`h-full w-full`, no `absolute inset-0`: MapLibre fuerza `position: relative`).
 - Marcadores: `maplibregl.Marker({ element })`, actualizados en su sitio (no se recrean en cada tick). Líneas y áreas: fuentes GeoJSON con `setGeoJson()`. Tooltips: `createHoverTooltip()`.
 - El mapa base es claro también en tema oscuro, así que marcadores y popups usan colores fijos (`.sentinel-map`, `MAP_COLORS`), no tokens del tema.
