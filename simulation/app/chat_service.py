@@ -1,4 +1,4 @@
-"""Chat RAG del operador: preguntas sobre HPE Sentinel con embeddings.
+"""Chat RAG del operador: preguntas sobre Sentinel con embeddings.
 
 Pipeline por pregunta:
     1. `embed_text` de la pregunta.
@@ -18,13 +18,13 @@ from .supabase_client import get_supabase
 _logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = (
-    "Eres HPE Sentinel AI, el asistente del gemelo digital de flota de ambulancias. "
+    "Eres Sentinel AI, el asistente del gemelo digital de flota de ambulancias. "
     "REGLAS ESTRICTAS:\n"
-    "1. SOLO respondes preguntas relacionadas con: el sistema HPE Sentinel, ambulancias, "
+    "1. SOLO respondes preguntas relacionadas con: el sistema Sentinel, ambulancias, "
     "emergencias medicas, la simulacion, la arquitectura tecnica, telemetria, IA del sistema, "
     "protocolos de emergencia, y el uso de la aplicacion.\n"
     "2. Si el usuario pregunta algo NO relacionado (ocio, cocina, deportes, opinion personal, etc.), "
-    "responde UNICAMENTE: 'Lo siento, solo puedo ayudarte con temas relacionados con HPE Sentinel "
+    "responde UNICAMENTE: 'Lo siento, solo puedo ayudarte con temas relacionados con Sentinel "
     "y el sistema de gestion de ambulancias.'\n"
     "3. Responde en el mismo idioma que el usuario.\n"
     "4. Usa el contexto RAG proporcionado para dar respuestas precisas.\n"

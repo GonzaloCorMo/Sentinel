@@ -146,7 +146,7 @@ TOOLS: list[dict[str, Any]] = [
 
 
 SYSTEM_PROMPT = (
-    "Eres el intérprete de comandos del dashboard HPE Sentinel (gemelo digital "
+    "Eres el intérprete de comandos del dashboard Sentinel (gemelo digital "
     "de ambulancias). Recibes instrucciones del operador en español y decides "
     "qué herramienta ejecutar. Reglas:\n"
     "- Si el usuario pide filtrar/listar/mostrar unidades con ciertas propiedades → filter_units.\n"

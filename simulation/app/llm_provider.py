@@ -1,12 +1,12 @@
-"""Abstracción del proveedor LLM: HPE-hosted vLLM (chat) + Ollama local (embeddings).
+"""Abstracción del proveedor LLM: vLLM externo (chat) + Ollama local (embeddings).
 
-Chat → endpoints OpenAI-compat servidos por HPE en la red interna del Cray:
+Chat → endpoints OpenAI-compat servidos por un vLLM externo en red interna:
 
 - Flash (default): ``LLM_FLASH_MODEL`` en ``LLM_FLASH_BASE_URL`` (Gemma).
 - Flagship (opt-in por llamada): ``LLM_FLAGSHIP_MODEL`` en ``LLM_FLAGSHIP_BASE_URL`` (Qwen).
 
 Embeddings → siguen en Ollama local (``OLLAMA_BASE_URL``, ``OLLAMA_EMBED_MODEL``;
-por defecto ``nomic-embed-text``). Los endpoints HPE listados son chat-only.
+por defecto ``nomic-embed-text``). Los endpoints vLLM listados son chat-only.
 
 Ambos comparten la API OpenAI-compatible, así que el cliente ``AsyncOpenAI``
 sirve para los tres y el resto del código es agnóstico del provider.
@@ -131,7 +131,7 @@ def _prepare(model: str, kwargs: dict[str, Any]) -> None:
 def get_provider_name() -> str:
     """Identificador del provider activo."""
     _init()
-    return "hpe-vllm"
+    return "vllm"
 
 
 def is_llm_available() -> bool:

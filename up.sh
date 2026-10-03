@@ -87,7 +87,7 @@ wait_http "Inbucket"       "http://localhost:54324/"               supabase-inbu
 # ── Banner ──────────────────────────────────────────────────────────────────
 printf "\n${BOLD}${GREEN}"
 echo "  ╔════════════════════════════════════════════════════════════╗"
-echo "  ║   HPE Ambulancia Digital Twin — stack levantado            ║"
+echo "  ║   Sentinel Digital Twin — stack levantado                  ║"
 echo "  ╚════════════════════════════════════════════════════════════╝"
 printf "${RESET}\n"
 

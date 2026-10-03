@@ -1,4 +1,4 @@
-"""HPE Sentinel — servicio ML.
+"""Sentinel — servicio ML.
 
 Sirve modelos ONNX sobre features derivadas de la telemetría v2.0. Primer
 caso de uso: detector de anomalías `fleet_anomaly` (IsolationForest→ONNX).
@@ -113,7 +113,7 @@ def _ensure_fleet_anomaly() -> None:
     train_fleet_anomaly()
 
 
-app = FastAPI(title="HPE Sentinel ML Service", version="1.0")
+app = FastAPI(title="Sentinel ML Service", version="1.0")
 
 
 @app.on_event("startup")

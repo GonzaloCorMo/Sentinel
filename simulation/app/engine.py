@@ -182,8 +182,8 @@ class SimulationEngine:
         self._training_last_spawn_tick: int = 0
         self._resolved_emergencies = 0
         self.dispatch_scoring: ScoringRegistry = default_registry()
-        self._aruba_dispatched_ids: set[str] = set()
-        self._kafka_em_window: deque[float] = deque(maxlen=120)
+        self._external_dispatched_ids: set[str] = set()
+        self._external_em_window: deque[float] = deque(maxlen=120)
         self.osrm_routing: dict[str, Any] = {
             "ready": False,
             "baseUrl": osrm_base_url(),
@@ -201,39 +201,21 @@ class SimulationEngine:
             "updatedRoads": 0,
             "itemsUpdated": 0,
         }
-        self.kafka_telemetry: dict[str, Any] = {
+        self.event_source_status: dict[str, Any] = {
             "enabled": False,
             "status": "idle",
-            "topic": None,
-            "teamId": None,
-            "intervalSec": None,
-            "lastPublishAt": None,
-            "lastError": None,
-            "publishedCount": 0,
-            "publishedTotal": 0,
-        }
-        self.aruba_events_status: dict[str, Any] = {
-            "enabled": False,
-            "status": "idle",
-            "topicEvents": None,
-            "topicWeather": None,
-            "groupId": None,
+            "source": None,
             "lastConsumeAt": None,
             "consumedTotal": 0,
             "consumedEvents": 0,
             "consumedWeather": 0,
             "lastError": None,
         }
-        self.aruba_events: list[dict[str, Any]] = []
-        self._aruba_events_index: dict[str, int] = {}
-        self._aruba_events_jam_ids: set[str] = set()
-        # Modo backup: replay de eventos Kafka de un día concreto.
-        self.backup_status: dict[str, Any] = {"running": False}
-        self._backup_task: Any = None
-        self._backup_cancel_token: int = 0
-        self._backup_replay_active: bool = False
-        self.aruba_weather: dict[str, dict[str, Any]] = {}
-        self._aruba_weather_history: dict[str, deque[dict[str, Any]]] = {}
+        self.external_events: list[dict[str, Any]] = []
+        self._external_events_index: dict[str, int] = {}
+        self._external_event_jam_ids: set[str] = set()
+        self.weather_by_station: dict[str, dict[str, Any]] = {}
+        self._weather_history: dict[str, deque[dict[str, Any]]] = {}
         self._weather_override_until: float = 0.0
         self.external_roads: list[dict[str, Any]] = []
 
@@ -613,13 +595,10 @@ class SimulationEngine:
             "trainingRatePerMin": self.training_emergencies_per_min,
             "sessionId": self._events.session_id,
             "arubaInventory": dict(self.aruba_inventory),
-            "kafkaTelemetry": dict(self.kafka_telemetry),
-            "arubaEvents": [e.copy() for e in self.aruba_events[-200:] if not e.get("resolved_at")],
-            # "arubaEvents": [e.copy() for e in self.aruba_events[-200:]],
-            "arubaWeather": {k: v.copy() for k, v in self.aruba_weather.items()},
-            "arubaEventsStatus": dict(self.aruba_events_status),
-            "backupStatus": dict(self.backup_status),
-            "arubaPulseEmergencyRatePerMin": round(self._recent_kafka_emergency_rate_per_min(), 2),
+            "externalEvents": [e.copy() for e in self.external_events[-200:] if not e.get("resolved_at")],
+            "weatherStations": {k: v.copy() for k, v in self.weather_by_station.items()},
+            "eventSourceStatus": dict(self.event_source_status),
+            "externalEmergencyRatePerMin": round(self._recent_external_emergency_rate_per_min(), 2),
         }
 
     def _ambulance_public(self, amb: dict[str, Any]) -> dict[str, Any]:
@@ -674,7 +653,7 @@ class SimulationEngine:
 
     def _dispatch_scoring_context(self) -> ScoringContext:
         return ScoringContext(
-            weather=self.aruba_weather,
+            weather=self.weather_by_station,
             weather_station_coords=self._weather_station_coords(),
             external_jams=self.external_jams,
             jams=self.jams,
@@ -683,7 +662,7 @@ class SimulationEngine:
     def weather_speed_factor(self, lat: float, lon: float) -> float:
         """Public accessor for ETA + per-tick speed degradation.
 
-        Returns 1.0 when no Aruba weather data is available so existing
+        Returns 1.0 when no weather data is available so existing
         clean-weather behavior is preserved.
         """
         return compute_weather_factor(lat, lon, self._dispatch_scoring_context())
@@ -2028,13 +2007,13 @@ class SimulationEngine:
                 payload={"auto": True, "displayLabel": row["displayLabel"]},
                 actor="engine", tick=self.tick,
             )
-        # Hybrid spawner: real Kafka events count toward target; synthetic fills gap.
-        # Kafka rate is wall-clock; sim ticks at sim-time → scale Kafka by 1/speed_mul
+        # Hybrid spawner: external-feed events count toward target; synthetic fills gap.
+        # External rate is wall-clock; sim ticks at sim-time → scale it by 1/speed_mul
         # so accelerated sims still get a full target rate of synthetic emergencies.
         target_rate = max(self.training_emergencies_per_min, 0.1)
-        kafka_wall_per_min = self._recent_kafka_emergency_rate_per_min()
-        kafka_sim_per_min = kafka_wall_per_min / max(self.speed_multiplier, 0.1)
-        synth_rate = max(0.1, target_rate - kafka_sim_per_min)
+        ext_wall_per_min = self._recent_external_emergency_rate_per_min()
+        ext_sim_per_min = ext_wall_per_min / max(self.speed_multiplier, 0.1)
+        synth_rate = max(0.1, target_rate - ext_sim_per_min)
         ticks_per_sec = max(self.speed_multiplier * 2.0, 1.0)
         ticks_between = max(1, int(60.0 * ticks_per_sec / synth_rate))
         if self.tick - self._training_last_spawn_tick < ticks_between:
@@ -2072,13 +2051,13 @@ class SimulationEngine:
         # Dispatch inmediato (bypass de HITL en training mode)
         asyncio.create_task(self._dispatch_emergency_safe(eid))
 
-    def _recent_kafka_emergency_rate_per_min(self) -> float:
-        """Wall-clock rate of Aruba-Pulse emergencies created in last 60s."""
+    def _recent_external_emergency_rate_per_min(self) -> float:
+        """Wall-clock rate of external-feed emergencies created in last 60s."""
         now = time.monotonic()
         cutoff = now - 60.0
-        while self._kafka_em_window and self._kafka_em_window[0] < cutoff:
-            self._kafka_em_window.popleft()
-        return float(len(self._kafka_em_window))
+        while self._external_em_window and self._external_em_window[0] < cutoff:
+            self._external_em_window.popleft()
+        return float(len(self._external_em_window))
 
     async def set_training_mode(self, enabled: bool, rate_per_min: float | None = None) -> dict[str, Any]:
         """Activa/desactiva generador continuo de emergencias.
@@ -2276,18 +2255,18 @@ class SimulationEngine:
         )
         self.aruba_inventory = merged
 
-    _ARUBA_EVENT_JAM_TYPES = {"lane_closure", "accident", "construction", "hazmat_spill"}
-    _ARUBA_EVENT_DISPATCH_TYPES = {
+    _EXTERNAL_EVENT_JAM_TYPES = {"lane_closure", "accident", "construction", "hazmat_spill"}
+    _EXTERNAL_EVENT_DISPATCH_TYPES = {
         "fire": "fire",
         "medical_emergency": "medical",
         "hazmat_spill": "hazmat",
         "accident": "trauma",
         "flood": "flood",
     }
-    _ARUBA_EVENT_DISPATCH_MAX_AGE_S = 600.0
-    _ARUBA_EVENT_DISPATCH_DEDUPE_CAP = 1000
-    _ARUBA_EVENT_CAP = 500
-    _ARUBA_WEATHER_HISTORY = 20
+    _EXTERNAL_EVENT_DISPATCH_MAX_AGE_S = 600.0
+    _EXTERNAL_EVENT_DISPATCH_DEDUPE_CAP = 1000
+    _EXTERNAL_EVENT_CAP = 500
+    _WEATHER_HISTORY = 20
 
     @staticmethod
     def _square_polygon_around(lat: float, lon: float, half_side_m: float) -> list[list[float]]:
@@ -2300,8 +2279,8 @@ class SimulationEngine:
             [lat + dlat, lon - dlon],
         ]
 
-    async def ingest_aruba_event(self, event: dict[str, Any]) -> None:
-        """Upsert un evento de `aruba.events` en el estado runtime.
+    async def ingest_external_event(self, event: dict[str, Any]) -> None:
+        """Upsert un evento externo (mock local o `POST /api/events/ingest`) en el estado runtime.
 
         Dedupe por id; eventos resueltos se mantienen pero pierden su
         jam asociado. Para tipos viales con `radius_m`, se materializa
@@ -2312,34 +2291,34 @@ class SimulationEngine:
         if not eid:
             return
         async with self._lock:
-            existing_idx = self._aruba_events_index.get(eid)
+            existing_idx = self._external_events_index.get(eid)
             stored = dict(event)
             stored["receivedAt"] = _iso()
             if existing_idx is not None:
-                self.aruba_events[existing_idx] = stored
+                self.external_events[existing_idx] = stored
             else:
-                self.aruba_events.append(stored)
-                self._aruba_events_index[eid] = len(self.aruba_events) - 1
-                if len(self.aruba_events) > self._ARUBA_EVENT_CAP:
-                    drop = self.aruba_events[:-self._ARUBA_EVENT_CAP]
-                    self.aruba_events = self.aruba_events[-self._ARUBA_EVENT_CAP:]
-                    self._aruba_events_index = {
-                        str(e.get("id")): i for i, e in enumerate(self.aruba_events)
+                self.external_events.append(stored)
+                self._external_events_index[eid] = len(self.external_events) - 1
+                if len(self.external_events) > self._EXTERNAL_EVENT_CAP:
+                    drop = self.external_events[:-self._EXTERNAL_EVENT_CAP]
+                    self.external_events = self.external_events[-self._EXTERNAL_EVENT_CAP:]
+                    self._external_events_index = {
+                        str(e.get("id")): i for i, e in enumerate(self.external_events)
                     }
                     for d in drop:
                         did = str(d.get("id") or "")
-                        if did in self._aruba_events_jam_ids:
-                            self._aruba_events_jam_ids.discard(did)
+                        if did in self._external_event_jam_ids:
+                            self._external_event_jam_ids.discard(did)
                             self.external_jams = [
-                                j for j in self.external_jams if j.get("id") != f"aruba-event:{did}"
+                                j for j in self.external_jams if j.get("id") != f"ext-event:{did}"
                             ]
 
             ev_type = str(stored.get("type") or "").lower()
             resolved = stored.get("resolved_at") is not None
-            jam_id = f"aruba-event:{eid}"
+            jam_id = f"ext-event:{eid}"
             should_jam = (
-                (not resolved or self._backup_replay_active)
-                and ev_type in self._ARUBA_EVENT_JAM_TYPES
+                not resolved
+                and ev_type in self._EXTERNAL_EVENT_JAM_TYPES
                 and isinstance(stored.get("latitude"), (int, float))
                 and isinstance(stored.get("longitude"), (int, float))
             )
@@ -2352,48 +2331,48 @@ class SimulationEngine:
                 jam_entry = {
                     "id": jam_id,
                     "polygon": polygon,
-                    "source": "aruba_events",
+                    "source": "external_events",
                     "eventType": ev_type,
                     "severity": stored.get("severity"),
                 }
                 self.external_jams = [j for j in self.external_jams if j.get("id") != jam_id]
                 self.external_jams.append(jam_entry)
-                self._aruba_events_jam_ids.add(eid)
-            elif eid in self._aruba_events_jam_ids:
-                self._aruba_events_jam_ids.discard(eid)
+                self._external_event_jam_ids.add(eid)
+            elif eid in self._external_event_jam_ids:
+                self._external_event_jam_ids.discard(eid)
                 self.external_jams = [j for j in self.external_jams if j.get("id") != jam_id]
 
             now = _iso()
-            self.aruba_events_status.update(
+            self.event_source_status.update(
                 {
                     "lastConsumeAt": now,
-                    "consumedTotal": int(self.aruba_events_status.get("consumedTotal") or 0) + 1,
-                    "consumedEvents": int(self.aruba_events_status.get("consumedEvents") or 0) + 1,
+                    "consumedTotal": int(self.event_source_status.get("consumedTotal") or 0) + 1,
+                    "consumedEvents": int(self.event_source_status.get("consumedEvents") or 0) + 1,
                     "lastError": None,
                 }
             )
 
-            new_emergency_id = self._maybe_create_emergency_from_aruba_event(stored)
+            new_emergency_id = self._maybe_create_emergency_from_external_event(stored)
 
         if new_emergency_id is not None:
-            await self._route_aruba_emergency_through_hitl(new_emergency_id)
+            await self._route_external_emergency_through_hitl(new_emergency_id)
 
-    def _maybe_create_emergency_from_aruba_event(
+    def _maybe_create_emergency_from_external_event(
         self, event: dict[str, Any]
     ) -> str | None:
-        """Convert qualifying Aruba events into dispatchable emergencies.
+        """Convert qualifying external events into dispatchable emergencies.
 
         Caller already holds ``self._lock``. Returns the new emergency id or
         None if the event was filtered out.
         """
         ev_id = str(event.get("id") or "").strip()
-        if not ev_id or ev_id in self._aruba_dispatched_ids:
+        if not ev_id or ev_id in self._external_dispatched_ids:
             return None
         ev_type = str(event.get("type") or "").lower()
-        emergency_type = self._ARUBA_EVENT_DISPATCH_TYPES.get(ev_type)
+        emergency_type = self._EXTERNAL_EVENT_DISPATCH_TYPES.get(ev_type)
         if emergency_type is None:
             return None
-        if event.get("resolved_at") and not self._backup_replay_active:
+        if event.get("resolved_at"):
             return None
         try:
             lat = float(event["latitude"])
@@ -2401,22 +2380,22 @@ class SimulationEngine:
         except (KeyError, TypeError, ValueError):
             return None
         started_at = event.get("started_at")
-        if started_at and not self._backup_replay_active:
+        if started_at:
             try:
                 started_dt = datetime.fromisoformat(str(started_at).replace("Z", "+00:00"))
                 age = (datetime.now(timezone.utc) - started_dt).total_seconds()
-                if age > self._ARUBA_EVENT_DISPATCH_MAX_AGE_S:
+                if age > self._EXTERNAL_EVENT_DISPATCH_MAX_AGE_S:
                     return None
             except (TypeError, ValueError):
                 pass
 
-        eid = f"aruba-{ev_id}"
-        self._aruba_dispatched_ids.add(ev_id)
-        if len(self._aruba_dispatched_ids) > self._ARUBA_EVENT_DISPATCH_DEDUPE_CAP:
+        eid = f"ext-{ev_id}"
+        self._external_dispatched_ids.add(ev_id)
+        if len(self._external_dispatched_ids) > self._EXTERNAL_EVENT_DISPATCH_DEDUPE_CAP:
             # Trim oldest by recreating set; cap is a soft guard, exact LRU not needed.
-            self._aruba_dispatched_ids = set(list(self._aruba_dispatched_ids)[-self._ARUBA_EVENT_DISPATCH_DEDUPE_CAP:])
+            self._external_dispatched_ids = set(list(self._external_dispatched_ids)[-self._EXTERNAL_EVENT_DISPATCH_DEDUPE_CAP:])
 
-        title_raw = str(event.get("title") or "Aruba Pulse Event").strip() or "Aruba Pulse Event"
+        title_raw = str(event.get("title") or "External event").strip() or "External event"
         title = f"{title_raw} (Pulse)"
         description = str(event.get("description") or "").strip() or None
         severity = event.get("severity") or "medium"
@@ -2432,7 +2411,7 @@ class SimulationEngine:
                 "assignedAmbulanceId": None,
                 "emergencyType": emergency_type,
                 "severity": severity,
-                "source": "aruba_pulse",
+                "source": "external_feed",
                 "createdAt": now_iso,
             }
         )
@@ -2443,21 +2422,21 @@ class SimulationEngine:
             "jams_crossed": 0,
             "rerouted_times": 0,
             "companions_dispatched": [],
-            "source": "aruba_pulse",
+            "source": "external_feed",
         }
-        self._kafka_em_window.append(time.monotonic())
+        self._external_em_window.append(time.monotonic())
         self._events.emit_event(
             "emergency", eid, "created",
             payload={
                 "lat": lat, "lon": lon, "title": title,
                 "emergencyType": emergency_type, "severity": severity,
-                "source": "aruba_pulse", "arubaEventId": ev_id,
+                "source": "external_feed", "externalEventId": ev_id,
             },
-            actor="aruba_pulse", tick=self.tick,
+            actor="external_feed", tick=self.tick,
         )
         return eid
 
-    async def _route_aruba_emergency_through_hitl(self, eid: str) -> None:
+    async def _route_external_emergency_through_hitl(self, eid: str) -> None:
         """Dispatch gate identical to ``add_emergency``."""
         if self._is_ai_autonomous() and self._ai_engine is not None:
             asyncio.create_task(self._create_dispatch_proposal(eid))
@@ -2466,12 +2445,12 @@ class SimulationEngine:
         else:
             asyncio.create_task(self._dispatch_emergency_safe(eid))
 
-    async def ingest_aruba_weather(self, reading: dict[str, Any]) -> None:
-        """Upsert lectura de `aruba.weather`. Mantiene latest + ring de 20.
+    async def ingest_weather_reading(self, reading: dict[str, Any]) -> None:
+        """Upsert de una lectura meteorológica. Mantiene latest + ring de 20.
 
         While an operator weather override is active (`_weather_override_until`),
         live readings are appended to history but do not displace the
-        overridden `aruba_weather[station_id]` values used by the dispatch
+        overridden `weather_by_station[station_id]` values used by the dispatch
         scoring + ETA pipelines.
         """
         station_id = str(reading.get("station_id") or "").strip()
@@ -2481,42 +2460,33 @@ class SimulationEngine:
             stored = dict(reading)
             stored["receivedAt"] = _iso()
             override_active = time.monotonic() < self._weather_override_until
-            if not override_active or station_id not in self.aruba_weather:
-                self.aruba_weather[station_id] = stored
-            history = self._aruba_weather_history.get(station_id)
+            if not override_active or station_id not in self.weather_by_station:
+                self.weather_by_station[station_id] = stored
+            history = self._weather_history.get(station_id)
             if history is None:
-                history = deque(maxlen=self._ARUBA_WEATHER_HISTORY)
-                self._aruba_weather_history[station_id] = history
+                history = deque(maxlen=self._WEATHER_HISTORY)
+                self._weather_history[station_id] = history
             history.append(stored)
             now = _iso()
-            self.aruba_events_status.update(
+            self.event_source_status.update(
                 {
                     "lastConsumeAt": now,
-                    "consumedTotal": int(self.aruba_events_status.get("consumedTotal") or 0) + 1,
-                    "consumedWeather": int(self.aruba_events_status.get("consumedWeather") or 0) + 1,
+                    "consumedTotal": int(self.event_source_status.get("consumedTotal") or 0) + 1,
+                    "consumedWeather": int(self.event_source_status.get("consumedWeather") or 0) + 1,
                     "lastError": None,
                 }
             )
 
-    def aruba_weather_history(self, station_id: str) -> list[dict[str, Any]]:
-        history = self._aruba_weather_history.get(station_id)
+    def weather_station_history(self, station_id: str) -> list[dict[str, Any]]:
+        history = self._weather_history.get(station_id)
         return [r.copy() for r in (history or [])]
 
-    def set_backup_status(self, status: dict[str, Any]) -> None:
-        """Estado del replay backup. Reemplazo total para visibilidad inmediata."""
-        self.backup_status = dict(status)
-
-    def cancel_backup(self) -> None:
-        self._backup_cancel_token += 1
-
-    def set_aruba_events_status(self, status: dict[str, Any]) -> None:
-        merged = dict(self.aruba_events_status)
+    def set_event_source_status(self, status: dict[str, Any]) -> None:
+        merged = dict(self.event_source_status)
         for key in (
             "enabled",
             "status",
-            "topicEvents",
-            "topicWeather",
-            "groupId",
+            "source",
             "lastError",
         ):
             if key in status:
@@ -2529,7 +2499,7 @@ class SimulationEngine:
             merged["consumedWeather"] = int(status["consumedWeather"] or 0)
         if "lastConsumeAt" in status:
             merged["lastConsumeAt"] = status["lastConsumeAt"]
-        self.aruba_events_status = merged
+        self.event_source_status = merged
 
     def _road_limit_for_position(self, lat: float, lon: float) -> float | None:
         best_d = float("inf")

@@ -63,7 +63,7 @@ class MqttChannel(Channel):
     def __init__(self) -> None:
         self._host = os.environ.get("MQTT_BROKER_HOST", "127.0.0.1")
         self._port = int(os.environ.get("MQTT_BROKER_PORT", "1883"))
-        self._topic = os.environ.get("MQTT_TELEMETRY_TOPIC", "hpe/sentinel/telemetry")
+        self._topic = os.environ.get("MQTT_TELEMETRY_TOPIC", "sentinel/telemetry")
         self._connected = False
 
     async def connect(self) -> None:

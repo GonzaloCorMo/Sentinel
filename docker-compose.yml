@@ -1,18 +1,18 @@
 # Arranque (elige perfil GPU según hardware del host para Ollama embeddings):
 #   docker compose --profile gpu-nvidia up -d   # RTX/A100/H100/etc.
-#   docker compose --profile gpu-amd up -d      # MI300X/MI250/etc. (HPE Cray)
+#   docker compose --profile gpu-amd up -d      # MI300X/MI250/etc. (ROCm)
 #   docker compose --profile cpu up -d          # sin GPU (lento, solo embeddings)
 # Parada:    docker compose down
 # Reset DB:  docker compose down -v  (borra volúmenes, aplica migraciones de cero)
 #
-# Chat LLM se delega al servicio HPE-hosted vLLM (ver LLM_FLASH_BASE_URL /
+# Chat LLM se delega al servicio vLLM externo (ver LLM_FLASH_BASE_URL /
 # LLM_FLAGSHIP_BASE_URL en .env). Solo embeddings corren en local vía Ollama
 # (modelo nomic-embed-text).
 #
 # Variables en .env (ver .env.example). Puertos expuestos en el host:
 #   5173  Frontend (Vue + Vite)
 #   8080  Simulation API (FastAPI)
-#   3001  MkDocs
+#   3001  Docs (VitePress)
 #   54321 Supabase API gateway (Kong)
 #   54322 Postgres
 #   54323 Supabase Studio (vía Kong también en 54321)
@@ -22,7 +22,7 @@
 #   5003  OSRM Aruba
 #   1883  Mosquitto (MQTT)
 
-name: hpe-ambulancia-digital-twin
+name: sentinel-digital-twin
 
 services:
   # ───────────────────────────────────────── Infra existente ───
@@ -439,8 +439,8 @@ services:
       GOTRUE_SMTP_PORT: 2500
       GOTRUE_SMTP_USER: ""
       GOTRUE_SMTP_PASS: ""
-      GOTRUE_SMTP_ADMIN_EMAIL: admin@hpe-sentinel.local
-      GOTRUE_SMTP_SENDER_NAME: HPE Sentinel
+      GOTRUE_SMTP_ADMIN_EMAIL: admin@sentinel.local
+      GOTRUE_SMTP_SENDER_NAME: Sentinel
 
   supabase-inbucket:
     # Servidor SMTP de pruebas. Captura emails de GoTrue (magic links, resets).
@@ -490,7 +490,7 @@ services:
     environment:
       STUDIO_PG_META_URL: http://supabase-meta:8080
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      DEFAULT_ORGANIZATION_NAME: HPE
+      DEFAULT_ORGANIZATION_NAME: Sentinel
       DEFAULT_PROJECT_NAME: Ambulancia Digital Twin
       SUPABASE_URL: http://supabase-kong:8000
       SUPABASE_PUBLIC_URL: http://localhost:54321
@@ -499,7 +499,7 @@ services:
 
   # ──────────────────────────── Ollama (embeddings only) ───
   # Solo corre el embedder local (`nomic-embed-text`) que alimenta pgvector
-  # para RAG. El chat principal se sirve desde el endpoint HPE-vLLM externo
+  # para RAG. El chat principal se sirve desde el endpoint vLLM externo
   # (ver `simulation` env).
   #
   # Selección de runtime GPU vía perfil de Compose (un solo perfil activo
@@ -623,7 +623,7 @@ services:
       # Telemetría
       MQTT_BROKER_HOST: mosquitto
       MQTT_BROKER_PORT: 1883
-      MQTT_TELEMETRY_TOPIC: hpe/sentinel/telemetry
+      MQTT_TELEMETRY_TOPIC: sentinel/telemetry
       TELEMETRY_INGEST_URL: http://simulation:8080/api/telemetry/ingest
       # OSRM por región (selector de mapa). El backend usa la URL de la región
       # activa; las demás quedan idle pero conectadas.
@@ -632,24 +632,13 @@ services:
       OSRM_URL_BOGOTA: http://osrm-bogota:5000
       OSRM_URL_MEXICO: http://osrm-mexico:5000
       DEFAULT_REGION: ${DEFAULT_REGION:-aruba}
-      # Publicación Kafka (AsyncAPI evaluación)
-      KAFKA_TELEMETRY_ENABLED: ${KAFKA_TELEMETRY_ENABLED:-true}
-      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-10.10.48.30:9092}
-      KAFKA_SECURITY_PROTOCOL: ${KAFKA_SECURITY_PROTOCOL:-PLAINTEXT}
-      KAFKA_SASL_MECHANISM: ${KAFKA_SASL_MECHANISM:-}
-      KAFKA_USERNAME: ${KAFKA_USERNAME:-}
-      KAFKA_PASSWORD: ${KAFKA_PASSWORD:-}
-      KAFKA_TOPIC: ${KAFKA_TOPIC:-aruba.team.tres-dias-de-gracia}
-      KAFKA_TEAM_ID: ${KAFKA_TEAM_ID:-tres-dias-de-gracia}
-      KAFKA_PUBLISH_INTERVAL_SEC: ${KAFKA_PUBLISH_INTERVAL_SEC:-5}
-      # Kafka events consumer (Aruba Pulse, read-only)
-      KAFKA_EVENTS_ENABLED: ${KAFKA_EVENTS_ENABLED:-true}
-      KAFKA_EVENTS_TOPIC_EVENTS: ${KAFKA_EVENTS_TOPIC_EVENTS:-aruba.events}
-      KAFKA_EVENTS_TOPIC_WEATHER: ${KAFKA_EVENTS_TOPIC_WEATHER:-aruba.weather}
-      KAFKA_EVENTS_GROUP_ID: ${KAFKA_EVENTS_GROUP_ID:-tres-dias-de-gracia-events}
-      KAFKA_EVENTS_AUTO_OFFSET_RESET: ${KAFKA_EVENTS_AUTO_OFFSET_RESET:-earliest}
+      # Fuente de eventos externos: mock local o ingesta REST (/api/events/ingest)
+      EVENT_SOURCE: ${EVENT_SOURCE:-mock}
+      MOCK_EVENT_INTERVAL_SEC: ${MOCK_EVENT_INTERVAL_SEC:-25}
+      MOCK_WEATHER_INTERVAL_SEC: ${MOCK_WEATHER_INTERVAL_SEC:-10}
+      MOCK_WEATHER_STATIONS: ${MOCK_WEATHER_STATIONS:-4}
       # LLM
-      # LLM — chat al endpoint HPE-vLLM externo, embeddings al Ollama local.
+      # LLM — chat al endpoint vLLM externo, embeddings al Ollama local.
       LLM_FLASH_BASE_URL: ${LLM_FLASH_BASE_URL:-http://10.10.48.10:8000/v1}
       LLM_FLAGSHIP_BASE_URL: ${LLM_FLAGSHIP_BASE_URL:-http://10.10.48.10:8001/v1}
       LLM_FLASH_MODEL: ${LLM_FLASH_MODEL:-google/gemma-4-31b-it}

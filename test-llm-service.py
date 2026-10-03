@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Quick connectivity + chat smoke test for the HPE-vLLM endpoints.
+"""Quick connectivity + chat smoke test for the vLLM endpoints.
 
 Run from repo root (uses .env values when present, otherwise the documented defaults):
 
@@ -85,7 +85,7 @@ def fail(msg: str) -> None:
 def main() -> int:
     load_dotenv(Path(__file__).resolve().parent / ".env")
 
-    parser = argparse.ArgumentParser(description="HPE-vLLM connectivity test.")
+    parser = argparse.ArgumentParser(description="vLLM connectivity test.")
     parser.add_argument(
         "--tier",
         choices=("flash", "flagship"),

@@ -1,9 +1,9 @@
-"""Modelos AsyncAPI 3.0.0 — Aruba Pulse (`aruba.events` y `aruba.weather`).
+"""Contratos de la fuente de eventos externa (eventos operativos + clima).
 
-Alineados con la especificación oficial documentada en
-`hpe-docs/events-sync.md` §5. Validación estricta (`extra="forbid"`):
-mensajes con campos extra o tipos incorrectos se descartan en el
-consumer, no se propagan al motor.
+Los usan el generador mock local (`event_source.py`) y los endpoints REST
+de ingesta (`POST /api/events/ingest`, `POST /api/weather/ingest`).
+Validación estricta (`extra="forbid"`): payloads con campos extra o tipos
+incorrectos se rechazan y no se propagan al motor.
 """
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ EventSeverity = Literal["low", "medium", "high", "critical"]
 
 
 class WeatherReading(BaseModel):
-    """Lectura puntual de una estación meteorológica de Aruba."""
+    """Lectura puntual de una estación meteorológica."""
 
     model_config = {"extra": "forbid"}
 
@@ -49,8 +49,8 @@ class WeatherReading(BaseModel):
     uv_index: float = Field(ge=0, le=15)
 
 
-class ArubaEvent(BaseModel):
-    """Evento crítico/operativo en Aruba (incidente, emergencia, etc.)."""
+class ExternalEvent(BaseModel):
+    """Evento crítico/operativo georreferenciado (incidente, emergencia, etc.)."""
 
     model_config = {"extra": "forbid"}
 
@@ -59,8 +59,8 @@ class ArubaEvent(BaseModel):
     severity: EventSeverity
     title: str = Field(max_length=200)
     description: str
-    latitude: float = Field(ge=12.4, le=12.7)
-    longitude: float = Field(ge=-70.1, le=-69.8)
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
     radius_m: float | None = Field(default=None, ge=0)
     road_id: str | None = None
     started_at: str
@@ -75,22 +75,22 @@ def _decode(raw: bytes | str | dict[str, Any]) -> dict[str, Any] | None:
         text = raw.decode("utf-8") if isinstance(raw, (bytes, bytearray)) else str(raw)
         obj = json.loads(text)
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        log.warning("aruba payload decode failed: %s", exc)
+        log.warning("event payload decode failed: %s", exc)
         return None
     if not isinstance(obj, dict):
-        log.warning("aruba payload is not a JSON object: %r", type(obj).__name__)
+        log.warning("event payload is not a JSON object: %r", type(obj).__name__)
         return None
     return obj
 
 
-def parse_event(raw: bytes | str | dict[str, Any]) -> ArubaEvent | None:
+def parse_event(raw: bytes | str | dict[str, Any]) -> ExternalEvent | None:
     obj = _decode(raw)
     if obj is None:
         return None
     try:
-        return ArubaEvent.model_validate(obj)
+        return ExternalEvent.model_validate(obj)
     except ValidationError as exc:
-        log.warning("aruba event validation failed: %s (id=%s)", exc.error_count(), obj.get("id"))
+        log.warning("event validation failed: %s (id=%s)", exc.error_count(), obj.get("id"))
         return None
 
 
@@ -102,7 +102,7 @@ def parse_weather(raw: bytes | str | dict[str, Any]) -> WeatherReading | None:
         return WeatherReading.model_validate(obj)
     except ValidationError as exc:
         log.warning(
-            "aruba weather validation failed: %s (station=%s)",
+            "weather validation failed: %s (station=%s)",
             exc.error_count(),
             obj.get("station_id"),
         )

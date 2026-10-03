@@ -20,8 +20,8 @@ KNOWLEDGE_CHUNKS: list[dict[str, str]] = [
         "source_type": "project_docs",
         "source_ref": "architecture",
         "content": (
-            "HPE Sentinel es un gemelo digital de flota de ambulancias desarrollado para "
-            "el HPE CDS Tech Challenge 2026. Consta de un frontend Vue 3 + Vite + TypeScript "
+            "Sentinel es un gemelo digital de flota de ambulancias desarrollado para "
+            "operaciones de emergencias. Consta de un frontend Vue 3 + Vite + TypeScript "
             "(en frontend/) y un motor de simulacion en Python con FastAPI (en simulation/). "
             "La persistencia y autenticacion usan Supabase local. La comunicacion en tiempo real "
             "entre backend y frontend es via Server-Sent Events (SSE)."
@@ -168,7 +168,7 @@ KNOWLEDGE_CHUNKS: list[dict[str, str]] = [
         "source_type": "project_docs",
         "source_ref": "ai_chatbot",
         "content": (
-            "El chatbot de HPE Sentinel usa RAG (Retrieval-Augmented Generation) para responder "
+            "El chatbot de Sentinel usa RAG (Retrieval-Augmented Generation) para responder "
             "preguntas sobre el proyecto. Funciona asi: 1) el usuario escribe una pregunta, "
             "2) se genera un embedding de la pregunta, 3) se buscan los chunks mas relevantes "
             "en ai_knowledge_chunks usando similitud coseno, 4) se construye un prompt con el "
@@ -192,7 +192,7 @@ KNOWLEDGE_CHUNKS: list[dict[str, str]] = [
         "source_type": "project_docs",
         "source_ref": "how_to_use",
         "content": (
-            "Para usar HPE Sentinel: 1) Iniciar Supabase local (supabase start), 2) Arrancar "
+            "Para usar Sentinel: 1) Iniciar Supabase local (supabase start), 2) Arrancar "
             "el motor de simulacion (uvicorn en simulation/), 3) Arrancar el frontend (npm run dev "
             "en frontend/). La simulacion empieza pausada y vacia; usa el selector de mapa para elegir region. "
             "Pulsa Play para iniciar, usa el constructor de escenario para anadir emergencias "

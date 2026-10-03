@@ -7,7 +7,7 @@ HITL/autónomo y chat RAG.
 
 Lifespan:
     - Siembra flota default y tipos custom desde Supabase al arrancar.
-    - Lanza tres tareas de fondo: `engine.run_loop`, `_osrm_probe_loop`
+    - Lanza las tareas de fondo: `engine.run_loop`, `_osrm_probe_loop`, `run_event_source`
       y `ai_engine.observe_loop`.
     - Al parar, cancela limpiamente todas y cierra el cliente HTTP.
 
@@ -28,7 +28,6 @@ import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Any, AsyncIterator, Literal
-from uuid import uuid4
 
 import httpx
 import yaml
@@ -41,9 +40,12 @@ from .ai_decision_engine import AIDecisionEngine
 from .chat_service import chat_stream, get_chat_history
 from .engine import SimulationEngine, default_spawn
 from .knowledge_seeder import seed_knowledge_force, seed_knowledge_if_empty
-from .events_consumer import consume_aruba_events, load_events_consumer_config
+from .event_source import run_event_source
+from .schemas.external_events import ExternalEvent as ExternalEventIn
+from .schemas.external_events import WeatherReading as WeatherReadingIn
+from .weather_db import upsert_weather_reading
 from .inventory_sync import load_aruba_config, sync_aruba_inventory
-from .regions import get_active_region, get_active_region_id, list_regions, set_active_region
+from .regions import get_active_region_id, list_regions, set_active_region
 from .schemas.telemetry import telemetry_schema_json
 from .supabase_client import is_supabase_available
 
@@ -62,155 +64,6 @@ def _env_bool(name: str, default: bool = False) -> bool:
     if not raw:
         return default
     return raw in {"1", "true", "yes", "on"}
-
-
-def _kafka_cfg() -> dict[str, Any]:
-    interval = float(os.environ.get("KAFKA_PUBLISH_INTERVAL_SEC", "5") or "5")
-    bootstrap = (os.environ.get("KAFKA_BOOTSTRAP_SERVERS") or "10.10.48.30:9092").strip()
-    security_protocol = (os.environ.get("KAFKA_SECURITY_PROTOCOL") or "PLAINTEXT").strip()
-    username = (os.environ.get("KAFKA_USERNAME") or "").strip()
-    password = os.environ.get("KAFKA_PASSWORD") or ""
-    topic = (os.environ.get("KAFKA_TOPIC") or "aruba.team.tres-dias-de-gracia").strip()
-    enabled_raw = (os.environ.get("KAFKA_TELEMETRY_ENABLED") or "").strip()
-    is_sasl = security_protocol.upper().startswith("SASL")
-    enabled = _env_bool("KAFKA_TELEMETRY_ENABLED", False) if enabled_raw else bool(
-        bootstrap and topic and ((username and password) if is_sasl else True)
-    )
-    return {
-        "enabled": enabled,
-        "bootstrap_servers": bootstrap,
-        "security_protocol": security_protocol,
-        "sasl_mechanism": (os.environ.get("KAFKA_SASL_MECHANISM") or "PLAIN").strip(),
-        "username": username,
-        "password": password,
-        "topic": topic,
-        "team_id": (os.environ.get("KAFKA_TEAM_ID") or "tres-dias-de-gracia").strip(),
-        "interval_sec": min(10.0, max(5.0, interval)),
-    }
-
-
-def _vehicle_type_of(unit: dict[str, Any], entity_types: list[dict[str, Any]]) -> str:
-    et_id = str(unit.get("entityTypeId") or unit.get("kind") or "vehicle")
-    et = next((e for e in entity_types if str(e.get("id")) == et_id), None)
-    return str((et or {}).get("name") or et_id)[:50]
-
-
-def _priority_for_unit(unit: dict[str, Any]) -> str:
-    sev = str(unit.get("patientSeverity") or "").lower()
-    if sev == "critical":
-        return "high"
-    if sev == "moderate":
-        return "medium"
-    return "low"
-
-
-def _availability_for_unit(unit: dict[str, Any]) -> str:
-    phase = str(unit.get("missionPhase") or unit.get("status") or "idle").lower()
-    if phase in {"idle", "available"}:
-        return "available"
-    return "busy"
-
-
-def _incident_for_unit(unit: dict[str, Any], emergencies: list[dict[str, Any]]) -> dict[str, Any]:
-    eid = unit.get("assignedEmergencyId")
-    if not eid:
-        return {
-            "incident_id": None,
-            "incident_type": None,
-            "incident_status": None,
-        }
-    em = next((e for e in emergencies if str(e.get("id")) == str(eid)), None)
-    if not em:
-        return {
-            "incident_id": str(eid),
-            "incident_type": None,
-            "incident_status": "assigned",
-        }
-    return {
-        "incident_id": str(em.get("id")),
-        "incident_type": em.get("emergencyType"),
-        "incident_status": em.get("status"),
-    }
-
-
-def _specialty_for_unit(unit: dict[str, Any]) -> dict[str, Any]:
-    medical = ((unit.get("telemetry") or {}).get("medical") or {}) if isinstance(unit.get("telemetry"), dict) else {}
-    out: dict[str, Any] = {}
-    if medical.get("heartRateBpm") is not None:
-        out["patient_heart_rate"] = medical.get("heartRateBpm")
-    if medical.get("spo2Pct") is not None:
-        out["patient_spo2"] = medical.get("spo2Pct")
-    return out
-
-
-def _cost_for_unit(unit: dict[str, Any], entity_types: list[dict[str, Any]]) -> dict[str, Any]:
-    et_id = str(unit.get("entityTypeId") or unit.get("kind") or "")
-    et = next((e for e in entity_types if str(e.get("id")) == et_id), None)
-    if not et:
-        return {
-            "estimated_operational_cost": None,
-            "currency": "EUR",
-        }
-    cost_per_min = et.get("costPerMin")
-    activation_cost = et.get("activationCost")
-    if cost_per_min is None and activation_cost is None:
-        return {
-            "estimated_operational_cost": None,
-            "currency": "EUR",
-        }
-    odom = float(unit.get("odometerKm") or 0.0)
-    estimated = float(activation_cost or 0.0) + (odom * 0.9 * float(cost_per_min or 0.0))
-    return {
-        "estimated_operational_cost": round(max(0.0, estimated), 2),
-        "currency": "EUR",
-    }
-
-
-def _fleet_telemetry_messages(cfg: dict[str, Any]) -> list[dict[str, Any]]:
-    state = engine.get_state_payload()
-    units = list(state.get("ambulances") or []) + list(state.get("companions") or [])
-    entity_types = list(state.get("entityTypes") or [])
-    emergencies = list(state.get("emergencies") or [])
-    now_iso = _iso()
-    out: list[dict[str, Any]] = []
-    for unit in units:
-        tele = unit.get("telemetry") if isinstance(unit.get("telemetry"), dict) else {}
-        pos = tele.get("positioning") if isinstance(tele, dict) and isinstance(tele.get("positioning"), dict) else {}
-        lat = float(pos.get("latitude", unit.get("latitude", 0.0)))
-        lon = float(pos.get("longitude", unit.get("longitude", 0.0)))
-        speed = float(pos.get("speedKmh", unit.get("speedKmh", 0.0)))
-        heading = pos.get("headingDeg", unit.get("headingDeg"))
-        heading_num = float(heading) % 360.0 if isinstance(heading, (int, float)) else None
-        msg = {
-            "schema_version": "1.0.0",
-            "message_type": "fleet_telemetry",
-            "team_id": cfg["team_id"],
-            "sent_at": now_iso,
-            "vehicle": {
-                "vehicle_id": str(unit.get("id")),
-                "vehicle_type": _vehicle_type_of(unit, entity_types),
-                "unit_name": unit.get("displayLabel") or unit.get("callsign") or unit.get("locationLabel"),
-            },
-            "telemetry": {
-                "position": {"lat": lat, "lon": lon},
-                "speed": {"value": max(0.0, speed), "unit": "kmh"},
-                "heading": heading_num,
-            },
-            "operational_status": {
-                "state": str(unit.get("missionPhase") or unit.get("status") or unit.get("fsmState") or "idle"),
-                "availability": _availability_for_unit(unit),
-                "priority": _priority_for_unit(unit),
-            },
-            "incident": _incident_for_unit(unit, emergencies),
-            "costs": _cost_for_unit(unit, entity_types),
-            "specialty_data": _specialty_for_unit(unit),
-            "metadata": {
-                "trace_id": str(uuid4()),
-                "producer": "digital-twin-backend",
-            },
-        }
-        out.append(msg)
-    return out
 
 
 def _format_proposal(p: dict[str, Any]) -> dict[str, Any]:
@@ -321,182 +174,6 @@ async def _aruba_inventory_loop() -> None:
         await asyncio.sleep(max(5.0, float(cfg.interval_sec)))
 
 
-async def _kafka_telemetry_loop() -> None:
-    """Periodic publisher of fleet telemetry to external Kafka topic."""
-    import logging
-
-    loop_log = logging.getLogger("uvicorn.error")
-    producer = None
-    try:
-        while True:
-            cfg = _kafka_cfg()
-            engine.kafka_telemetry.update(
-                {
-                    "enabled": bool(cfg["enabled"]),
-                    "topic": cfg["topic"],
-                    "teamId": cfg["team_id"],
-                    "intervalSec": cfg["interval_sec"],
-                }
-            )
-            if not cfg["enabled"]:
-                status = "disabled"
-                if str(cfg.get("security_protocol", "")).upper().startswith("SASL") and (
-                    not cfg.get("username") or not cfg.get("password")
-                ):
-                    status = "disabled_missing_credentials"
-                engine.kafka_telemetry.update({"status": status, "lastError": None})
-                await asyncio.sleep(5.0)
-                continue
-
-            try:
-                if producer is None:
-                    from aiokafka import AIOKafkaProducer
-
-                    producer_kwargs: dict[str, Any] = {
-                        "bootstrap_servers": cfg["bootstrap_servers"],
-                        "security_protocol": cfg["security_protocol"],
-                        "acks": "all",
-                        "value_serializer": lambda v: json.dumps(v, ensure_ascii=True).encode("utf-8"),
-                    }
-                    if str(cfg["security_protocol"]).upper().startswith("SASL"):
-                        sasl_auth: dict[str, Any] = {
-                            # aiokafka usa las mismas keys para PLAIN y SCRAM.
-                            "sasl_plain_username": cfg["username"],
-                            "sasl_plain_password": cfg["password"],
-                        }
-                        producer_kwargs.update(
-                            {
-                                "sasl_mechanism": cfg["sasl_mechanism"],
-                                **sasl_auth,
-                            }
-                        )
-                    producer = AIOKafkaProducer(
-                        **producer_kwargs
-                    )
-                    await producer.start()
-                    engine.kafka_telemetry.update({"status": "connected", "lastError": None})
-                    loop_log.info(
-                        "Kafka telemetry connected (%s, topic=%s)",
-                        cfg["bootstrap_servers"],
-                        cfg["topic"],
-                    )
-
-                rows = _fleet_telemetry_messages(cfg)
-                sent = 0
-                for row in rows:
-                    key = str(row["vehicle"]["vehicle_id"]).encode("utf-8")
-                    await producer.send_and_wait(cfg["topic"], row, key=key)
-                    sent += 1
-                now = _iso()
-                engine.kafka_telemetry.update(
-                    {
-                        "status": "publishing",
-                        "lastPublishAt": now,
-                        "publishedCount": sent,
-                        "publishedTotal": int(engine.kafka_telemetry.get("publishedTotal") or 0) + sent,
-                        "lastError": None,
-                    }
-                )
-            except asyncio.CancelledError:
-                raise
-            except ImportError as exc:
-                engine.kafka_telemetry.update(
-                    {
-                        "status": "error_missing_dependency",
-                        "lastError": str(exc),
-                        "publishedCount": 0,
-                    }
-                )
-                loop_log.warning("Kafka telemetry disabled: aiokafka not installed")
-                await asyncio.sleep(15.0)
-            except Exception as exc:
-                engine.kafka_telemetry.update(
-                    {
-                        "status": f"error:{type(exc).__name__}",
-                        "lastError": str(exc),
-                        "publishedCount": 0,
-                    }
-                )
-                loop_log.warning("Kafka telemetry publish failed: %s", exc)
-                if producer is not None:
-                    try:
-                        await producer.stop()
-                    except Exception:
-                        pass
-                    producer = None
-                await asyncio.sleep(3.0)
-            await asyncio.sleep(float(cfg["interval_sec"]))
-    finally:
-        if producer is not None:
-            try:
-                await producer.stop()
-            except Exception:
-                pass
-
-
-async def _aruba_events_loop() -> None:
-    """Consume `aruba.events` y `aruba.weather` y vuelca al engine.
-
-    Mantiene una conexión persistente; ante fallo aplica backoff y
-    reconecta. Refleja el estado en `engine.aruba_events_status` para
-    que la UI vea cuándo el consumer está conectado/perdido.
-    """
-    import logging
-
-    loop_log = logging.getLogger("uvicorn.error")
-    backoff = 3.0
-    while True:
-        cfg = load_events_consumer_config()
-        engine.set_aruba_events_status(
-            {
-                "enabled": bool(cfg.enabled),
-                "topicEvents": cfg.topic_events,
-                "topicWeather": cfg.topic_weather,
-                "groupId": cfg.group_id,
-            }
-        )
-        if not cfg.enabled:
-            status = "disabled"
-            if cfg.security_protocol.upper().startswith("SASL") and (
-                not cfg.username or not cfg.password
-            ):
-                status = "disabled_missing_credentials"
-            engine.set_aruba_events_status({"status": status, "lastError": None})
-            try:
-                await asyncio.sleep(15.0)
-            except asyncio.CancelledError:
-                raise
-            continue
-
-        try:
-            await consume_aruba_events(engine, cfg=cfg)
-            backoff = 3.0
-        except asyncio.CancelledError:
-            raise
-        except ImportError as exc:
-            engine.set_aruba_events_status(
-                {
-                    "status": "error_missing_dependency",
-                    "lastError": str(exc),
-                }
-            )
-            loop_log.warning("Aruba events consumer disabled: aiokafka not installed")
-            await asyncio.sleep(30.0)
-        except Exception as exc:
-            engine.set_aruba_events_status(
-                {
-                    "status": f"error:{type(exc).__name__}",
-                    "lastError": str(exc),
-                }
-            )
-            loop_log.warning("Aruba events consumer failed: %s", exc)
-            try:
-                await asyncio.sleep(min(30.0, backoff))
-            except asyncio.CancelledError:
-                raise
-            backoff = min(30.0, backoff * 1.5)
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Ciclo de vida FastAPI: siembra fleet/tipos/knowledge y lanza tareas de fondo.
@@ -528,14 +205,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     loop_task = asyncio.create_task(engine.run_loop())
     osrm_task = asyncio.create_task(_osrm_probe_loop())
     aruba_task = asyncio.create_task(_aruba_inventory_loop())
-    kafka_task = asyncio.create_task(_kafka_telemetry_loop())
-    aruba_events_task = asyncio.create_task(_aruba_events_loop())
+    event_source_task = asyncio.create_task(run_event_source(engine))
     ai_task = asyncio.create_task(ai_engine.observe_loop())
     yield
     ai_engine.stop()
     ai_task.cancel()
-    aruba_events_task.cancel()
-    kafka_task.cancel()
+    event_source_task.cancel()
     aruba_task.cancel()
     osrm_task.cancel()
     engine.stop()
@@ -545,11 +220,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     except asyncio.CancelledError:
         pass
     try:
-        await aruba_events_task
-    except asyncio.CancelledError:
-        pass
-    try:
-        await kafka_task
+        await event_source_task
     except asyncio.CancelledError:
         pass
     try:
@@ -568,7 +239,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(
-    title="Aruba Team Fleet API – Evaluation Contract",
+    title="Sentinel Digital Twin API",
     version="2.0.1",
     lifespan=lifespan,
 )
@@ -733,7 +404,7 @@ def _vehicle_row(unit: dict[str, Any], *, is_companion: bool = False) -> dict[st
     fuel_level. Para vehículos eléctricos `fuel_level` representa la batería
     primaria (semántica "energía disponible" %, 0-100).
 
-    `metadata` opcional se usa como contenedor de telemetría rica HPE
+    `metadata` opcional se usa como contenedor de telemetría rica
     (powertrain, costes, mecánica, médico, misión, etc.) sin romper el
     contrato base.
     """
@@ -819,7 +490,7 @@ async def _weather_station_rows() -> list[dict[str, Any]]:
     """Construye la lista de estaciones conocidas fusionando tres fuentes:
 
     1. POIs del inventario de la isla (tienen nombre y coordenadas).
-    2. Cache in-memory del engine (lecturas Kafka recientes, caliente).
+    2. Cache in-memory del engine (lecturas recientes, caliente).
     3. Base de datos (weather_stations_latest) — permite reconstruir la lista
        tras un reinicio cuando el engine aún no ha recibido mensajes nuevos.
     """
@@ -841,7 +512,7 @@ async def _weather_station_rows() -> list[dict[str, Any]]:
         }
 
     # 2. Cache in-memory (lecturas ya recibidas en esta sesión)
-    for sid, reading in engine.aruba_weather.items():
+    for sid, reading in engine.weather_by_station.items():
         station_id = str(sid or "").strip()
         if not station_id:
             continue
@@ -988,103 +659,6 @@ async def stream() -> StreamingResponse:
     )
 
 
-@app.get("/api/kafka/telemetry/stream")
-async def kafka_telemetry_stream(
-    request: Request,
-    group_id: str = Query(default="digital-twin-live-viewer", min_length=3),
-    include_meta: bool = Query(default=False),
-    from_beginning: bool = Query(default=False),
-) -> StreamingResponse:
-    """Consume Kafka telemetry y emite payload AsyncAPI por SSE.
-
-    Por defecto publica directamente `TeamEventMessageIn` (sin envoltorios).
-    Si `include_meta=true`, añade metadatos de Kafka junto al payload.
-    """
-    cfg = _kafka_cfg()
-    if not cfg["enabled"]:
-        raise HTTPException(status_code=400, detail="Kafka telemetry está deshabilitado")
-
-    try:
-        from aiokafka import AIOKafkaConsumer
-    except Exception as e:  # pragma: no cover - depende de entorno
-        raise HTTPException(status_code=503, detail=f"aiokafka no disponible: {type(e).__name__}")
-
-    consumer_kwargs: dict[str, Any] = {
-        "bootstrap_servers": cfg["bootstrap_servers"],
-        "security_protocol": cfg["security_protocol"],
-        "group_id": group_id,
-        # Endpoint de observabilidad: no confirmamos offsets para evitar errores
-        # de commit en cuentas con permiso de lectura limitado.
-        "enable_auto_commit": False,
-        "auto_offset_reset": "earliest" if from_beginning else "latest",
-    }
-    if str(cfg["security_protocol"]).upper().startswith("SASL"):
-        consumer_kwargs.update(
-            {
-                "sasl_mechanism": cfg["sasl_mechanism"],
-                "sasl_plain_username": cfg["username"],
-                "sasl_plain_password": cfg["password"],
-            }
-        )
-
-    consumer = AIOKafkaConsumer(cfg["topic"], **consumer_kwargs)
-    try:
-        await consumer.start()
-    except Exception as e:
-        raise HTTPException(
-            status_code=502,
-            detail=f"No se pudo conectar a Kafka ({type(e).__name__}): {e}",
-        )
-
-    async def gen() -> AsyncIterator[str]:
-        try:
-            while True:
-                if await request.is_disconnected():
-                    break
-                try:
-                    batch = await consumer.getmany(timeout_ms=1000, max_records=64)
-                except Exception as e:
-                    err = {
-                        "error": "kafka_consume_error",
-                        "type": type(e).__name__,
-                        "detail": str(e),
-                        "topic": cfg["topic"],
-                    }
-                    yield f"data: {json.dumps(err, ensure_ascii=True)}\n\n"
-                    break
-                for records in batch.values():
-                    for msg in records:
-                        payload = msg.value
-                        if isinstance(payload, bytes):
-                            payload = payload.decode("utf-8", errors="replace")
-                        if isinstance(payload, str):
-                            try:
-                                payload = json.loads(payload)
-                            except json.JSONDecodeError:
-                                payload = {"raw": payload}
-                        if include_meta:
-                            out = {
-                                "topic": msg.topic,
-                                "partition": msg.partition,
-                                "offset": msg.offset,
-                                "timestamp": msg.timestamp,
-                                "payload": payload,
-                            }
-                        else:
-                            out = payload
-                        yield f"data: {json.dumps(out, ensure_ascii=True)}\n\n"
-        finally:
-            await consumer.stop()
-
-    return StreamingResponse(
-        gen(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        },
-    )
 
 
 @app.get("/health", tags=["base"], response_model=HealthResponse)
@@ -1312,7 +886,7 @@ async def get_reading(station_id: str) -> WeatherReading:
 
     # Fallback: cache in-memory (lectura reciente aún no persistida, o DB off)
     if reading is None:
-        reading = engine.aruba_weather.get(station_id)
+        reading = engine.weather_by_station.get(station_id)
 
     if reading is None:
         raise HTTPException(status_code=503, detail="no reading available yet for this station")
@@ -1325,15 +899,31 @@ async def get_reading(station_id: str) -> WeatherReading:
     )
 
 
-@app.get("/api/aruba/events", tags=["aruba"])
-async def list_aruba_events(
+@app.post("/api/events/ingest", tags=["events"], status_code=202)
+async def ingest_event(event: ExternalEventIn) -> dict[str, Any]:
+    """Ingesta REST de un evento externo (sustituye al antiguo consumer de mensajería)."""
+    await engine.ingest_external_event(event.model_dump())
+    return {"ok": True, "id": event.id}
+
+
+@app.post("/api/weather/ingest", tags=["events"], status_code=202)
+async def ingest_weather(reading: WeatherReadingIn) -> dict[str, Any]:
+    """Ingesta REST de una lectura meteorológica; se persiste en `weather_readings` si hay Supabase."""
+    row = reading.model_dump()
+    await engine.ingest_weather_reading(row)
+    asyncio.create_task(upsert_weather_reading(row))
+    return {"ok": True, "id": reading.id}
+
+
+@app.get("/api/events", tags=["events"])
+async def list_external_events(
     type: str | None = Query(default=None, description="Filtra por tipo de evento"),
     severity: str | None = Query(default=None, description="Filtra por severidad"),
     only_active: bool = Query(default=False, description="Solo eventos sin resolved_at"),
     limit: int = Query(default=200, ge=1, le=500),
 ) -> dict[str, Any]:
-    """Lista los últimos eventos consumidos del topic `aruba.events`."""
-    rows = list(engine.aruba_events)
+    """Lista los últimos eventos externos recibidos (mock o ingesta REST)."""
+    rows = list(engine.external_events)
     if type:
         rows = [e for e in rows if str(e.get("type")) == type]
     if severity:
@@ -1344,34 +934,34 @@ async def list_aruba_events(
     return {"items": [e.copy() for e in rows], "count": len(rows)}
 
 
-@app.get("/api/aruba/weather", tags=["aruba"])
-async def list_aruba_weather() -> dict[str, Any]:
-    """Última lectura por estación consumida del topic `aruba.weather`."""
+@app.get("/api/weather", tags=["events"])
+async def list_weather() -> dict[str, Any]:
+    """Última lectura recibida por estación."""
     return {
-        "stations": {k: v.copy() for k, v in engine.aruba_weather.items()},
-        "count": len(engine.aruba_weather),
+        "stations": {k: v.copy() for k, v in engine.weather_by_station.items()},
+        "count": len(engine.weather_by_station),
     }
 
 
-@app.get("/api/aruba/weather/{station_id}/history", tags=["aruba"])
-async def aruba_weather_history(station_id: str) -> dict[str, Any]:
-    history = engine.aruba_weather_history(station_id)
-    if not history and station_id not in engine.aruba_weather:
+@app.get("/api/weather/{station_id}/history", tags=["events"])
+async def weather_station_history(station_id: str) -> dict[str, Any]:
+    history = engine.weather_station_history(station_id)
+    if not history and station_id not in engine.weather_by_station:
         raise HTTPException(status_code=404, detail="station not found")
     return {"stationId": station_id, "items": history, "count": len(history)}
 
 
-@app.get("/api/aruba/events/status", tags=["aruba"])
-async def aruba_events_status() -> dict[str, Any]:
-    """Estado del consumer Kafka de Aruba Pulse (debug/health)."""
-    return dict(engine.aruba_events_status)
+@app.get("/api/events/status", tags=["events"])
+async def event_source_status() -> dict[str, Any]:
+    """Estado de la fuente de eventos (mock/REST) y contadores de ingesta."""
+    return dict(engine.event_source_status)
 
 
 class WeatherOverrideRequest(BaseModel):
     """Manual weather override for demos / what-if. Apply to all stations or a subset.
 
-    `holdSeconds` (default 600) freezes the engine's `aruba_weather` snapshot
-    so live Pulse readings don't immediately overwrite the override values.
+    `holdSeconds` (default 600) freezes the engine's `weather_by_station` snapshot
+    so live readings don't immediately overwrite the override values.
     Set 0 to apply once and let live readings reclaim within ~5s.
     """
     precipitationMm: float = 0.0
@@ -1382,33 +972,32 @@ class WeatherOverrideRequest(BaseModel):
     holdSeconds: float = 600.0
 
 
-@app.post("/api/aruba/weather/override", tags=["aruba"])
-async def aruba_weather_override(req: WeatherOverrideRequest) -> dict[str, Any]:
-    """Push a synthetic reading into engine.aruba_weather for stress testing.
+@app.post("/api/weather/override", tags=["events"])
+async def weather_override(req: WeatherOverrideRequest) -> dict[str, Any]:
+    """Push a synthetic reading into engine.weather_by_station for stress testing.
 
-    Per F2 spec, internally-defined events may augment the Pulse stream. This
-    lets operators force a storm/fog scenario to validate ETA degradation,
+    Lets operators force a storm/fog scenario to validate ETA degradation,
     routing avoidance, and scoring shifts without waiting for live conditions.
     """
     if req.stationIds:
         targets = req.stationIds
     else:
         # Broadcast across both already-seen stations and POI registry so an
-        # override hits every station regardless of broker fan-in pacing.
-        seen = set(engine.aruba_weather.keys())
+        # override hits every station regardless of feed pacing.
+        seen = set(engine.weather_by_station.keys())
         for poi in engine.pois:
             if poi.get("kind") == "weather_station":
                 seen.add(str(poi.get("id")))
         targets = list(seen)
         if not targets:
-            targets = [s["id"] for s in _weather_station_rows()]
+            targets = [s["id"] for s in await _weather_station_rows()]
     import time as _time
     if req.holdSeconds > 0:
         engine._weather_override_until = _time.monotonic() + float(req.holdSeconds)
     now_iso = datetime.now(timezone.utc).isoformat()
     applied = 0
     for sid in targets:
-        existing = engine.aruba_weather.get(sid) or {}
+        existing = engine.weather_by_station.get(sid) or {}
         merged = dict(existing)
         merged.update({
             "id": existing.get("id") or f"override-{sid}",
@@ -1425,7 +1014,7 @@ async def aruba_weather_override(req: WeatherOverrideRequest) -> dict[str, Any]:
             "receivedAt": now_iso,
             "source": "operator_override",
         })
-        engine.aruba_weather[sid] = merged
+        engine.weather_by_station[sid] = merged
         applied += 1
     return {
         "ok": True,
@@ -1444,7 +1033,7 @@ async def island_summary() -> dict[str, Any]:
     fleet KPIs, dispatch ETA averages, weather impact, and a per-zone
     breakdown bucketing assets into the four Aruba quadrants by centroid.
     """
-    weather = engine.aruba_weather
+    weather = engine.weather_by_station
     stations_meta = _weather_station_rows()
     coord_by_id = {s["id"]: (s.get("latitude"), s.get("longitude")) for s in stations_meta}
     temps: list[float] = []
@@ -1482,7 +1071,7 @@ async def island_summary() -> dict[str, Any]:
         "alerts": alerts,
     }
 
-    events = engine.aruba_events
+    events = engine.external_events
     unresolved = [e for e in events if not e.get("resolved_at")]
     by_type: dict[str, int] = {}
     by_severity: dict[str, int] = {}
@@ -1511,7 +1100,7 @@ async def island_summary() -> dict[str, Any]:
         "activeEmergencies": len(active),
         "fuelLowCount": fuel_low,
         "avgEtaSeconds": round(sum(etas) / len(etas), 1) if etas else None,
-        "pulseRatePerMin": round(engine._recent_kafka_emergency_rate_per_min(), 2),
+        "pulseRatePerMin": round(engine._recent_external_emergency_rate_per_min(), 2),
     }
     weather_impact = {
         "worstFactor": round(min(weather_factors), 3) if weather_factors else 1.0,
@@ -1595,47 +1184,6 @@ async def set_network(body: NetworkBody) -> dict:
     """Toggle canales MQTT / P2P mesh / HTTP fallback."""
     await engine.set_network(body.mqtt, body.p2p, body.http)
     return {"ok": True, "networkStatus": engine.network.copy(), "state": _state_merged()}
-
-
-# ── Modo backup: replay de eventos Aruba históricos por día ──────────────
-class BackupReplayBody(BaseModel):
-    date: str = Field(..., description="ISO YYYY-MM-DD, mínimo 2026-04-01")
-    showAll: bool = Field(default=True, description="True=ingest instantáneo. False=ritmo natural")
-    naturalSpeed: float = Field(default=60.0, ge=1.0, le=3600.0, description="Factor temporal cuando showAll=false")
-
-
-@app.post("/api/sim/backup/replay")
-async def backup_replay_start(body: BackupReplayBody) -> dict[str, Any]:
-    """Inicia replay de eventos Kafka del día indicado en background.
-
-    Si ya hay un replay en curso, devuelve 409. Cancela primero con
-    `/api/sim/backup/stop` para iniciar otro.
-    """
-    from datetime import date as _date
-    try:
-        day = _date.fromisoformat(body.date)
-    except ValueError:
-        raise HTTPException(status_code=422, detail="date must be YYYY-MM-DD")
-    if engine._backup_task is not None and not engine._backup_task.done():
-        raise HTTPException(status_code=409, detail="backup replay already running")
-    from .backup_replay import replay_aruba_day
-    engine._backup_task = asyncio.create_task(
-        replay_aruba_day(engine, day, show_all=body.showAll, natural_speed=body.naturalSpeed)
-    )
-    return {"ok": True, "started": True, "day": day.isoformat(), "showAll": body.showAll, "status": engine.backup_status}
-
-
-@app.get("/api/sim/backup/status")
-async def backup_replay_status() -> dict[str, Any]:
-    return {"ok": True, "status": engine.backup_status, "running": (engine._backup_task is not None and not engine._backup_task.done())}
-
-
-@app.post("/api/sim/backup/stop")
-async def backup_replay_stop() -> dict[str, Any]:
-    engine.cancel_backup()
-    if engine._backup_task is not None and not engine._backup_task.done():
-        engine._backup_task.cancel()
-    return {"ok": True, "status": engine.backup_status}
 
 
 @app.post("/api/sim/spawn")
@@ -2402,7 +1950,7 @@ async def ml_export(
     from .ml_client import export_features
     data, content_type = await export_features(hours=hours, format=format)
     ext = {"csv": "csv", "parquet": "parquet", "jsonl": "jsonl"}[format]
-    filename = f"hpe_sentinel_features_{hours}h.{ext}"
+    filename = f"sentinel_features_{hours}h.{ext}"
     headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
     return StreamingResponse(iter([data]), media_type=content_type, headers=headers)
 

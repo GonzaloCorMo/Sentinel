@@ -100,7 +100,7 @@ fi
 # verificar explícitamente que las imágenes existen.
 MISSING=()
 for svc in "${SERVICES[@]}"; do
-  IMG="hpe-ambulancia-digital-twin-${svc}:latest"
+  IMG="sentinel-digital-twin-${svc}:latest"
   if ! docker image inspect "$IMG" >/dev/null 2>&1; then
     MISSING+=("$svc")
   fi
@@ -131,7 +131,7 @@ printf "  ${BOLD}%-22s${RESET} %s\n" "Servicios construidos:" "${SERVICES[*]}"
 echo
 printf "  ${BOLD}Imágenes:${RESET}\n"
 for svc in "${SERVICES[@]}"; do
-  IMG="hpe-ambulancia-digital-twin-${svc}:latest"
+  IMG="sentinel-digital-twin-${svc}:latest"
   SIZE=$(docker image inspect "$IMG" --format '{{.Size}}' 2>/dev/null | awk '{printf "%.0f MB", $1/1024/1024}')
   CREATED=$(docker image inspect "$IMG" --format '{{.Created}}' 2>/dev/null | cut -dT -f1)
   printf "    ${GREEN}•${RESET} %-16s ${DIM}%s  (%s)${RESET}\n" "$svc" "$SIZE" "$CREATED"
@@ -139,5 +139,5 @@ done
 
 echo
 printf "${DIM}Siguiente paso:${RESET}  ./up.sh   ${DIM}(levanta stack)${RESET}\n"
-printf "${DIM}Ver imágenes:${RESET}    docker images | grep hpe-ambulancia\n"
+printf "${DIM}Ver imágenes:${RESET}    docker images | grep sentinel-digital-twin\n"
 printf "${DIM}Limpiar cache:${RESET}   docker builder prune\n\n"

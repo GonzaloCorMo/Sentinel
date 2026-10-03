@@ -193,7 +193,7 @@ async def generate_shift_report(window_minutes: int, engine_snapshot: dict[str, 
         {
             "role": "system",
             "content": (
-                "Eres el analista de operaciones del sistema HPE Sentinel. "
+                "Eres el analista de operaciones del sistema Sentinel. "
                 "Escribe un informe de cambio de turno conciso y profesional, "
                 "en español. El informe debe ser accionable: highlights con "
                 "severidad (info/warning/critical) y recomendaciones concretas."

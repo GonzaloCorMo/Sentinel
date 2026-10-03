@@ -855,7 +855,7 @@ class AIDecisionEngine:
             {
                 "role": "system",
                 "content": (
-                    "Motor IA de HPE Sentinel (gemelo digital de emergencias). "
+                    "Motor IA de Sentinel (gemelo digital de emergencias). "
                     "Genera explicabilidad estructurada para operador humano: "
                     "por qué la anomalía es relevante, qué factores la disparan, "
                     "qué acción recomienda y con qué confianza. Si hay protocolo "

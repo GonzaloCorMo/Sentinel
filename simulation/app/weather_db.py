@@ -122,6 +122,6 @@ async def get_all_latest_readings() -> dict[str, dict[str, Any]]:
 
 async def get_station_ids_from_db() -> list[str]:
     """Lista de station_ids conocidos en DB (para reconstruir la lista de
-    estaciones tras un reinicio, cuando engine.aruba_weather está vacío)."""
+    estaciones tras un reinicio, cuando engine.weather_by_station está vacío)."""
     readings = await get_all_latest_readings()
     return list(readings.keys())
