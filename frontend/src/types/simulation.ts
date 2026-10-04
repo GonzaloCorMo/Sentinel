@@ -308,6 +308,9 @@ export interface SimulationStatePayload {
   simTimeS?: number;
   /** Sube en cada reinicio del escenario (junto con `stats.tickCount` ordena las instantáneas). */
   epoch?: number;
+  trainingRateAuto?: boolean;
+  /** Emergencias por hora que mantienen la flota equilibrada (~65 % de ocupación). */
+  balancedRatePerHour?: number;
   networkStatus: { mqtt: boolean; p2p: boolean; http: boolean };
   linkState: LinkState | string;
   ambulances: Ambulance[];

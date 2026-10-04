@@ -1056,7 +1056,8 @@ async def delete_jam(jam_id: str) -> dict[str, Any]:
 
 class TrainingModeBody(BaseModel):
     enabled: bool
-    ratePerMin: float | None = Field(default=None, ge=0.1, le=60.0)
+    # Sin valor: tasa equilibrada según la flota. Con valor: tasa fija.
+    ratePerMin: float | None = Field(default=None, ge=0.01, le=60.0)
 
 
 @app.post("/api/sim/training-mode")

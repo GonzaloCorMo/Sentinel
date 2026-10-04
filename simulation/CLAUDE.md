@@ -29,6 +29,7 @@ Ver `docs/pages/technical/modelo-de-simulacion.md`. En resumen:
 - Las rutas son `RouteCoords` (una lista con `seg_speeds_ms`, la velocidad de cada tramo según OSRM). El tick mueve la unidad con aceleración y frenada hacia la velocidad objetivo (`_target_speed_ms`).
 - Las fases con duración (`on_scene`, `at_hospital`, `refueling`) usan `phaseUntil` en segundos simulados (`sim_time_s`, expuesto como `simTimeS`).
 - Emergencias: `pending` → `assigned` → `on_scene` → `resolved` (al salir del lugar).
+- **Carga**: las emergencias automáticas van por defecto a ritmo equilibrado (`emergency_catalog.balanced_rate_per_min`: ~65 % de ocupación, frena si hay cola). Las incidencias externas simuladas van en **tiempo simulado** (`MOCK_EVENT_INTERVAL_MIN`, 8 min de media) y se descuentan del presupuesto. No vuelvas a programar nada del mundo simulado en tiempo de reloj.
 - Una unidad **sin ruta está detenida**: el motor de posicionamiento devuelve su posición tal cual y velocidad 0. Nunca añadas ruido a la posición: el motor la reescribe en cada tick y se acumula (las unidades «se mecían»).
 
 ## Probar
@@ -39,6 +40,7 @@ curl -s localhost:8080/api/sim/state | python -m json.tool | head
 bash scripts/smoke.sh --ai
 python scripts/check_realism.py      # todo sobre calles, velocidades y fases plausibles
 python scripts/check_stability.py    # nada oscila: paradas quietas, sin retrocesos ni saltos ni vaivenes
+python scripts/check_balance.py      # carga equilibrada: ocupación ~35–85 % y sin cola de avisos creciente
 ```
 
 Escenario de prueba: `POST /api/sim/generate-scenario {"hospitals":3,"gasStations":2,"ambulances":5,"incidents":3,"clearExisting":true}` y después `POST /api/sim/control {"action":"play"}`.

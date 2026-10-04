@@ -13,7 +13,7 @@ meteorológicas. Dos vías de entrada, ambas con el mismo contrato
 
 Variables de entorno:
     EVENT_SOURCE               mock | off           (default: mock)
-    MOCK_EVENT_INTERVAL_SEC    segundos entre eventos (default: 25)
+    MOCK_EVENT_INTERVAL_MIN    minutos simulados medios entre eventos (default: 8)
     MOCK_WEATHER_INTERVAL_SEC  segundos entre lecturas (default: 10)
     MOCK_WEATHER_STATIONS      estaciones sintéticas si no hay POIs
                                `weather_station` en el mapa (default: 4)
@@ -75,7 +75,7 @@ _ROAD_RADIUS_M = {"accident": 150.0, "lane_closure": 120.0, "construction": 200.
 @dataclass(frozen=True)
 class EventSourceConfig:
     mode: str
-    event_interval_sec: float
+    event_interval_min: float
     weather_interval_sec: float
     weather_stations: int
 
@@ -95,7 +95,7 @@ def load_event_source_config() -> EventSourceConfig:
     mode = (os.environ.get("EVENT_SOURCE") or "mock").strip().lower()
     return EventSourceConfig(
         mode=mode if mode in {"mock", "off"} else "mock",
-        event_interval_sec=_env_float("MOCK_EVENT_INTERVAL_SEC", 25.0, 2.0),
+        event_interval_min=_env_float("MOCK_EVENT_INTERVAL_MIN", 8.0, 0.5),
         weather_interval_sec=_env_float("MOCK_WEATHER_INTERVAL_SEC", 10.0, 1.0),
         weather_stations=int(_env_float("MOCK_WEATHER_STATIONS", 4, 1)),
     )
@@ -190,13 +190,6 @@ def _station_ids(engine: Any, fallback_count: int) -> list[str]:
     return ids or [f"mock-ws-{i + 1}" for i in range(fallback_count)]
 
 
-async def _resolve_later(engine: Any, event: dict[str, Any], after_s: float) -> None:
-    await asyncio.sleep(after_s)
-    resolved = dict(event)
-    resolved["resolved_at"] = _iso()
-    await engine.ingest_external_event(resolved)
-
-
 async def run_event_source(engine: Any, *, seed: int | None = None) -> None:
     """Tarea de fondo del lifespan: alimenta el motor según `EVENT_SOURCE`."""
     cfg = load_event_source_config()
@@ -206,39 +199,48 @@ async def run_event_source(engine: Any, *, seed: int | None = None) -> None:
         return
 
     log.info(
-        "Event source: mock local (eventos cada %.0fs, clima cada %.0fs)",
-        cfg.event_interval_sec,
+        "Event source: mock local (un evento cada %.1f min simulados de media, clima cada %.0f s)",
+        cfg.event_interval_min,
         cfg.weather_interval_sec,
     )
     rng = random.Random(seed)
     drift = _WeatherDrift(rng)
     loop = asyncio.get_running_loop()
-    next_event_at = loop.time() + min(5.0, cfg.event_interval_sec)
-    pending: set[asyncio.Task[None]] = set()
-    try:
-        while True:
-            try:
-                if weather_source_mode() == "mock":
-                    for sid in _station_ids(engine, cfg.weather_stations):
-                        await engine.ingest_weather_reading(drift.next(sid))
-                if loop.time() >= next_event_at:
-                    event = await build_mock_event(rng, getattr(engine, "_http", None))
-                    await engine.ingest_external_event(event)
-                    # Los eventos se autorresuelven pasado un rato para que el mapa no se sature.
-                    task = asyncio.create_task(_resolve_later(engine, event, rng.uniform(120, 420)))
-                    pending.add(task)
-                    task.add_done_callback(pending.discard)
-                    jitter = rng.uniform(0.6, 1.4)
-                    next_event_at = loop.time() + cfg.event_interval_sec * jitter
-            except asyncio.CancelledError:
-                raise
-            except Exception as exc:  # el mock nunca debe tumbar el lifespan
-                log.warning("Event source: fallo generando datos mock: %s", exc)
-                engine.set_event_source_status({"status": f"error:{type(exc).__name__}", "lastError": str(exc)})
-            await asyncio.sleep(cfg.weather_interval_sec)
-    finally:
-        for task in pending:
-            task.cancel()
-
+    next_weather_at = 0.0
+    # Todo en tiempo simulado (engine.sim_time_s): con la simulación en pausa
+    # no aparecen incidencias y a 20× aparecen 20 veces más rápido, igual que
+    # el resto del mundo simulado.
+    mean_s = cfg.event_interval_min * 60.0
+    next_event_sim = engine.sim_time_s + rng.expovariate(1.0 / mean_s)
+    open_events: list[tuple[float, dict[str, Any]]] = []  # (fin en tiempo simulado, evento)
+    last_sim = engine.sim_time_s
+    while True:
+        try:
+            now_sim = float(engine.sim_time_s)
+            if now_sim < last_sim:  # escenario reiniciado
+                next_event_sim = now_sim + rng.expovariate(1.0 / mean_s)
+                open_events.clear()
+            last_sim = now_sim
+            if weather_source_mode() == "mock" and loop.time() >= next_weather_at:
+                next_weather_at = loop.time() + cfg.weather_interval_sec
+                for sid in _station_ids(engine, cfg.weather_stations):
+                    await engine.ingest_weather_reading(drift.next(sid))
+            if now_sim >= next_event_sim:
+                next_event_sim = now_sim + rng.expovariate(1.0 / mean_s)
+                event = await build_mock_event(rng, getattr(engine, "_http", None))
+                await engine.ingest_external_event(event)
+                # Una incidencia en la vía dura entre 20 y 90 minutos.
+                open_events.append((now_sim + rng.uniform(20, 90) * 60.0, event))
+            for item in [e for e in open_events if now_sim >= e[0]]:
+                open_events.remove(item)
+                resolved = dict(item[1])
+                resolved["resolved_at"] = _iso()
+                await engine.ingest_external_event(resolved)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # el mock nunca debe tumbar el lifespan
+            log.warning("Event source: fallo generando datos mock: %s", exc)
+            engine.set_event_source_status({"status": f"error:{type(exc).__name__}", "lastError": str(exc)})
+        await asyncio.sleep(1.0)
 
 __all__ = ["EventSourceConfig", "build_mock_event", "load_event_source_config", "run_event_source"]

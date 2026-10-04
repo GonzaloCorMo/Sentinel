@@ -16,7 +16,10 @@ const speed = computed(() => state.value?.stats.simulationSpeed ?? 1);
 const tick = computed(() => state.value?.stats.tickCount ?? 0);
 const osrm = computed(() => state.value?.osrmRouting);
 const trainingMode = computed(() => state.value?.trainingMode ?? false);
-const rateInput = ref<number>(state.value?.trainingRatePerMin ?? 5);
+/** Emergencias por hora; vacío = equilibrada según la flota. */
+const rateInput = ref<number | "">("");
+const balancedPerHour = computed(() => state.value?.balancedRatePerHour ?? null);
+const fixedRate = computed(() => typeof rateInput.value === "number" && rateInput.value > 0);
 
 const presets = [1, 2, 5, 10, 20];
 
@@ -24,10 +27,13 @@ async function toggleTrainingMode() {
   busy.value = true;
   try {
     const next = !trainingMode.value;
-    await store.setTrainingMode(next, next ? rateInput.value : undefined);
+    const perMin = next && fixedRate.value ? Number(rateInput.value) / 60 : undefined;
+    await store.setTrainingMode(next, perMin);
     toast[next ? "success" : "info"](
       next
-        ? t("sim.training_on", { rate: rateInput.value })
+        ? fixedRate.value
+          ? t("sim.training_on", { rate: rateInput.value })
+          : t("sim.training_on_balanced", { rate: balancedPerHour.value ?? "—" })
         : t("sim.training_off"),
     );
   } catch (e) {
@@ -131,14 +137,20 @@ async function setSpeed(mult: number) {
           v-model.number="rateInput"
           type="number"
           min="1"
-          max="60"
+          max="600"
           step="1"
+          :placeholder="t('sim.rate_balanced_short')"
           :disabled="busy || trainingMode"
-          class="w-12 rounded border border-slate-800 bg-slate-950 px-1.5 py-0.5 text-center font-mono text-xs text-slate-200 focus:border-slate-600 focus:outline-none disabled:opacity-50"
+          class="w-14 rounded border border-slate-800 bg-slate-950 px-1.5 py-0.5 text-center font-mono text-xs text-slate-200 focus:border-slate-600 focus:outline-none disabled:opacity-50"
           :title="trainingMode ? t('sim.training_change_off_first') : t('sim.training_rate_tooltip')"
           :aria-label="t('sim.training_rate_tooltip')"
         />
-        <span class="text-[11px] text-slate-500">/min</span>
+        <span class="text-[11px] text-slate-500">/h</span>
+        <span
+          v-if="!fixedRate && balancedPerHour != null"
+          class="font-mono text-[11px] text-slate-500"
+          :title="t('sim.rate_balanced_tooltip')"
+        >≈{{ balancedPerHour }}</span>
         <button
           type="button"
           class="ml-1 flex items-center gap-1.5 rounded border px-2 py-0.5 text-xs"

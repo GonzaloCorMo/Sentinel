@@ -200,6 +200,8 @@ class SimulationEngine:
         # alimentar el pipeline ML. Controlado por endpoint.
         self.training_mode: bool = False
         self.training_emergencies_per_min: float = 3.0
+        # Por defecto la tasa se ajusta a la flota (ver emergency_catalog.balanced_rate_per_min).
+        self.training_rate_auto: bool = True
         self._training_last_spawn_tick: int = 0
         self._resolved_emergencies = 0
         self.dispatch_scoring: ScoringRegistry = default_registry()
@@ -589,6 +591,10 @@ class SimulationEngine:
             "dispatchRequiresApproval": self.dispatch_requires_approval,
             "trainingMode": self.training_mode,
             "trainingRatePerMin": self.training_emergencies_per_min,
+            "trainingRateAuto": self.training_rate_auto,
+            # Ritmo objetivo de la flota (sin el frenado temporal por cola de avisos).
+            "balancedRatePerHour": round(ecat.balanced_rate_per_min(
+                sum(1 for a in self.ambulances if not a.get("poweredOff"))) * 60, 1),
             "sessionId": self._events.session_id,
             "externalEvents": [e.copy() for e in self.external_events[-200:] if not e.get("resolved_at")],
             "weatherStations": {k: v.copy() for k, v in self.weather_by_station.items()},
@@ -2100,16 +2106,21 @@ class SimulationEngine:
         await self._ensure_region_infrastructure()
         if len(self.ambulances) < 3:
             await self._spawn_unit_at_base()
-        target_rate = max(self.training_emergencies_per_min, 0.1)
-        ext_wall_per_min = self._recent_external_emergency_rate_per_min()
-        ext_sim_per_min = ext_wall_per_min / max(self.speed_multiplier, 0.1)
-        rate_per_min = max(0.0, target_rate - ext_sim_per_min) * ecat.demand_factor(self._local_hour())
+        target_rate = self._balanced_rate_per_min() if self.training_rate_auto else max(self.training_emergencies_per_min, 0.1)
+        ext_per_min = self._recent_external_emergency_rate_per_min()
+        rate_per_min = max(0.0, target_rate - ext_per_min) * ecat.demand_factor(self._local_hour())
         if _rng.random() >= rate_per_min / 60.0 * dt_sim:
             return
         if self._training_spawning >= 3:
             return  # no acumular colocaciones pendientes si OSRM va lento
         self._training_spawning += 1
         asyncio.create_task(self._spawn_catalog_emergency("training"))
+
+    def _balanced_rate_per_min(self) -> float:
+        """Tasa equilibrada para la flota actual (unidades encendidas y con cola de avisos)."""
+        units = sum(1 for a in self.ambulances if not a.get("poweredOff"))
+        pending = sum(1 for e in self.emergencies if e.get("status") == "pending")
+        return ecat.balanced_rate_per_min(units, pending)
 
     async def _spawn_catalog_emergency(
         self, source: str, center: tuple[float, float] | None = None,
@@ -2234,12 +2245,14 @@ class SimulationEngine:
         )
 
     def _recent_external_emergency_rate_per_min(self) -> float:
-        """Wall-clock rate of external-feed emergencies created in last 60s."""
-        now = time.monotonic()
-        cutoff = now - 60.0
+        """Emergencias de incidencias externas por minuto simulado (última hora simulada)."""
+        cutoff = self.sim_time_s - 3600.0
         while self._external_em_window and self._external_em_window[0] < cutoff:
             self._external_em_window.popleft()
-        return float(len(self._external_em_window))
+        if not self._external_em_window:
+            return 0.0
+        span_min = max(10.0, min(60.0, (self.sim_time_s - self._external_em_window[0]) / 60.0))
+        return len(self._external_em_window) / span_min
 
     async def set_training_mode(self, enabled: bool, rate_per_min: float | None = None) -> dict[str, Any]:
         """Activa/desactiva generador continuo de emergencias.
@@ -2253,8 +2266,10 @@ class SimulationEngine:
         """
         async with self._lock:
             self.training_mode = bool(enabled)
+            # Sin tasa explícita → modo equilibrado.
+            self.training_rate_auto = rate_per_min is None
             if rate_per_min is not None:
-                self.training_emergencies_per_min = max(0.1, min(60.0, float(rate_per_min)))
+                self.training_emergencies_per_min = max(0.01, min(60.0, float(rate_per_min)))
             self._training_last_spawn_tick = self.tick
             if enabled:
                 new_session = self._events.new_session(
@@ -2268,6 +2283,7 @@ class SimulationEngine:
                 return {
                     "trainingMode": True,
                     "rate": self.training_emergencies_per_min,
+                    "auto": self.training_rate_auto,
                     "sessionId": new_session,
                 }
             return {
@@ -2503,7 +2519,7 @@ class SimulationEngine:
             "companions_dispatched": [],
             "source": "external_feed",
         }
-        self._external_em_window.append(time.monotonic())
+        self._external_em_window.append(self.sim_time_s)
         self._events.emit_event(
             "emergency", eid, "created",
             payload={

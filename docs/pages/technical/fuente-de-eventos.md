@@ -40,7 +40,7 @@ Todo lo que genera el mock se valida contra los mismos esquemas que la ingesta R
 | Variable | Default | Uso |
 |---|---|---|
 | `EVENT_SOURCE` | `mock` | `mock` activa el generador; `off` lo desactiva y deja solo la ingesta REST. |
-| `MOCK_EVENT_INTERVAL_SEC` | `25` | Segundos medios entre eventos sintéticos (con jitter). |
+| `MOCK_EVENT_INTERVAL_MIN` | `8` | Minutos **simulados** medios entre incidencias sintéticas (llegadas de Poisson). Cada incidencia dura entre 20 y 90 minutos simulados; con la simulación en pausa no se generan. |
 | `WEATHER_SOURCE` | `meteogalicia` | `meteogalicia` (lecturas reales) o `mock` (sintéticas). |
 | `METEOGALICIA_INTERVAL_SEC` | `600` | Cada cuánto se consulta MeteoGalicia (publica cada 10 min). |
 | `WEATHER_RADIUS_KM` | `18` | Radio alrededor del centro de la región para elegir estaciones. |

@@ -172,15 +172,18 @@
     "speed_n": "Speed {n}x",
     "tick": "Step",
     "auto_ml": "Automatic incidents",
-    "training_on": "Automatic incidents on · {rate}/min",
+    "training_on": "Automatic emergencies on · {rate}/h",
     "training_off": "Automatic incidents off",
     "training_change_off_first": "Turn them off to change the rate",
-    "training_rate_tooltip": "Simulated incidents per minute",
+    "training_rate_tooltip": "Emergencies per hour. Leave it empty for a pace balanced with the fleet",
     "stop_generator": "Stop",
     "training_24_7": "Continuously creates incidents to train the anomaly model",
     "auto": "Start",
     "osrm_warn": "The routing service isn't ready yet: units will travel in straight lines until it is.",
-    "mode_change_error": "Could not change mode"
+    "mode_change_error": "Could not change mode",
+    "training_on_balanced": "Automatic emergencies on · balanced pace (≈{rate}/h)",
+    "rate_balanced_short": "auto",
+    "rate_balanced_tooltip": "Balanced pace: the fleet works at ~65% and slows down if calls queue up without a unit"
   },
   "scenario": {
     "hospitals": "Hospitals",

@@ -172,15 +172,18 @@
     "speed_n": "Velocidad {n}x",
     "tick": "Paso",
     "auto_ml": "Emergencias automáticas",
-    "training_on": "Emergencias automáticas activadas · {rate}/min",
+    "training_on": "Emergencias automáticas activadas · {rate}/h",
     "training_off": "Emergencias automáticas desactivadas",
     "training_change_off_first": "Desactívalas para cambiar el ritmo",
-    "training_rate_tooltip": "Emergencias simuladas por minuto",
+    "training_rate_tooltip": "Emergencias por hora. Déjalo vacío para un ritmo equilibrado con la flota",
     "stop_generator": "Detener",
     "training_24_7": "Crea emergencias de forma continua para entrenar el modelo de anomalías",
     "auto": "Activar",
     "osrm_warn": "El servicio de rutas aún no responde: las unidades irán en línea recta hasta que esté listo.",
-    "mode_change_error": "No se pudo cambiar el modo"
+    "mode_change_error": "No se pudo cambiar el modo",
+    "training_on_balanced": "Emergencias automáticas activadas · ritmo equilibrado (≈{rate}/h)",
+    "rate_balanced_short": "auto",
+    "rate_balanced_tooltip": "Ritmo equilibrado: la flota trabaja al ~65 % y frena si se acumulan avisos sin unidad"
   },
   "scenario": {
     "hospitals": "Hospitales",

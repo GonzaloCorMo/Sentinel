@@ -225,3 +225,48 @@ MAJOR_ROAD_HINTS = ("avenida", "estrada", "autovía", "autopista", "rolda", "car
 def is_major_road(name: str) -> bool:
     n = name.strip().lower()
     return any(n.startswith(h) or f" {h}" in n for h in MAJOR_ROAD_HINTS)
+
+
+# ── Carga equilibrada ───────────────────────────────────────────────────
+# Ocupación objetivo de la flota: ~65 % de media deja margen para las horas
+# punta (demand_factor llega a ~1,28 → ~83 %) sin que se acumulen avisos.
+TARGET_UTILIZATION = 0.65
+# Minutos que no están en el catálogo: llegada al lugar, traslado y vuelta a
+# base o repostaje, en ciudad.
+_RESPONSE_MIN = 7.0
+_TRANSPORT_MIN = 7.0
+_RETURN_MIN = 6.0
+_ON_SCENE_SEV = {"critical": 1.25, "high": 1.0, "medium": 0.9, "low": 0.8}
+_TRANSPORT_ADJ = {"critical": 0.1, "high": 0.05, "medium": 0.0, "low": -0.15}
+_HANDOVER_MIN = {"critical": 9.0, "high": 12.0, "medium": 15.0, "low": 16.0}
+
+
+def _mean_cycle_minutes() -> float:
+    """Duración media de una misión (de la asignación a quedar libre), en minutos."""
+    total_w = sum(k.weight for k in CATALOG)
+    cycle = 0.0
+    for k in CATALOG:
+        sev_w = sum(k.severity)
+        for w, sev in zip(k.severity, SEVERITIES):
+            p = k.weight / total_w * w / sev_w
+            on_scene = k.on_scene_min * _ON_SCENE_SEV[sev] * 1.05  # media de la lognormal
+            transport = max(0.0, min(1.0, k.transport_p + _TRANSPORT_ADJ[sev]))
+            cycle += p * (_RESPONSE_MIN + on_scene + transport * (_TRANSPORT_MIN + _HANDOVER_MIN[sev]) + _RETURN_MIN)
+    return cycle
+
+
+MEAN_CYCLE_MIN = _mean_cycle_minutes()
+
+
+def balanced_rate_per_min(units: int, pending: int = 0) -> float:
+    """Emergencias por minuto simulado que mantienen la flota al ~65 % de ocupación.
+
+    Si ya hay avisos esperando unidad, se frena en proporción a la cola para
+    que el escenario se recupere en lugar de saturarse.
+    """
+    if units <= 0:
+        return 0.0
+    rate = TARGET_UTILIZATION * units / MEAN_CYCLE_MIN
+    if pending > 0:
+        rate *= max(0.15, 1.0 - pending / max(1.0, units * 0.5))
+    return rate

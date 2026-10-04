@@ -85,7 +85,7 @@ curl -X POST http://localhost:8080/api/events/ingest \
 | Variable | Default | Uso |
 |---|---|---|
 | `EVENT_SOURCE` | `mock` | `mock` genera datos sintéticos · `off` solo ingesta REST |
-| `MOCK_EVENT_INTERVAL_SEC` | `25` | Segundos medios entre eventos |
+| `MOCK_EVENT_INTERVAL_MIN` | `8` | Minutos simulados medios entre incidencias externas simuladas |
 | `MOCK_WEATHER_INTERVAL_SEC` | `10` | Segundos entre lecturas meteorológicas |
 | `MOCK_WEATHER_STATIONS` | `4` | Estaciones sintéticas si el mapa no tiene POIs `weather_station` |
 

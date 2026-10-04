@@ -31,6 +31,14 @@ Todo lo que genera el simulador cae sobre la red viaria real del grafo OSRM de l
 
 Las emergencias automáticas siguen un proceso de Poisson. La tasa media es la configurada (por minuto simulado) y se modula por la hora local de la región: mínimo hacia las 4:00 y picos a media mañana y a última hora de la tarde.
 
+**Ritmo equilibrado.** Si no se fija una tasa, las emergencias automáticas siguen un ritmo calculado para la flota:
+- una misión media dura unos 45 minutos (asignación, asistencia, traslado, transferencia y vuelta);
+- la tasa se fija para que la flota trabaje al 65 % de su capacidad: unas 5 emergencias por hora con 6 unidades;
+- en horas punta sube hacia el 80 %;
+- si se acumulan avisos sin unidad, frena hasta que la cola baja.
+
+Las emergencias que llegan de las incidencias externas simuladas (una cada 8 minutos simulados de media) se descuentan de ese presupuesto. `scripts/check_balance.py` lo comprueba.
+
 Las cifras son aproximaciones razonables de la demanda de un servicio de emergencias urbano en España, no datos oficiales.
 
 ### Ciclo de una misión
