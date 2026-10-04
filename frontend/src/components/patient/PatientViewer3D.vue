@@ -54,7 +54,7 @@ const uniforms = {
   uTime: { value: 0 },
   uPulse: { value: 0 },
   uScanY: { value: 0 },
-  uOpacity: { value: 0.22 },
+  uOpacity: { value: 0.16 },
 };
 
 const VERT = /* glsl */ `
@@ -93,10 +93,11 @@ function makeMaterials() {
   const wire = new THREE.ShaderMaterial({
     uniforms, vertexShader: VERT, fragmentShader: FRAG, wireframe: true, transparent: true, depthWrite: false,
   });
-  // Relleno casi invisible: da volumen y oculta las líneas traseras a medias.
+  // Relleno casi invisible que da volumen. Estilo rayos X (sin escribir
+  // profundidad): la zona afectada se ve también con el cuerpo de espaldas.
   const fill = new THREE.ShaderMaterial({
-    uniforms: { ...uniforms, uOpacity: { value: 0.05 } },
-    vertexShader: VERT, fragmentShader: FRAG, transparent: true, depthWrite: true,
+    uniforms: { ...uniforms, uOpacity: { value: 0.04 } },
+    vertexShader: VERT, fragmentShader: FRAG, transparent: true, depthWrite: false,
   });
   return { wire, fill };
 }
@@ -162,9 +163,11 @@ function rebuildOverlay() {
     dot.userData.spin = true;
     overlay.add(dot);
     const text = props.labels[z.id] ?? { zone: z.id, detail: "" };
+    // three.js escribe la transformación del elemento exterior en cada frame;
+    // el desplazamiento lateral va en el interior para no pelearse con ella.
     const el = document.createElement("div");
-    el.className = `pv-label pv-${props.tone} ${side > 0 ? "pv-left" : "pv-right"}`;
-    el.innerHTML = `<span class="pv-zone">[${esc(text.zone)}]</span>${text.detail ? `<span class="pv-detail">${esc(text.detail)}</span>` : ""}`;
+    el.className = "pv-anchor";
+    el.innerHTML = `<div class="pv-label pv-${props.tone} ${side > 0 ? "pv-left" : "pv-right"}"><span class="pv-zone">[${esc(text.zone)}]</span>${text.detail ? `<span class="pv-detail">${esc(text.detail)}</span>` : ""}</div>`;
     const label = new CSS2DObject(el);
     label.position.copy(anchor);
     overlay.add(label);
@@ -198,6 +201,17 @@ function frame() {
   controls.update();
   renderer!.render(scene, camera);
   labelRenderer!.render(scene, camera);
+  snapLabelsToPixels();
+}
+
+/** CSS2DRenderer usa posiciones fraccionarias: el texto «tiembla» al girar. Se redondean. */
+function snapLabelsToPixels() {
+  for (const o of overlay.children) {
+    if (!(o instanceof CSS2DObject)) continue;
+    const st = o.element.style;
+    const snapped = st.transform.replace(/(-?\d+\.\d+)px/g, (_, n: string) => `${Math.round(Number(n))}px`);
+    if (snapped !== st.transform) st.transform = snapped;
+  }
 }
 
 onMounted(() => {
@@ -266,7 +280,12 @@ onMounted(() => {
   frame();
 });
 
-watch(() => [props.zones, props.tone, props.labels], rebuildOverlay, { deep: true });
+// Solo se reconstruye si cambia el contenido: el estado llega cada 0,4 s con
+// objetos nuevos aunque la afección sea la misma, y recrear las etiquetas en
+// cada actualización las hacía parpadear.
+const overlayKey = () =>
+  JSON.stringify([props.tone, props.zones.map((z) => [z.id, z.center, z.radius]), props.labels]);
+watch(overlayKey, rebuildOverlay);
 
 onBeforeUnmount(() => {
   cancelAnimationFrame(raf);

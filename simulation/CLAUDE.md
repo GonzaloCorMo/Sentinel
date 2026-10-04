@@ -13,6 +13,7 @@
 - `app/emergency_catalog.py` — tipos de llamada con frecuencia, gravedad, tiempo en el lugar, probabilidad de traslado y demanda por hora.
 - `app/region_data/<región>.json` — lugares reales de OpenStreetMap (gasolineras, bases, bomberos, policía), leídos con `regions.region_places()`.
 - `app/weather_source.py` — tiempo real de MeteoGalicia (estaciones de la región como POIs `mg-<id>`, lectura cada 10 min); `WEATHER_SOURCE=mock` para sintético.
+- `app/patient_report_service.py` — informe ISBAR del paciente (`POST /api/ai/patient-report`). El código calcula los hechos (rangos, tendencias, alertas) y el LLM solo redacta; si falla, plantilla determinista. Usa el historial de constantes (`engine._vitals_history`, una muestra cada 30 s simulados).
 - `app/supabase_client.py` — si no hay Supabase, el motor sigue funcionando sin persistencia.
 
 ## Reglas

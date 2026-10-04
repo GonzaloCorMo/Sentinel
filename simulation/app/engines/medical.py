@@ -7,7 +7,7 @@ unidad tenga un perfil estable.
 Perfiles soportados vía ``patientSeverity``:
     - ``stable``: vitales en rangos normales con poco drift.
     - ``moderate``: empeoramiento progresivo controlable.
-    - ``critical``: hipotensión, taquicardia, hipoxemia, ECG arrítmico.
+    - ``critical``: hipotensión, taquicardia, hipoxemia.
 """
 from __future__ import annotations
 
@@ -15,25 +15,12 @@ import math
 import random
 from typing import Any
 
-_ECG_WEIGHTS_NORMAL = (
-    ("Sinusal", 0.80),
-    ("Taquicardia", 0.15),
-    ("Fibrilacion", 0.05),
-)
-
-_ECG_WEIGHTS_CRITICAL = (
-    ("Sinusal", 0.30),
-    ("Taquicardia", 0.40),
-    ("Fibrilacion", 0.30),
-)
-
-
 # Ajustes de las constantes según la afección del paciente (``patientKindKey``,
 # tipos de emergency_catalog). Valores aproximados y ficticios, solo para que
 # la simulación sea coherente: no son criterios clínicos.
 #   d_*  → se suma al valor calculado; set_* → se fija.
 _CONDITION_PROFILES: dict[str, dict[str, Any]] = {
-    "cardiac_arrest": {"set_hr": 150, "set_sys": 60, "set_dia": 35, "set_spo2": 78, "set_gcs": 3, "set_ecg": "Fibrilacion", "d_rr": -8},
+    "cardiac_arrest": {"set_hr": 150, "set_sys": 60, "set_dia": 35, "set_spo2": 78, "set_gcs": 3, "set_ecg": "Fibrilacion", "set_rr": 6, "set_temp": 36.2},
     "chest_pain": {"d_hr": 15, "d_sys": 25, "d_dia": 10, "d_spo2": -2, "d_troponin": 90},
     "breathing": {"d_spo2": -9, "d_rr": 10, "d_hr": 15},
     "stroke": {"d_sys": 45, "d_dia": 20, "d_gcs": -4},
@@ -81,16 +68,23 @@ class MedicalEngine:
         self._phase.pop(amb_id, None)
         self._rng.pop(amb_id, None)
 
-    def _pick_ecg(self, rng: random.Random, severity: str) -> str:
-        """Muestrea ritmo ECG ponderado (distinto set si ``severity=="critical"``)."""
-        weights = _ECG_WEIGHTS_CRITICAL if severity == "critical" else _ECG_WEIGHTS_NORMAL
-        r = rng.random()
-        acc = 0.0
-        for label, w in weights:
-            acc += w
-            if r <= acc:
-                return label
-        return weights[0][0]
+    @staticmethod
+    def _ecg_for(amb: dict[str, Any], severity: str, hr: float) -> str:
+        """Ritmo estable por paciente: sinusal o taquicardia sinusal según el pulso.
+
+        La fibrilación solo aparece en la parada (perfil) o, una vez por
+        paciente y con baja probabilidad, en pacientes críticos. Antes se
+        sorteaba en cada tick y el monitor saltaba de ritmo constantemente.
+        """
+        if severity == "critical":
+            seed = f"{amb.get('id')}:{amb.get('patientEmergencyId')}"
+            if random.Random(seed).random() < 0.1:
+                return "Fibrilacion"
+        # Histéresis: no alternar sinusal/taquicardia con el pulso rondando 100.
+        prev = amb.get("_ecg")
+        rhythm = "Taquicardia" if (hr > 105 or (prev == "Taquicardia" and hr > 95)) else "Sinusal"
+        amb["_ecg"] = rhythm
+        return rhythm
 
     def tick(self, amb_id: str, tick_index: int, dt: float, amb: dict[str, Any]) -> dict[str, Any]:
         """Avanza un tick; el caller debe garantizar ``amb["hasPatient"]``."""
@@ -174,26 +168,25 @@ class MedicalEngine:
 
         # ── Afección concreta del paciente ────────────────────────────────
         prof = _CONDITION_PROFILES.get(str(amb.get("patientKindKey") or ""), {})
-        ecg = self._pick_ecg(rng, severity)
         if prof:
             hr = float(prof.get("set_hr", hr + prof.get("d_hr", 0)))
             sys_bp = int(prof.get("set_sys", sys_bp + prof.get("d_sys", 0)))
             dia_bp = int(prof.get("set_dia", dia_bp + prof.get("d_dia", 0)))
             spo2 = int(min(100, max(60, prof.get("set_spo2", spo2 + prof.get("d_spo2", 0)))))
             gcs = int(min(15, max(3, prof.get("set_gcs", gcs + prof.get("d_gcs", 0)))))
-            resp_rate = int(max(4, resp_rate + prof.get("d_rr", 0)))
+            resp_rate = int(max(4, prof.get("set_rr", resp_rate + prof.get("d_rr", 0))))
             glucose = float(prof.get("set_glucose", glucose))
             body_temp = float(prof.get("set_temp", body_temp))
             pain_score = int(min(10, max(0, pain_score + prof.get("d_pain", 0))))
             spco_pct = round(spco_pct + prof.get("d_spco", 0), 2)
             hemoglobin_g_dl = round(max(5.0, hemoglobin_g_dl + prof.get("d_hb", 0)), 2)
             troponin_ng_l = round(troponin_ng_l + prof.get("d_troponin", 0), 1)
-            ecg = str(prof.get("set_ecg", ecg))
             map_mmhg = round((sys_bp + 2 * dia_bp) / 3, 1)
             pulse_pressure = sys_bp - dia_bp
             shock_index = round(hr / max(1, sys_bp), 2)
             mshock_index = round(hr / max(1, map_mmhg), 2)
             news2 = self._calc_news2(hr, resp_rate, spo2, sys_bp, body_temp, fsm)
+        ecg = str(prof.get("set_ecg") or self._ecg_for(amb, severity, hr))
 
         return {
             # ── Básicos (UI existente) ──
@@ -339,12 +332,8 @@ class MedicalEngine:
         return hr, sys, dia, spo2
 
     def _calc_gcs(self, severity: str, phase: float, rng: random.Random) -> int:
-        if severity == "critical":
-            return int(max(3, min(8, round(5 + 2 * math.sin(phase * 0.4) + rng.gauss(0, 0.8)))))
-        elif severity == "moderate":
-            return int(max(6, min(12, round(10 + 2 * math.sin(phase * 0.4) + rng.gauss(0, 1.0)))))
-        else:
-            return int(max(12, min(15, round(14 + math.sin(phase * 0.4) + rng.gauss(0, 0.5)))))
+        """Glasgow estable por gravedad; no oscila (las afecciones neurológicas lo bajan vía perfil)."""
+        return {"critical": 12, "moderate": 14}.get(severity, 15)
 
     def _calc_resp_rate(self, severity: str, phase: float, rng: random.Random) -> int:
         if severity == "critical":

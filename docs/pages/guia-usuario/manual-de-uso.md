@@ -84,6 +84,10 @@ Pulsa una tarjeta para seleccionar la unidad. Debajo aparece el **monitor del pa
 - **Visor 3D**: cuerpo en malla de alambre con la zona afectada resaltada (rojo si el paciente está crítico, ámbar en el resto) y etiquetas ancladas a la zona. Se puede girar arrastrando y acercar con la rueda; gira solo si no se toca.
 - **Constantes**: frecuencia cardiaca, saturación, tensión, frecuencia respiratoria, temperatura, Glasgow, glucemia y ritmo, en ámbar o rojo fuera de rango. Funciona desde que la unidad llega al lugar hasta la entrega en urgencias.
 - La afección sale del tipo de emergencia (dolor torácico → corazón, ictus → cabeza, caída de persona mayor → cadera…), y las constantes simuladas son coherentes con ella.
+- **Informe para el hospital**: con un paciente real de la simulación, el botón genera con la IA local un informe de transferencia en formato ISBAR (Identificación, Situación, Antecedentes, Evaluación, Recomendación), con hallazgos y acciones orientativas. Tarda entre 10 y 40 s.
+  - Las alertas y los «datos objetivos» (constantes fuera de rango y su tendencia) los calcula el sistema, no la IA.
+  - Se puede copiar y regenerar. Si la IA no está disponible, se genera con una plantilla a partir de los mismos datos.
+  - Es orientativo y no sustituye el criterio médico.
 - **Vista de ejemplo**: si la unidad no atiende a ningún paciente, permite elegir una afección y una gravedad, con datos ficticios generados en el navegador.
 
 Todos los datos médicos son simulados y ficticios.

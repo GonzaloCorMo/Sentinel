@@ -1535,6 +1535,22 @@ async def ai_shift_report(body: ShiftReportBody) -> dict[str, Any]:
     return await generate_shift_report(body.windowMinutes, snapshot)
 
 
+class PatientReportBody(BaseModel):
+    model_config = {"extra": "forbid"}
+    ambulanceId: str = Field(min_length=1, max_length=64)
+
+
+@app.post("/api/ai/patient-report")
+async def ai_patient_report(body: PatientReportBody) -> dict[str, Any]:
+    """Informe ISBAR del paciente que atiende una unidad (datos simulados), con la IA local."""
+    from .patient_report_service import generate_patient_report
+
+    ctx = engine.patient_context(body.ambulanceId)
+    if ctx is None:
+        raise HTTPException(status_code=404, detail="La unidad no atiende a ningún paciente")
+    return await generate_patient_report(ctx)
+
+
 @app.get("/api/ai/shift-reports")
 async def ai_shift_reports(limit: int = Query(default=10, ge=1, le=50)) -> list[dict[str, Any]]:
     """Lista los últimos informes guardados en ``ai_shift_reports``."""

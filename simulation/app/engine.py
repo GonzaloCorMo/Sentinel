@@ -182,6 +182,8 @@ class SimulationEngine:
             {"id": "gas_station", "kind": "place", "name": "Gasolinera", "color": "#0ea5e9", "iconSvg": None, "builtIn": True},
         ]
         self._comms_log: deque[dict[str, Any]] = deque(maxlen=400)
+        # Constantes del paciente por unidad (una muestra cada 30 s simulados, ~1 h).
+        self._vitals_history: dict[str, deque[dict[str, Any]]] = {}
         # Mensajes de la central a las unidades (más recientes al final).
         self.unit_messages: deque[dict[str, Any]] = deque(maxlen=200)
         self._comms_seq = 0
@@ -1496,7 +1498,48 @@ class SimulationEngine:
         self._set_idle(amb)
         await self._try_assign_pending_emergency_to_ambulance(amb)
 
+    def _record_vitals(self, amb: dict[str, Any], med: dict[str, Any] | None) -> None:
+        if not med:
+            return
+        hist = self._vitals_history.setdefault(str(amb["id"]), deque(maxlen=120))
+        if hist and self.sim_time_s - hist[-1]["t"] < 30.0:
+            return
+        bp = med.get("bloodPressureMmhg") or {}
+        hist.append({
+            "t": round(self.sim_time_s, 1),
+            "phase": amb.get("missionPhase"),
+            "hr": med.get("heartRateBpm"), "sys": bp.get("systolic"), "dia": bp.get("diastolic"),
+            "spo2": med.get("spo2Pct"), "rr": med.get("respiratoryRatePerMin"), "temp": med.get("bodyTempC"),
+            "gcs": med.get("gcsScore"), "glucose": med.get("bloodGlucoseMgDl"), "ecg": med.get("ecgRhythm"),
+            "pain": med.get("painScore"), "news2": med.get("news2Score"), "spco": med.get("spcoPct"),
+        })
+
+    def patient_context(self, ambulance_id: str) -> dict[str, Any] | None:
+        """Datos simulados (ficticios) del paciente que atiende una unidad, para el informe."""
+        amb = next((a for a in self.ambulances if str(a.get("id")) == ambulance_id), None)
+        if amb is None or not amb.get("patientKindKey"):
+            return None
+        em = self._emergency_by_id(str(amb.get("patientEmergencyId") or "")) or {}
+        kind = ecat.kind_by_key(amb.get("patientKindKey"))
+        hosp = next((p for p in self.pois if p.get("id") == amb.get("stagingHospitalId")), None)
+        hist = list(self._vitals_history.get(ambulance_id, []))
+        return {
+            "unit": amb.get("displayLabel") or ambulance_id[:8],
+            "phase": amb.get("missionPhase"),
+            "conditionKey": amb.get("patientKindKey"),
+            "conditionTitle": kind.title if kind else amb.get("patientKindKey"),
+            "emergencyType": em.get("emergencyType"),
+            "severity": amb.get("patientSeverity"),
+            "callDescription": em.get("description"),
+            "street": em.get("street"),
+            "hospital": (hosp or {}).get("name"),
+            "minutesWithPatient": round((self.sim_time_s - hist[0]["t"]) / 60.0, 1) if hist else 0.0,
+            "vitals": hist,
+            "current": ((amb.get("telemetry") or {}).get("medical")) or {},
+        }
+
     def _set_idle(self, amb: dict[str, Any]) -> None:
+        self._vitals_history.pop(str(amb.get("id")), None)
         amb.pop("patientKindKey", None)
         amb.pop("patientEmergencyId", None)
         amb["missionPhase"] = "idle"
@@ -1922,6 +1965,7 @@ class SimulationEngine:
                 for amb in self.ambulances:
                     tele_out, pu = await self._tick_one_ambulance(amb, dt_real, dt_sim)
                     payload_units.append(pu)
+                    self._record_vitals(amb, tele_out.get("medical"))
                     self._tele_writer.append(
                         str(amb["id"]),
                         tele_out.get("positioning"),

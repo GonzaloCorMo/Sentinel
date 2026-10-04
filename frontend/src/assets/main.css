@@ -303,6 +303,7 @@
 .pv-host > canvas { display: block; width: 100%; height: 100%; cursor: grab; }
 .pv-host > canvas:active { cursor: grabbing; }
 .pv-labels { position: absolute; inset: 0; pointer-events: none; }
+.pv-anchor { will-change: transform; }
 .pv-label {
   display: flex;
   flex-direction: column;

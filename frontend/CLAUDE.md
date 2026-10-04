@@ -51,6 +51,7 @@
 `components/patient/PatientViewer3D.vue` (three.js directo; se carga de forma diferida) y `PatientMonitor.vue`.
 - **Modelo**: `public/models/male-base.glb`, CC BY. La atribución tiene que seguir visible en el visor y en `trazabilidad-tecnica.md`.
 - **Zonas**: coordenadas del modelo en `lib/patientZones.ts`. El resaltado lo hace un shader por distancia a la zona, así que no hacen falta mallas separadas. Si cambias de modelo, vuelve a medir las coordenadas.
+- **Etiquetas 3D**: se reconstruyen solo si cambia su contenido (`overlayKey`) y su posición se redondea a píxel entero. Si no, «tiemblan» al girar o parpadean con cada actualización del estado.
 - **Afección**: `patientKindKey` de la unidad (catálogo del motor); las constantes, de `telemetry.medical`. El modo de ejemplo usa `lib/patientMock.ts` (ficticio, no se guarda nada).
 
 ## Gráficos

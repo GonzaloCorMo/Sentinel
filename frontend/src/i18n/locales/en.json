@@ -750,6 +750,32 @@
       "assault": "Assault",
       "stabbing": "Stab wound",
       "multi_vehicle": "Multiple trauma"
+    },
+    "report": {
+      "button": "Hospital handover report",
+      "button_hint": "Generate a handover report (ISBAR) for this patient with the local AI",
+      "generating": "Generating the report with the local AI… it may take up to a minute.",
+      "generating_short": "Generating…",
+      "title": "Handover report",
+      "source_llm": "Local AI",
+      "source_rules": "Template (AI unavailable)",
+      "copy": "Copy",
+      "copied": "Copied",
+      "copy_error": "Could not copy",
+      "regenerate": "Regenerate",
+      "close": "Close report",
+      "alerts": "Alerts",
+      "findings": "Findings",
+      "actions": "Suggested actions",
+      "objective": "Objective data",
+      "no_abnormal": "Vital signs within range",
+      "error": "The report could not be generated",
+      "no_patient": "The unit is no longer handling a patient",
+      "isbar_identification": "Identification",
+      "isbar_situation": "Situation",
+      "isbar_background": "Background",
+      "isbar_assessment": "Assessment",
+      "isbar_recommendation": "Recommendation"
     }
   }
 }

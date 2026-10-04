@@ -750,6 +750,32 @@
       "assault": "Agresión",
       "stabbing": "Herida por arma blanca",
       "multi_vehicle": "Politraumatismo"
+    },
+    "report": {
+      "button": "Informe para el hospital",
+      "button_hint": "Genera con la IA local un informe de transferencia (ISBAR) de este paciente",
+      "generating": "Generando el informe con la IA local… puede tardar hasta un minuto.",
+      "generating_short": "Generando…",
+      "title": "Informe de transferencia",
+      "source_llm": "IA local",
+      "source_rules": "Plantilla (IA no disponible)",
+      "copy": "Copiar",
+      "copied": "Copiado",
+      "copy_error": "No se pudo copiar",
+      "regenerate": "Regenerar",
+      "close": "Cerrar informe",
+      "alerts": "Alertas",
+      "findings": "Hallazgos",
+      "actions": "Acciones orientativas",
+      "objective": "Datos objetivos",
+      "no_abnormal": "Constantes dentro de rango",
+      "error": "No se pudo generar el informe",
+      "no_patient": "La unidad ya no atiende a ningún paciente",
+      "isbar_identification": "Identificación",
+      "isbar_situation": "Situación",
+      "isbar_background": "Antecedentes",
+      "isbar_assessment": "Evaluación",
+      "isbar_recommendation": "Recomendación"
     }
   }
 }
