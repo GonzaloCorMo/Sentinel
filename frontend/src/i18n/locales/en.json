@@ -751,5 +751,11 @@
       "stabbing": "Stab wound",
       "multi_vehicle": "Multiple trauma"
     }
+  },
+  "chat": {
+    "filter_toast": "{match} of {total} units match the filter",
+    "filter_none": "None of the {total} units match. Try other criteria.",
+    "filter_some": "{match} of {total} units match; the rest are dimmed on the map.",
+    "filters_cleared": "Filters cleared"
   }
 }

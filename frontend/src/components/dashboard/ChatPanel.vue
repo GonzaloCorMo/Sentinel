@@ -201,13 +201,13 @@ async function runCommand(text: string) {
       };
       const total = simStore.state?.ambulances?.length ?? 0;
       const match = (simStore.state?.ambulances ?? []).filter(matchFn).length;
-      toast.success(`${match}/${total} unidades cumplen el filtro`);
+      toast.success(t("chat.filter_toast", { match, total }));
       effectDetail = match === 0
-        ? `Ninguna de las ${total} unidades cumple. Ajusta los criterios o mira la pestaña "Informes" para ver el estado real.`
-        : `${match} de ${total} cumplen. Markers restantes se oscurecen en el mapa.`;
+        ? t("chat.filter_none", { total })
+        : t("chat.filter_some", { match, total });
     } else if (cmd === "reset_filters") {
       simStore.clearUiFilters();
-      toast.info("Filtros limpiados");
+      toast.info(t("chat.filters_cleared"));
     } else if (cmd === "set_ai_mode") {
       await simStore.setAiMode(args.mode);
       toast.success(`IA → ${args.mode}`);

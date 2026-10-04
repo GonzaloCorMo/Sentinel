@@ -12,6 +12,7 @@ import { getSupabase } from "@/lib/supabase";
 import { useTheme } from "@/composables/useTheme";
 import { useRegionStore } from "@/stores/region";
 import { useSimulationStore } from "@/stores/simulation";
+import { unitStatus } from "@/lib/unitStatus";
 
 const { t } = useI18n();
 
@@ -70,9 +71,16 @@ const activePills = computed<FilterPill[]>(() => {
   if (f.batteryBelow != null) pills.push({ key: "batteryBelow", label: t("filters.battery_below", { value: f.batteryBelow }) });
   if (f.hasPatient === true) pills.push({ key: "hasPatient", label: t("filters.with_patient") });
   if (f.hasPatient === false) pills.push({ key: "hasPatient", label: t("filters.without_patient") });
-  if (f.severity) pills.push({ key: "severity", label: t("filters.severity", { value: f.severity }) });
-  if (f.entityTypeId) pills.push({ key: "entityTypeId", label: t("filters.type", { value: f.entityTypeId }) });
-  if (f.missionPhase) pills.push({ key: "missionPhase", label: t("filters.phase", { value: f.missionPhase }) });
+  // Los filtros guardan valores internos (critical, to_emergency, ids de tipo): se muestran traducidos.
+  if (f.severity) pills.push({ key: "severity", label: t("filters.severity", { value: t(`operations.severity_${f.severity}`).toLowerCase() }) });
+  if (f.entityTypeId) {
+    const name = state.value?.entityTypes?.find((e) => e.id === f.entityTypeId)?.name ?? f.entityTypeId;
+    pills.push({ key: "entityTypeId", label: t("filters.type", { value: name }) });
+  }
+  if (f.missionPhase) {
+    const phase = t(`status.${unitStatus({ missionPhase: f.missionPhase as never }).key}`).toLowerCase();
+    pills.push({ key: "missionPhase", label: t("filters.phase", { value: phase }) });
+  }
   if (f.poweredOff === true) pills.push({ key: "poweredOff", label: t("filters.powered_off") });
   if (f.poweredOff === false) pills.push({ key: "poweredOff", label: t("filters.powered_on") });
   return pills;

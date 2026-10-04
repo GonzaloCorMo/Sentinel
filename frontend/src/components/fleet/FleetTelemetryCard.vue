@@ -126,8 +126,8 @@ const lowSpo2 = computed(() => (props.amb.telemetry?.medical?.spo2Pct ?? 100) < 
     <div class="grid grid-cols-2 border-t border-slate-800 text-xs">
       <div class="border-r border-slate-800 px-3 py-2">
         <p class="text-[10px] uppercase tracking-wider text-slate-500">{{ t('vehicle.patient') }}</p>
-        <p v-if="amb.hasPatient && amb.telemetry?.medical" class="mt-0.5 font-mono text-slate-200">
-          {{ amb.telemetry.medical.heartRateBpm }}<span class="text-[10px] text-slate-500"> bpm</span>
+        <p v-if="amb.telemetry?.medical" class="mt-0.5 font-mono text-slate-200">
+          {{ Math.round(amb.telemetry.medical.heartRateBpm) }}<span class="text-[10px] text-slate-500"> lpm</span>
           ·
           <span :class="lowSpo2 ? 'text-red-300' : ''">{{ amb.telemetry.medical.spo2Pct }}%</span>
           <span class="text-[10px] text-slate-500"> SpO₂</span>

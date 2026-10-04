@@ -353,9 +353,7 @@ function companionsForEmergency(emergencyId: string | null | undefined) {
 
 watch(
   () =>
-    selectedAmbulance.value?.hasPatient
-      ? selectedAmbulance.value?.telemetry?.medical?.spo2Pct
-      : undefined,
+    selectedAmbulance.value?.telemetry?.medical?.spo2Pct,
   (spo2) => {
     if (spo2 == null) return;
     if (spo2 < 93) {
@@ -1004,13 +1002,13 @@ async function onMapClick(lat: number, lng: number) {
               <!-- Paciente -->
               <div class="border-b border-slate-800 px-4 py-3">
                 <p class="field-label">{{ t('operations.vitals') }}</p>
-                <p v-if="!selectedAmbulance.hasPatient || selectedAmbulance.telemetry?.medical == null" class="text-xs text-slate-500">
+                <p v-if="selectedAmbulance.telemetry?.medical == null" class="text-xs text-slate-500">
                   {{ t('operations.no_patient') }}
                 </p>
                 <div v-else class="grid grid-cols-2 gap-px overflow-hidden rounded border border-slate-800 bg-slate-800">
                   <div class="bg-slate-900 px-2.5 py-2">
                     <p class="text-[11px] text-slate-500">{{ t('operations.pulse') }}</p>
-                    <p class="font-mono text-sm text-slate-100">{{ selectedAmbulance.telemetry?.medical?.heartRateBpm ?? '—' }} <span class="text-[11px] text-slate-500">{{ t('operations.bpm') }}</span></p>
+                    <p class="font-mono text-sm text-slate-100">{{ selectedAmbulance.telemetry?.medical?.heartRateBpm != null ? Math.round(selectedAmbulance.telemetry.medical.heartRateBpm) : '—' }} <span class="text-[11px] text-slate-500">{{ t('operations.bpm') }}</span></p>
                   </div>
                   <div class="bg-slate-900 px-2.5 py-2">
                     <p class="text-[11px] text-slate-500">SpO₂</p>

@@ -98,6 +98,9 @@ async def interpret(text: str, context: dict[str, Any] | None = None) -> dict[st
         "Comandos válidos y sus args:\n"
         "- filter_units: {fuelBelow?, fuelAbove?, batteryBelow?, hasPatient?, severity?, "
         "entityTypeId?, missionPhase?, poweredOff?, nearPoiKind?, nearPoiName?, maxDistanceKm?, sortBy?, limit?}\n"
+        "  severity: critical|moderate|stable. missionPhase: idle (disponible) | to_emergency (hacia la emergencia) | "
+        "on_scene (atendiendo en el lugar) | to_hospital (trasladando paciente) | at_hospital (transferencia en urgencias) | "
+        "to_refuel (repostando) | to_staging (volviendo a base). Usa nearPoi* solo si se nombra un lugar concreto.\n"
         "- focus_unit: {query: str}\n"
         "- set_ai_mode: {mode: 'hitl'|'autonomous'}\n"
         "- spawn_units: {entityTypeId: str, count: int, nearPoiName?, latitude?, longitude?}\n"
@@ -180,9 +183,9 @@ def _fast_interpret(text: str, context: dict[str, Any] | None) -> dict[str, Any]
 
     # Modo IA
     if re.search(r"\bmodo\s+aut[óo]nomo\b|\bia\s+aut[óo]noma\b", low):
-        return {"ok": True, "command": "set_ai_mode", "args": {"mode": "autonomous"}, "summary": "IA → modo autonomous", "error": None}
+        return {"ok": True, "command": "set_ai_mode", "args": {"mode": "autonomous"}, "summary": "IA autónoma", "error": None}
     if re.search(r"\bmodo\s+hitl\b|\bmodo\s+(humano|manual)\b|\baprobaci[óo]n\s+manual\b", low):
-        return {"ok": True, "command": "set_ai_mode", "args": {"mode": "hitl"}, "summary": "IA → modo HITL", "error": None}
+        return {"ok": True, "command": "set_ai_mode", "args": {"mode": "hitl"}, "summary": "IA con aprobación", "error": None}
 
     # Filter units: acumulamos args según keywords presentes
     args: dict[str, Any] = {}
@@ -218,10 +221,13 @@ def _fast_interpret(text: str, context: dict[str, Any] | None) -> dict[str, Any]
 
     # Fase misión
     phase_map = {
-        "idle": r"\b(inactiv[oa]s?|en\s+espera|ociosas?|idle|disponibles?)\b",
-        "to_emergency": r"\b(?:de\s+camino|hacia)\s+emergencia|rumbo\s+al?\s+incident",
-        "to_hospital": r"\b(?:de\s+camino|hacia|rumbo)\s+al?\s+hospital\b|\btransportando\b",
+        "on_scene": r"\ben\s+el\s+lugar\b|\ben\s+escena\b|\batendiendo\b|\bon\s+scene\b",
+        "at_hospital": r"\btransferencia\b|\ben\s+urgencias\b|\bentregando\b",
+        "to_hospital": r"\b(?:de\s+camino|hacia|rumbo)\s+al?\s+hospital\b|\btransportando\b|\btrasladando\b",
+        "to_emergency": r"\b(?:de\s+camino|hacia|rumbo|yendo)\s+(?:a\s+)?(?:la\s+|una\s+)?(?:emergencia|incident\w*|aviso)|\ben\s+camino\b",
         "to_refuel": r"\b(?:de\s+camino|hacia)\s+(?:gasolinera|repostaj)|\brepostando\b",
+        "to_staging": r"\bvolviendo\s+a\s+(?:la\s+)?base\b|\bregresando\b",
+        "idle": r"\b(inactiv[oa]s?|en\s+espera|ociosas?|idle|disponibles?|libres?)\b",
     }
     for ph, rx in phase_map.items():
         if re.search(rx, low):
@@ -368,6 +374,15 @@ def _heuristic_fallback(text: str, err: str) -> dict[str, Any]:
     return {"ok": cmd != "explain", "command": cmd, "args": args, "summary": summary, "error": err}
 
 
+# Valores internos → texto para el operador.
+_SEVERITY_ES = {"critical": "crítica", "moderate": "moderada", "stable": "estable"}
+_PHASE_ES = {
+    "idle": "disponibles", "to_emergency": "hacia la emergencia", "on_scene": "en el lugar",
+    "to_hospital": "trasladando paciente", "at_hospital": "en transferencia", "to_refuel": "repostando",
+    "refueling": "repostando", "to_staging": "volviendo a base",
+}
+
+
 def _summarize_command(name: str, args: dict[str, Any]) -> str:
     """Formatea feedback humano en una frase a partir de ``command + args``."""
     if name == "filter_units":
@@ -376,10 +391,10 @@ def _summarize_command(name: str, args: dict[str, Any]) -> str:
         if "fuelAbove" in args: bits.append(f"combustible > {args['fuelAbove']}%")
         if "batteryBelow" in args: bits.append(f"batería < {args['batteryBelow']}%")
         if args.get("hasPatient"): bits.append("con paciente")
-        if "severity" in args: bits.append(f"severidad {args['severity']}")
+        if "severity" in args: bits.append(f"gravedad {_SEVERITY_ES.get(str(args['severity']), args['severity'])}")
         if "entityTypeId" in args: bits.append(f"tipo {args['entityTypeId']}")
-        if "missionPhase" in args: bits.append(f"fase {args['missionPhase']}")
-        if args.get("poweredOff") is True: bits.append("apagadas")
+        if "missionPhase" in args: bits.append(_PHASE_ES.get(str(args["missionPhase"]), f"fase {args['missionPhase']}"))
+        if args.get("poweredOff") is True: bits.append("en reserva")
         if "nearPoiKind" in args or "nearPoiName" in args:
             target = args.get("nearPoiName") or args.get("nearPoiKind")
             km = args.get("maxDistanceKm", 2)

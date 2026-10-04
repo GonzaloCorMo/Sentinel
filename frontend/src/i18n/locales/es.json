@@ -751,5 +751,11 @@
       "stabbing": "Herida por arma blanca",
       "multi_vehicle": "Politraumatismo"
     }
+  },
+  "chat": {
+    "filter_toast": "{match} de {total} unidades cumplen el filtro",
+    "filter_none": "Ninguna de las {total} unidades cumple. Prueba con otros criterios.",
+    "filter_some": "{match} de {total} unidades cumplen; el resto se atenúa en el mapa.",
+    "filters_cleared": "Filtros quitados"
   }
 }
