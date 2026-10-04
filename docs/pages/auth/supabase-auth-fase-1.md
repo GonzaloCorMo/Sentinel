@@ -58,7 +58,7 @@ Ambas se definen en el `.env` de la raíz y Docker Compose las inyecta en el ser
 
 ## Redirect URLs permitidas en local
 
-Incluye `http://localhost:5173/auth/callback` y sus variantes con `127.0.0.1`. En `supabase/config.toml`, **`site_url`** debe coincidir con la URL desde la que entras en el navegador (p. ej. `http://localhost:5173`).
+Incluye `http://localhost:5173/auth/callback` y sus variantes con `127.0.0.1`. La variable **`SITE_URL`** de `.env` (que llega a GoTrue como `GOTRUE_SITE_URL`) debe coincidir con la URL desde la que entras en el navegador (p. ej. `http://localhost:5173`).
 
 ## Validación manual
 

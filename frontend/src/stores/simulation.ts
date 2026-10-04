@@ -256,19 +256,6 @@ export const useSimulationStore = defineStore("simulation", () => {
     await fetchState();
   }
 
-  /** Mapea al mismo contrato que `POST /api/sim/control` (no existe endpoint `/api/sim/motor`). */
-  async function setMotorState(motorState: MotorState) {
-    if (motorState === "RUNNING") {
-      await postControl({ action: "play" });
-    } else {
-      await postControl({ action: "pause" });
-    }
-  }
-
-  async function startSimulation() {
-    await postControl({ action: "play" });
-  }
-
   /** Añade una unidad nueva. Si `entityTypeId` no se pasa, el backend usa `ambulance`. */
   async function spawnAmbulance(
     latitude: number,
@@ -296,16 +283,6 @@ export const useSimulationStore = defineStore("simulation", () => {
       body: JSON.stringify({ latitude, longitude, title, emergencyType: emergencyType ?? "medical", description: description || null }),
     });
     await ensureOk(r, "No se pudo registrar la emergencia");
-    await fetchState();
-  }
-
-  async function createJamFromPolygon(polygon: [number, number][]) {
-    const r = await fetch("/api/sim/jam", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ polygon }),
-    });
-    await ensureOk(r, "No se pudo crear el atasco");
     await fetchState();
   }
 
@@ -341,20 +318,6 @@ export const useSimulationStore = defineStore("simulation", () => {
   ) {
     const r = await fetch(`/api/sim/${kind}/${id}`, { method: "DELETE" });
     await ensureOk(r, `No se pudo eliminar ${kind}`);
-    await fetchState();
-  }
-
-  /** Asignación manual operador unidad↔emergencia (bypass del ranking automático). */
-  async function assignEmergency(ambulanceId: string, emergencyId: string) {
-    const r = await fetch("/api/sim/assign", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ambulanceId, emergencyId }),
-    });
-    const j = (await r.json()) as { ok: boolean };
-    if (!j.ok) {
-      toast.error("No se pudo asignar la emergencia (comprueba IDs y estado).");
-    }
     await fetchState();
   }
 
@@ -427,7 +390,6 @@ export const useSimulationStore = defineStore("simulation", () => {
   return {
     state,
     streamStatus,
-    commsStreamStatus,
     commsLog,
     lastCommsSeq,
     selectedAmbulanceId,
@@ -443,18 +405,14 @@ export const useSimulationStore = defineStore("simulation", () => {
     postControl,
     setNetwork,
     sendUnitMessage,
-    setMotorState,
-    startSimulation,
     spawnAmbulance,
     uiFilters,
     setUiFilters,
     clearUiFilters,
     createEmergency,
-    createJamFromPolygon,
     createJamAtPoint,
     createPoi,
     deleteMapObject,
-    assignEmergency,
     resolveProposal,
     setAiMode,
     setTrainingMode,

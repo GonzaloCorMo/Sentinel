@@ -127,38 +127,6 @@
     border: 1px solid color-mix(in oklab, var(--crit-500) 35%, transparent);
   }
 
-  /* ── Chips de estado FSM ─────────────────────────────────────────────────
-   * Neutros salvo los estados que exigen atención (en ruta / en escena /
-   * trasladando = ámbar) y el cierre correcto (en hospital = verde). */
-  .fsm-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.375rem;
-    padding: 0.125rem 0.375rem;
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius-sm);
-    font-family: var(--font-mono);
-    font-size: 0.625rem;
-    font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--text-2);
-  }
-
-  .fsm-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 9999px;
-    background: var(--text-4);
-  }
-
-  .fsm-en_route .fsm-dot,
-  .fsm-on_scene .fsm-dot,
-  .fsm-transporting .fsm-dot { background: var(--warn); }
-  .fsm-at_hospital .fsm-dot { background: var(--ok); }
-  .fsm-idle,
-  .fsm-refueling { color: var(--text-3); }
-
   /* ── Transiciones: solo propiedades de color, nunca `all` ─────────────── */
   button,
   a,

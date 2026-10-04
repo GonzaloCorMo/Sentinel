@@ -24,7 +24,6 @@ from __future__ import annotations
 import asyncio
 import json
 import math
-import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Any, AsyncIterator, Literal
@@ -57,13 +56,6 @@ _last_http_ingest: dict[str, Any] | None = None
 
 def _iso() -> str:
     return datetime.now(timezone.utc).isoformat()
-
-
-def _env_bool(name: str, default: bool = False) -> bool:
-    raw = (os.environ.get(name) or "").strip().lower()
-    if not raw:
-        return default
-    return raw in {"1", "true", "yes", "on"}
 
 
 def _format_proposal(p: dict[str, Any]) -> dict[str, Any]:
@@ -214,14 +206,6 @@ class SpawnBody(BaseModel):
     longitude: float | None = Field(default=None)
     entityTypeId: str | None = Field(default=None)
     displayLabel: str | None = Field(default=None)
-    manualControl: bool = Field(default=False)
-
-
-class VehiclePositionBody(BaseModel):
-    latitude: float
-    longitude: float
-    headingDeg: float | None = None
-    speedKmh: float | None = None
 
 
 class ControlBody(BaseModel):
@@ -282,12 +266,6 @@ class JamPointBody(BaseModel):
 
 class HealthResponse(BaseModel):
     status: str = Field(description="Status of the service")
-
-
-class AskResponse(BaseModel):
-    answer: str
-    confidence: float | None = None
-    data: dict[str, Any] | None = None
 
 
 async def _weather_station_rows() -> list[dict[str, Any]]:
@@ -555,83 +533,6 @@ def _execute_command_against_fleet(cmd: dict[str, Any]) -> dict[str, Any]:
     if name == "reset_filters":
         return {"applied": True}
     return {"total": total}
-
-
-@app.get("/ask", tags=["base"], response_model=AskResponse)
-async def ask_fleet(q: str = Query(..., min_length=3)) -> AskResponse:
-    """Schema AskResponse: {answer, confidence?, data?}.
-
-    Pipeline: command_service.interpret (regex fast-path → LLM tool-calling
-    → heurística) → ejecuta el comando contra la flota → responde con conteo
-    real + sample. Para filter_units: `answer` es texto humano del estilo
-    "5 vehículos cumplen el filtro (combustible > 50%)".
-    """
-    snapshot = _state_merged()
-    state_summary = {
-        "units": len(snapshot.get("ambulances") or []),
-        "companions": len(snapshot.get("companions") or []),
-        "emergencies": len(snapshot.get("emergencies") or []),
-        "pois": len(snapshot.get("pois") or []),
-        "link_state": snapshot.get("linkState"),
-        "paused": snapshot.get("paused", True),
-        "ai_mode": snapshot.get("aiMode"),
-    }
-    try:
-        from .command_service import interpret
-        ctx = {
-            "pois": [
-                {"name": p.get("name"), "kind": p.get("kind"), "latitude": p.get("latitude"), "longitude": p.get("longitude")}
-                for p in engine.pois
-            ],
-            "entityTypes": engine.get_entity_types(),
-        }
-        cmd = await interpret(q, ctx)
-    except Exception as e:
-        return AskResponse(
-            answer=f"Error interpretando: {type(e).__name__}",
-            confidence=0.0,
-            data={"state_summary": state_summary, "query": q, "error": str(e)},
-        )
-
-    name = cmd.get("command") or "explain"
-    summary = cmd.get("summary") or ""
-    confidence = 0.85 if cmd.get("ok") else 0.35
-
-    # Ejecuta el comando contra estado actual para devolver respuesta concreta.
-    exec_result: dict[str, Any] = {}
-    answer: str
-    if name == "filter_units":
-        exec_result = _execute_command_against_fleet(cmd)
-        n = exec_result.get("matched_count", 0)
-        tot = exec_result.get("total", 0)
-        criterio = summary.replace("Filtrando: ", "") if summary.startswith("Filtrando:") else summary
-        answer = f"{n} de {tot} vehículos cumplen el filtro ({criterio})."
-    elif name == "focus_unit":
-        exec_result = _execute_command_against_fleet(cmd)
-        answer = (
-            f"Unidad encontrada: {exec_result.get('id')}"
-            if exec_result.get("found")
-            else f"No encontré ninguna unidad que coincida con «{cmd['args'].get('query', '')}»."
-        )
-    elif name == "set_ai_mode":
-        exec_result = _execute_command_against_fleet(cmd)
-        answer = f"IA actualmente en modo «{exec_result.get('current_mode')}». Solicitado: «{exec_result.get('requested_mode')}». Usa POST /api/ai/mode para aplicar."
-    elif name == "explain":
-        answer = cmd.get("args", {}).get("text") or summary or "Sin comando accionable."
-    else:
-        exec_result = _execute_command_against_fleet(cmd)
-        answer = summary
-
-    return AskResponse(
-        answer=answer,
-        confidence=confidence,
-        data={
-            "query": q,
-            "command": cmd,
-            "execution": exec_result,
-            "state_summary": state_summary,
-        },
-    )
 
 
 @app.post("/api/events/ingest", tags=["events"], status_code=202)
@@ -932,26 +833,8 @@ async def spawn(body: SpawnBody) -> dict:
         lat, lon,
         entity_type_id=body.entityTypeId,
         display_label=body.displayLabel,
-        manual_control=body.manualControl,
     )
     return {"ok": True, "id": aid, "state": _state_merged()}
-
-
-@app.post("/api/sim/vehicle/{vehicle_id}/position")
-async def vehicle_position(vehicle_id: str, body: VehiclePositionBody) -> dict:
-    """Empuja posición desde el panel del vehículo (GPS / arrastre manual)."""
-    ok = await engine.update_vehicle_position(
-        vehicle_id, body.latitude, body.longitude,
-        heading_deg=body.headingDeg, speed_kmh=body.speedKmh,
-    )
-    return {"ok": ok}
-
-
-@app.post("/api/sim/vehicle/{vehicle_id}/advance")
-async def vehicle_advance(vehicle_id: str) -> dict:
-    """Avanza fase de misión en vehículos manuales (botón "He llegado")."""
-    res = await engine.advance_manual_phase(vehicle_id)
-    return res
 
 
 # ═══════════════════════════════════════════════════════════════════════════

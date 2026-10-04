@@ -7,13 +7,10 @@ incorrectos se rechazan y no se propagan al motor.
 """
 from __future__ import annotations
 
-import json
-import logging
-from typing import Any, Literal
+from typing import Literal
 
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field
 
-log = logging.getLogger(__name__)
 
 EventType = Literal[
     "storm",
@@ -67,43 +64,3 @@ class ExternalEvent(BaseModel):
     resolved_at: str | None = None
     geometry: list[list[float]] | None = None
 
-
-def _decode(raw: bytes | str | dict[str, Any]) -> dict[str, Any] | None:
-    if isinstance(raw, dict):
-        return raw
-    try:
-        text = raw.decode("utf-8") if isinstance(raw, (bytes, bytearray)) else str(raw)
-        obj = json.loads(text)
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        log.warning("event payload decode failed: %s", exc)
-        return None
-    if not isinstance(obj, dict):
-        log.warning("event payload is not a JSON object: %r", type(obj).__name__)
-        return None
-    return obj
-
-
-def parse_event(raw: bytes | str | dict[str, Any]) -> ExternalEvent | None:
-    obj = _decode(raw)
-    if obj is None:
-        return None
-    try:
-        return ExternalEvent.model_validate(obj)
-    except ValidationError as exc:
-        log.warning("event validation failed: %s (id=%s)", exc.error_count(), obj.get("id"))
-        return None
-
-
-def parse_weather(raw: bytes | str | dict[str, Any]) -> WeatherReading | None:
-    obj = _decode(raw)
-    if obj is None:
-        return None
-    try:
-        return WeatherReading.model_validate(obj)
-    except ValidationError as exc:
-        log.warning(
-            "weather validation failed: %s (station=%s)",
-            exc.error_count(),
-            obj.get("station_id"),
-        )
-        return None

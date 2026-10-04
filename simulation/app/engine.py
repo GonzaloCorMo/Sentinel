@@ -34,7 +34,7 @@ import time
 from collections import deque
 from datetime import datetime, timezone
 from typing import Any
-from uuid import NAMESPACE_DNS, uuid4, uuid5
+from uuid import uuid4
 
 import httpx
 
@@ -98,11 +98,6 @@ def _heading_delta_deg(prev: float | None, new: float) -> float:
 
 def _iso() -> str:
     return datetime.now(timezone.utc).isoformat()
-
-
-def _seed_poi_id(seed: str) -> str:
-    """UUID determinista para POIs por defecto (misma forma que str(uuid4()))."""
-    return str(uuid5(NAMESPACE_DNS, f"sentinel-default-poi-{seed}"))
 
 
 # Centro de spawn por defecto: derivado dinámicamente de la región activa
@@ -229,7 +224,6 @@ class SimulationEngine:
         self.weather_by_station: dict[str, dict[str, Any]] = {}
         self._weather_history: dict[str, deque[dict[str, Any]]] = {}
         self._weather_override_until: float = 0.0
-        self.external_roads: list[dict[str, Any]] = []
 
     def set_osrm_routing_status(
         self,
@@ -299,24 +293,6 @@ class SimulationEngine:
     def _refuel_kind_for_amb(self, amb: dict[str, Any]) -> str:
         """POI donde recargar: gas_station (combustion) o charging_station (electric/unique)."""
         return "gas_station" if self._powertrain_for_amb(amb) == "combustion" else "charging_station"
-
-    def _sync_energy_from_tele(self, amb: dict[str, Any], tele: dict[str, Any]) -> None:
-        """Sincroniza energía amb↔tele preservando el recurso primario drenado.
-
-        Combustion → fuel primario, battery secundario cosmético.
-        Electric/unique → battery primario, fuel constante 100.
-        El wobble del motor mecánico (clamp [5,100]) no debe sobrescribir el drenaje real.
-        """
-        mech = tele.get("mechanical") or {}
-        if self._powertrain_for_amb(amb) == "combustion":
-            amb["batteryLevel"] = float(mech.get("batteryPct", amb.get("batteryLevel", 100.0)))
-            real_fuel = float(amb.get("fuelLevel", 100.0))
-            mech["fuelLevelPct"] = round(real_fuel, 1)
-        else:
-            real_batt = float(amb.get("batteryLevel", 100.0))
-            mech["batteryPct"] = round(real_batt, 1)
-            mech["fuelLevelPct"] = 100.0
-            amb["fuelLevel"] = 100.0
 
     def _companion_callsign_prefix(self, kind: str) -> str:
         et = self._entity_type_by_id(kind)
@@ -703,7 +679,6 @@ class SimulationEngine:
             ``(coords, road_speed_limit_kmh | None, duration_s | None)``.
         """
         coords, lim, duration = await fetch_route(self._http, [start, end])
-        lim = self._effective_road_limit_for_route(coords, lim)
         if len(coords) < 2:
             return coords, lim, duration
         route_pts = [(float(c[0]), float(c[1])) for c in coords]
@@ -725,7 +700,6 @@ class SimulationEngine:
             improved = False
             for via in detour_candidates_from_jam(first_hit):
                 new_coords, new_lim, new_duration = await fetch_route(self._http, [start, via, end])
-                new_lim = self._effective_road_limit_for_route(new_coords, new_lim)
                 if len(new_coords) < 2:
                     continue
                 npts = [(float(c[0]), float(c[1])) for c in new_coords]
@@ -1625,24 +1599,6 @@ class SimulationEngine:
             dashboard.
         """
         aid = str(amb["id"])
-        # Vehículos bajo control manual (teclado desde la PWA): el motor NO
-        # mueve. Posición la empuja el cliente vía /api/sim/vehicle/{id}/position.
-        # Solo actualizamos telemetría para que el stream siga vivo.
-        if amb.get("manualControl"):
-            tele = self._telemetry.tick(aid, self.tick, dt_sim, amb)
-            pt = self._powertrain_of(amb)
-            if pt == "electric":
-                b = float(amb.get("batteryLevel", tele["mechanical"]["batteryPct"]))
-                tele["mechanical"]["batteryPct"] = round(max(0.0, min(100.0, b)), 1)
-                amb["batteryLevel"] = tele["mechanical"]["batteryPct"]
-            else:
-                f = float(amb.get("fuelLevel", tele["mechanical"]["fuelLevelPct"]))
-                tele["mechanical"]["fuelLevelPct"] = round(max(0.0, min(100.0, f)), 1)
-                amb["fuelLevel"] = tele["mechanical"]["fuelLevelPct"]
-            self._normalize_energy_by_powertrain(amb, tele)
-            amb["telemetry"] = tele
-            amb["updatedAt"] = _iso()
-            return tele, {"id": aid, "telemetry": tele}
         coords = amb.get("routeCoords")
         phase = str(amb.get("missionPhase") or "")
         # Sin polilínea válida hacia gasolinera: OSRM vacío o fallo — completar repostaje en sitio.
@@ -2080,7 +2036,6 @@ class SimulationEngine:
         lon: float,
         entity_type_id: str | None = None,
         display_label: str | None = None,
-        manual_control: bool = False,
     ) -> str:
         """Crea una unidad nueva en el mapa y la registra en la flota.
 
@@ -2092,9 +2047,6 @@ class SimulationEngine:
                 ``"ambulance"``.
             display_label: Etiqueta visible en UI (``"AMB-042"``, ``"DRON-01"``).
                 Si es None, la UI genera uno a partir del tipo + índice.
-            manual_control: Si True, el motor omite la lógica automática de
-                este vehículo (posición la empuja el cliente vía
-                ``/api/sim/vehicle/{id}/position``).
 
         Returns:
             UUID de la nueva unidad (string).
@@ -2117,8 +2069,6 @@ class SimulationEngine:
                 row["entityTypeId"] = entity_type_id
             if display_label:
                 row["displayLabel"] = display_label
-            if manual_control:
-                row["manualControl"] = True
             self._normalize_energy_by_powertrain(row, None)
             self.ambulances.append(row)
         self._events.emit_event(
@@ -2127,103 +2077,10 @@ class SimulationEngine:
                 "lat": lat, "lon": lon,
                 "entityTypeId": entity_type_id or self.default_ambulance_entity_type_id(),
                 "displayLabel": display_label,
-                "manualControl": manual_control,
             },
             actor="operator", tick=self.tick,
         )
         return aid
-
-    async def update_vehicle_position(
-        self, aid: str, lat: float, lon: float,
-        heading_deg: float | None = None, speed_kmh: float | None = None,
-    ) -> bool:
-        """Actualiza la posición de un vehículo bajo control manual (ignorado
-        para los auto-dirigidos por el motor)."""
-        async with self._lock:
-            amb = next((a for a in self.ambulances if str(a["id"]) == aid), None)
-            if amb is None or not amb.get("manualControl"):
-                return False
-            amb["latitude"] = float(lat)
-            amb["longitude"] = float(lon)
-            if heading_deg is not None:
-                amb["headingDeg"] = float(heading_deg)
-            if speed_kmh is not None:
-                amb["speedKmh"] = float(speed_kmh)
-            amb["updatedAt"] = _iso()
-            return True
-
-    async def advance_manual_phase(self, aid: str) -> dict[str, Any]:
-        """Avanza la fase de misión de un vehículo bajo control manual.
-
-        Para vehículos con `manualControl=True`, el motor no avanza la FSM
-        por su cuenta. Este helper lo hace explícitamente al pulsar el
-        operador "He llegado" / "Entregar paciente" desde la PWA.
-
-        Transiciones:
-            - ``to_emergency`` → resuelve emergencia, activa `hasPatient`,
-              calcula ruta a hospital más cercano, fase ``to_hospital``.
-            - ``to_hospital`` → entrega paciente, vuelve a ``idle``.
-            - ``idle`` u otra → intenta asignar una emergencia pendiente.
-
-        Args:
-            aid: UUID del vehículo manual.
-
-        Returns:
-            Dict con claves ``ok`` (bool), ``phase`` (siguiente fase) y,
-            opcionalmente, ``hospitalId``. Si el vehículo no existe o no
-            es manual, ``{"ok": False, "reason": "no-manual-vehicle"}``.
-        """
-        from .ambulance_fsm import AmbulanceState
-
-        async with self._lock:
-            amb = next((a for a in self.ambulances if str(a["id"]) == aid), None)
-            if amb is None or not amb.get("manualControl"):
-                return {"ok": False, "reason": "no-manual-vehicle"}
-
-            phase = str(amb.get("missionPhase") or "")
-
-            if phase == "to_emergency":
-                eid = amb.get("assignedEmergencyId")
-                if eid:
-                    e = self._emergency_by_id(str(eid))
-                    if e:
-                        e["status"] = "resolved"
-                        self._resolved_emergencies += 1
-                amb["assignedEmergencyId"] = None
-                amb["hasPatient"] = True
-                import random as _rng
-                amb["patientSeverity"] = _rng.choices(
-                    ["stable", "moderate", "critical"], weights=[0.5, 0.3, 0.2],
-                )[0]
-                hosp = self._nearest_poi(amb, "hospital")
-                if hosp:
-                    amb["missionPhase"] = "to_hospital"
-                    amb["stagingHospitalId"] = hosp["id"]
-                    amb["targetHospitalId"] = hosp["id"]
-                    amb["missionStatus"] = "EN_ROUTE"
-                    amb["fsmState"] = AmbulanceState.TRANSPORTING.value
-                    start = (float(amb["latitude"]), float(amb["longitude"]))
-                    dest = (float(hosp["latitude"]), float(hosp["longitude"]))
-                    route, rlim, route_duration_s = await self._route_with_jam_avoidance(start, dest)
-                    amb["routeCoords"] = route if len(route) >= 2 else None
-                    if rlim is not None:
-                        amb["roadSpeedLimitKmh"] = rlim
-                    amb["routeProgressM"] = 0.0
-                return {"ok": True, "phase": "to_hospital", "hospitalId": amb.get("targetHospitalId")}
-
-            if phase == "to_hospital":
-                amb["hasPatient"] = False
-                amb["patientSeverity"] = None
-                amb["missionPhase"] = "idle"
-                amb["routeCoords"] = None
-                amb["routeProgressM"] = 0.0
-                amb["missionStatus"] = "INACTIVE"
-                amb["fsmState"] = AmbulanceState.IDLE.value
-                return {"ok": True, "phase": "idle"}
-
-            # Sin misión: intenta recoger una emergencia pendiente
-            await self._try_assign_pending_emergency_to_ambulance(amb)
-            return {"ok": True, "phase": amb.get("missionPhase") or "idle"}
 
     async def _training_mode_tick(self, dt_sim: float) -> None:
         """Genera emergencias automáticas mientras ``training_mode`` está activo.
@@ -2427,19 +2284,6 @@ class SimulationEngine:
         """Activa/desactiva canales de comms (MQTT, P2P mesh, HTTP fallback)."""
         async with self._lock:
             self.network = {"mqtt": mqtt, "p2p": p2p, "http": http}
-
-    async def set_control(self, *, paused: bool | None = None, speed: float | None = None) -> None:
-        """Variante fine-grained de `apply_sim_control` sin reset.
-
-        Args:
-            paused: Valor nuevo para ``self.paused`` o None.
-            speed: Nuevo multiplicador en ``[0.1, 20.0]`` o None.
-        """
-        async with self._lock:
-            if paused is not None:
-                self.paused = paused
-            if speed is not None:
-                self.speed_multiplier = max(0.1, min(20.0, speed))
 
     async def reset_simulation(self) -> None:
         """Borra flota, emergencias, companions, jams; repuebla POIs default.
@@ -2729,45 +2573,6 @@ class SimulationEngine:
         if "lastConsumeAt" in status:
             merged["lastConsumeAt"] = status["lastConsumeAt"]
         self.event_source_status = merged
-
-    def _road_limit_for_position(self, lat: float, lon: float) -> float | None:
-        best_d = float("inf")
-        best_lim: float | None = None
-        for r in self.external_roads:
-            lim = r.get("speedLimitKmh")
-            if lim is None:
-                continue
-            d1 = haversine_m(lat, lon, float(r["startLat"]), float(r["startLon"]))
-            d2 = haversine_m(lat, lon, float(r["endLat"]), float(r["endLon"]))
-            d = min(d1, d2)
-            if d < best_d:
-                best_d = d
-                best_lim = float(lim)
-        # only trust nearby road segments
-        if best_d <= 350.0:
-            return best_lim
-        return None
-
-    def _effective_road_limit_for_route(
-        self,
-        coords: list[tuple[float, float]],
-        osrm_limit_kmh: float | None,
-    ) -> float | None:
-        if not coords:
-            return osrm_limit_kmh
-        sampled_limits: list[float] = []
-        step = max(1, len(coords) // 8)
-        for i in range(0, len(coords), step):
-            lat, lon = coords[i]
-            lim = self._road_limit_for_position(float(lat), float(lon))
-            if lim is not None:
-                sampled_limits.append(lim)
-        ext_limit = min(sampled_limits) if sampled_limits else None
-        if osrm_limit_kmh is None:
-            return ext_limit
-        if ext_limit is None:
-            return osrm_limit_kmh
-        return min(float(osrm_limit_kmh), float(ext_limit))
 
     async def apply_sim_control(self, action: str | None, speed: float | None) -> None:
         """Punto de entrada único del operador para controlar el motor.

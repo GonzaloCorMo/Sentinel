@@ -87,12 +87,6 @@ def _resolve_chat(tier: ChatTier) -> tuple[AsyncOpenAI, str]:
     return _flash_client, _flash_model
 
 
-def get_provider_name() -> str:
-    """Identificador del provider activo."""
-    _init()
-    return "ollama" if "11434" in _env("LLM_FLASH_BASE_URL", "http://ollama:11434/v1") else "openai-compatible"
-
-
 def is_llm_available() -> bool:
     """True si los clientes se inicializaron correctamente (suele ser siempre)."""
     _init()
@@ -203,48 +197,6 @@ async def chat_completion_json(
         if start != -1 and end > start:
             return _json.loads(s[start : end + 1])
         raise ValueError(f"LLM no devolvió JSON válido: {raw[:200]}")
-
-
-async def chat_completion_with_tools(
-    messages: list[dict[str, str]],
-    *,
-    tools: list[dict[str, Any]],
-    tool_choice: str | dict[str, Any] = "auto",
-    temperature: float = 0.2,
-    max_tokens: int = 1024,
-    tier: ChatTier = "flash",
-) -> dict[str, Any]:
-    """Chat completion con function calling estructurado.
-
-    `tools` sigue el formato OpenAI:
-    ```
-    [{"type":"function","function":{"name":"dispatch_unit","description":"...",
-      "parameters":{"type":"object","properties":{...},"required":[...]}}}]
-    ```
-    Devuelve `{"tool_calls":[{name, arguments:dict}], "content": str|None}`.
-    """
-    import json as _json
-
-    client, model = _resolve_chat(tier)
-    kwargs: dict[str, Any] = {
-        "model": model,
-        "messages": messages,
-        "temperature": temperature,
-        "max_tokens": max_tokens,
-        "tools": tools,
-        "tool_choice": tool_choice,
-    }
-
-    resp = await client.chat.completions.create(**kwargs)
-    msg = resp.choices[0].message
-    calls: list[dict[str, Any]] = []
-    for tc in (msg.tool_calls or []):
-        try:
-            args = _json.loads(tc.function.arguments or "{}")
-        except Exception:
-            args = {}
-        calls.append({"name": tc.function.name, "arguments": args})
-    return {"tool_calls": calls, "content": msg.content}
 
 
 async def chat_completion_stream(

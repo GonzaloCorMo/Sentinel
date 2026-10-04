@@ -8,7 +8,7 @@ modo IA, etc.
 Pipeline:
     1. `_fast_interpret`: matcher regex determinista para patrones
        frecuentes. Barato y predecible.
-    2. Si no matcha, LLM con `tool_choice="auto"` sobre `TOOLS`.
+    2. Si no matcha, el LLM devuelve el comando como JSON con esquema (`chat_completion_json`).
     3. Si el LLM falla, `_heuristic_fallback` con regex más amplios.
 
 Contrato de salida (siempre dict):
@@ -26,125 +26,6 @@ _logger = logging.getLogger(__name__)
 
 
 # ── Definición de herramientas (OpenAI tool format) ─────────────────────
-TOOLS: list[dict[str, Any]] = [
-    {
-        "type": "function",
-        "function": {
-            "name": "filter_units",
-            "description": (
-                "Aplica filtros sobre las unidades (ambulancias y companions) "
-                "mostradas en el mapa y la vista de flota. Devuelve las que "
-                "cumplan TODAS las condiciones."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "fuelBelow": {"type": "number", "description": "Combustible menor que (0-100)"},
-                    "fuelAbove": {"type": "number"},
-                    "batteryBelow": {"type": "number"},
-                    "hasPatient": {"type": "boolean"},
-                    "severity": {"type": "string", "enum": ["stable", "moderate", "critical"]},
-                    "entityTypeId": {"type": "string", "description": "id del tipo (ambulance, helicopter, police_patrol, o custom)"},
-                    "missionPhase": {"type": "string", "description": "idle, to_emergency, to_hospital, to_refuel..."},
-                    "poweredOff": {"type": "boolean"},
-                    "nearPoiKind": {"type": "string", "description": "hospital | gas_station"},
-                    "nearPoiName": {"type": "string", "description": "Nombre exacto o parcial del POI"},
-                    "maxDistanceKm": {"type": "number", "description": "Usado con nearPoi*"},
-                    "sortBy": {"type": "string", "enum": ["fuel", "battery", "severity", "distance"]},
-                    "limit": {"type": "integer", "minimum": 1, "maximum": 50},
-                },
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "focus_unit",
-            "description": "Selecciona una unidad concreta en el panel lateral por su ID, label o callsign.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string", "description": "ID parcial, displayLabel o callsign"},
-                },
-                "required": ["query"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "set_ai_mode",
-            "description": "Cambia el modo de la IA observer.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "mode": {"type": "string", "enum": ["hitl", "autonomous"]},
-                },
-                "required": ["mode"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "spawn_units",
-            "description": "Añade N unidades del tipo indicado al escenario, cerca de un POI o coordenadas.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "entityTypeId": {"type": "string"},
-                    "count": {"type": "integer", "minimum": 1, "maximum": 20},
-                    "nearPoiName": {"type": "string"},
-                    "latitude": {"type": "number"},
-                    "longitude": {"type": "number"},
-                },
-                "required": ["entityTypeId", "count"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "create_emergency",
-            "description": "Registra una incidencia nueva en las coordenadas dadas.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "title": {"type": "string"},
-                    "description": {"type": "string"},
-                    "emergencyType": {"type": "string", "enum": ["medical", "altercation", "mass_casualty"]},
-                    "latitude": {"type": "number"},
-                    "longitude": {"type": "number"},
-                },
-                "required": ["title", "latitude", "longitude"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "reset_filters",
-            "description": "Limpia todos los filtros aplicados previamente en el dashboard.",
-            "parameters": {"type": "object", "properties": {}},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "explain",
-            "description": "Si el mensaje NO es un comando accionable, devuelve una explicación en texto plano.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "text": {"type": "string"},
-                },
-                "required": ["text"],
-            },
-        },
-    },
-]
-
-
 SYSTEM_PROMPT = (
     "Eres el intérprete de comandos del dashboard Sentinel (gemelo digital "
     "de ambulancias). Recibes instrucciones del operador en español y decides "

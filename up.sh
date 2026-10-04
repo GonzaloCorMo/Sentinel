@@ -81,7 +81,7 @@ wait_http() {
 wait_http "API Simulación" "http://localhost:8080/api/sim/state"   simulation     900 || true
 wait_http "Frontend Vue"   "http://localhost:5173/"                frontend       120 || true
 wait_http "Supabase API"   "http://localhost:54321/auth/v1/health" supabase-kong   60 || true
-wait_http "MkDocs"         "http://localhost:3001/"                docs            60 || true
+wait_http "Docs (VitePress)" "http://localhost:3001/"                docs            60 || true
 wait_http "Inbucket"       "http://localhost:54324/"               supabase-inbucket 60 || true
 
 # ── Banner ──────────────────────────────────────────────────────────────────

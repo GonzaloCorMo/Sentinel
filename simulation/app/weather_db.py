@@ -79,28 +79,6 @@ async def upsert_weather_reading(reading: dict[str, Any]) -> None:
 # ─────────────────────────────── read ─────────────────────────────────────────
 
 
-async def get_latest_reading(station_id: str) -> dict[str, Any] | None:
-    """Lectura más reciente para una estación. None si no hay datos o DB off."""
-    sb = _sb()
-    if sb is None:
-        return None
-    try:
-        result = await asyncio.to_thread(
-            lambda: (
-                sb.table(_VIEW_LATEST)
-                .select("*")
-                .eq("station_id", station_id)
-                .limit(1)
-                .execute()
-            )
-        )
-        data: list[dict[str, Any]] = getattr(result, "data", None) or []
-        return data[0] if data else None
-    except Exception as exc:
-        log.warning("weather_db get_latest failed (station=%s): %s", station_id, exc)
-        return None
-
-
 async def get_all_latest_readings() -> dict[str, dict[str, Any]]:
     """Última lectura por estación (via vista weather_stations_latest).
 
@@ -119,9 +97,3 @@ async def get_all_latest_readings() -> dict[str, dict[str, Any]]:
         log.warning("weather_db get_all_latest failed: %s", exc)
         return {}
 
-
-async def get_station_ids_from_db() -> list[str]:
-    """Lista de station_ids conocidos en DB (para reconstruir la lista de
-    estaciones tras un reinicio, cuando engine.weather_by_station está vacío)."""
-    readings = await get_all_latest_readings()
-    return list(readings.keys())

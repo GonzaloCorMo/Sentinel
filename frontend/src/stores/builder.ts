@@ -44,16 +44,6 @@ export const useBuilderStore = defineStore("builder", () => {
     vehicleEntityId.value = null;
   }
 
-  /** Activa/desactiva; las herramientas con id auxiliar no se apagan al re-click. */
-  function toggleTool(t: BuilderTool) {
-    if (currentBuilderTool.value === t && t !== "add_place" && t !== "add_vehicle") {
-      clearTool();
-      return;
-    }
-    currentBuilderTool.value = t;
-    resetAuxIds(t);
-  }
-
   /** Activa colocación de place; ``hospital``/``gas_station`` tienen herramienta propia. */
   function selectPlaceEntity(entityId: string) {
     if (entityId === "hospital") {
@@ -92,7 +82,6 @@ export const useBuilderStore = defineStore("builder", () => {
     vehicleEntityId,
     setTool,
     clearTool,
-    toggleTool,
     selectPlaceEntity,
     selectVehicleEntity,
   };

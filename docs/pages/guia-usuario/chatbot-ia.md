@@ -66,7 +66,7 @@ Pasos:
 | `reset_filters` | "limpia los filtros" |
 | `explain` | (cualquier pregunta libre — pasa a RAG) |
 
-Detrás del comando hay un fast-path regex (latencia <50 ms) y un fallback al LLM local (Ollama, `qwen2.5:3b` por defecto) para casos ambiguos. El endpoint subyacente es `POST /api/ai/command` o `GET /ask?q=...`.
+Detrás del comando hay un fast-path regex (latencia <50 ms) y un fallback al LLM local (Ollama, `qwen2.5:3b` por defecto) para casos ambiguos. El endpoint subyacente es `POST /api/ai/command`.
 
 ### Lo que no puede hacer
 
