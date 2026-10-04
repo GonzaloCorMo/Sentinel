@@ -593,8 +593,7 @@ class SimulationEngine:
             "trainingRatePerMin": self.training_emergencies_per_min,
             "trainingRateAuto": self.training_rate_auto,
             # Ritmo objetivo de la flota (sin el frenado temporal por cola de avisos).
-            "balancedRatePerHour": round(ecat.balanced_rate_per_min(
-                sum(1 for a in self.ambulances if not a.get("poweredOff"))) * 60, 1),
+            "balancedRatePerHour": round(ecat.balanced_rate_per_min(len(self.ambulances)) * 60, 1),
             "sessionId": self._events.session_id,
             "externalEvents": [e.copy() for e in self.external_events[-200:] if not e.get("resolved_at")],
             "weatherStations": {k: v.copy() for k, v in self.weather_by_station.items()},
@@ -2123,8 +2122,12 @@ class SimulationEngine:
         asyncio.create_task(self._spawn_catalog_emergency("training"))
 
     def _balanced_rate_per_min(self) -> float:
-        """Tasa equilibrada para la flota actual (unidades encendidas y con cola de avisos)."""
-        units = sum(1 for a in self.ambulances if not a.get("poweredOff"))
+        """Tasa equilibrada para la flota actual (con la cola de avisos).
+
+        Cuenta todas las unidades: «poweredOff» solo indica que una unidad libre
+        tiene el motor parado en reserva, no que no esté disponible.
+        """
+        units = len(self.ambulances)
         pending = sum(1 for e in self.emergencies if e.get("status") == "pending")
         return ecat.balanced_rate_per_min(units, pending)
 

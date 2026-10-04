@@ -86,7 +86,6 @@ const CLUSTER_RADIUS_PX = 30;
 let lastNodes: NodeSpec[] = [];
 
 function unitTone(amb: Ambulance): NodeTone {
-  if (amb.poweredOff) return "off";
   if (unitStatus(amb).tone === "alert") return "warn";
   const energy = energyOf(amb, state.value?.entityTypes).value;
   if (energy != null && energy < 20) return "warn";

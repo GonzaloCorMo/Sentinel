@@ -16,7 +16,7 @@ export interface UnitStatus {
 }
 
 export function unitStatus(amb: Pick<Ambulance, "missionPhase" | "fsmState" | "hasPatient"> & { poweredOff?: boolean }): UnitStatus {
-  if (amb.poweredOff) return { key: "off", tone: "neutral" };
+  // «poweredOff» = unidad libre con el motor parado en reserva: está disponible.
   if (String(amb.fsmState ?? "").toUpperCase() === "UNAVAILABLE") return { key: "unavailable", tone: "alert" };
   switch (amb.missionPhase) {
     case "to_emergency":
