@@ -5,9 +5,7 @@
  * afección del catálogo de emergencias. Si la unidad no atiende a ningún
  * paciente, ofrece una vista de ejemplo con datos generados en el navegador.
  */
-import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { toast } from "vue-sonner";
-import PatientReport, { type PatientReportData } from "./PatientReport.vue";
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { mockVitals } from "@/lib/patientMock";
 import { alertTone, CONDITION_KEYS, zonesFor } from "@/lib/patientZones";
@@ -102,29 +100,6 @@ const rows = computed<Row[]>(() => {
   ];
 });
 
-// ── Informe para el hospital (IA local) ──────────────────────────────────
-const report = ref<PatientReportData | null>(null);
-const reportBusy = ref(false);
-async function generateReport() {
-  if (!props.amb || !live.value || reportBusy.value) return;
-  reportBusy.value = true;
-  try {
-    const r = await fetch("/api/ai/patient-report", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ambulanceId: props.amb.id }),
-    });
-    if (!r.ok) throw new Error(r.status === 404 ? t("patient.report.no_patient") : `HTTP ${r.status}`);
-    report.value = (await r.json()) as PatientReportData;
-  } catch (e) {
-    toast.error(t("patient.report.error"), { description: e instanceof Error ? e.message : String(e) });
-  } finally {
-    reportBusy.value = false;
-  }
-}
-// El informe es de un paciente concreto: se cierra al cambiar de unidad.
-watch(() => props.amb?.id, () => (report.value = null));
-
 const levelClass: Record<Level, string> = { ok: "text-slate-100", warn: "text-amber-300", crit: "text-red-400" };
 </script>
 
@@ -142,13 +117,6 @@ const levelClass: Record<Level, string> = { ok: "text-slate-100", warn: "text-am
           class="border px-1.5 py-px font-mono text-[11px]"
           :class="tone === 'crit' ? 'border-red-500/60 text-red-300' : 'border-amber-500/60 text-amber-300'"
         >{{ conditionName(conditionKey) }}</span>
-        <button
-          type="button"
-          class="ml-1 rounded bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-950 hover:bg-slate-300 disabled:opacity-50"
-          :disabled="reportBusy"
-          :title="t('patient.report.button_hint')"
-          @click="generateReport"
-        >{{ reportBusy ? t('patient.report.generating_short') : t('patient.report.button') }}</button>
       </div>
       <div v-else class="flex flex-wrap items-center gap-2 text-xs">
         <label class="text-slate-500" for="pv-demo-condition">{{ t('patient.demo_condition') }}</label>
@@ -194,7 +162,5 @@ const levelClass: Record<Level, string> = { ok: "text-slate-100", warn: "text-am
         <p v-if="!live" class="px-4 py-2.5 text-[11px] text-slate-500">{{ t('patient.demo_disclaimer') }}</p>
       </dl>
     </div>
-    <p v-if="reportBusy && !report" class="border-t border-slate-800 px-4 py-3 text-xs text-slate-400" role="status">{{ t('patient.report.generating') }}</p>
-    <PatientReport v-if="report && live" :report="report" :busy="reportBusy" @regenerate="generateReport" @close="report = null" />
   </section>
 </template>

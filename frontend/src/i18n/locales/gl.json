@@ -750,32 +750,6 @@
       "assault": "Agresión",
       "stabbing": "Ferida por arma branca",
       "multi_vehicle": "Politraumatismo"
-    },
-    "report": {
-      "button": "Informe para o hospital",
-      "button_hint": "Xera coa IA local un informe de transferencia (ISBAR) deste paciente",
-      "generating": "Xerando o informe coa IA local… pode tardar ata un minuto.",
-      "generating_short": "Xerando…",
-      "title": "Informe de transferencia",
-      "source_llm": "IA local",
-      "source_rules": "Modelo (IA non dispoñible)",
-      "copy": "Copiar",
-      "copied": "Copiado",
-      "copy_error": "Non se puido copiar",
-      "regenerate": "Rexenerar",
-      "close": "Pechar informe",
-      "alerts": "Alertas",
-      "findings": "Achados",
-      "actions": "Accións orientativas",
-      "objective": "Datos obxectivos",
-      "no_abnormal": "Constantes dentro de rango",
-      "error": "Non se puido xerar o informe",
-      "no_patient": "A unidade xa non atende ningún paciente",
-      "isbar_identification": "Identificación",
-      "isbar_situation": "Situación",
-      "isbar_background": "Antecedentes",
-      "isbar_assessment": "Avaliación",
-      "isbar_recommendation": "Recomendación"
     }
   }
 }
