@@ -91,4 +91,6 @@ Qué usamos y dónde vive cada pieza.
 - [FastAPI](https://fastapi.tiangolo.com/)
 - [Supabase](https://supabase.com/docs)
 - [MapLibre GL JS](https://maplibre.org/) + [Stadia Maps](https://stadiamaps.com/) (estilos Alidade Smooth)
+- [three.js](https://threejs.org/) (visor 3D del paciente, `frontend/src/components/patient/`)
+- Modelo 3D «[Male base](https://poly.pizza/m/eWGDnQ0jzmH)» de Артур Мигранов, [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/), vía Poly Pizza (`frontend/public/models/male-base.glb`, sin modificar; el material de malla se aplica al cargarlo)
 - [ECharts](https://echarts.apache.org/)

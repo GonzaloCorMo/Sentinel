@@ -4,6 +4,7 @@ import { storeToRefs } from "pinia";
 import { useI18n } from "vue-i18n";
 import FleetTelemetryCard from "@/components/fleet/FleetTelemetryCard.vue";
 import PatientVitalsChart from "@/components/dashboard/PatientVitalsChart.vue";
+import PatientMonitor from "@/components/patient/PatientMonitor.vue";
 import { useSimulationStore } from "@/stores/simulation";
 import { displayId } from "@/lib/vehicleId";
 
@@ -86,6 +87,13 @@ const stats = computed(() => {
     lowFuel: all.filter((a) => energyPctOf(a) < 25).length,
     idle: all.filter((a) => (a.missionPhase ?? "idle") === "idle" || !a.missionPhase).length,
   };
+});
+
+const selectedAmb = computed(() => state.value?.ambulances?.find((a) => a.id === selectedAmbulanceId.value) ?? null);
+const selectedLabel = computed(() => {
+  const a = selectedAmb.value;
+  if (!a || !state.value) return "";
+  return displayId(a, state.value.ambulances.indexOf(a), state.value.entityTypes);
 });
 
 function typeLabel(id: string): string {
@@ -223,6 +231,8 @@ async function runMlPrediction() {
     <p v-else class="rounded border border-dashed border-slate-700 p-8 text-center text-sm text-slate-500">
       {{ t('fleet.no_units_filter') }}
     </p>
+
+    <PatientMonitor :amb="selectedAmb" :label="selectedLabel" :emergencies="state?.emergencies ?? []" />
 
     <section class="panel">
       <div class="flex flex-wrap items-start justify-between gap-3 border-b border-slate-800 px-4 py-3">

@@ -73,13 +73,20 @@ Vista principal del gemelo digital con mapa interactivo:
 
 Tarjetas de todas las unidades con indicadores de:
 
-- Estado FSM (idle, en_route, on_scene, transporting, at_hospital, refueling/charging).
+- Estado de la unidad (disponible, hacia la emergencia, en el lugar, trasladando, transferencia en hospital, repostando).
 - Combustible (combustion) o batería (electric) según `powertrain` del tipo.
 - Velocidad, RPM, motor health.
 - Vitales del paciente (si está transportando) + severidad.
 - Filtros por tipo, estado, severidad, energía baja.
 
-Click en una tarjeta para detalles ampliados.
+Pulsa una tarjeta para seleccionar la unidad. Debajo aparece el **monitor del paciente**:
+
+- **Visor 3D**: cuerpo en malla de alambre con la zona afectada resaltada (rojo si el paciente está crítico, ámbar en el resto) y etiquetas ancladas a la zona. Se puede girar arrastrando y acercar con la rueda; gira solo si no se toca.
+- **Constantes**: frecuencia cardiaca, saturación, tensión, frecuencia respiratoria, temperatura, Glasgow, glucemia y ritmo, en ámbar o rojo fuera de rango. Funciona desde que la unidad llega al lugar hasta la entrega en urgencias.
+- La afección sale del tipo de emergencia (dolor torácico → corazón, ictus → cabeza, caída de persona mayor → cadera…), y las constantes simuladas son coherentes con ella.
+- **Vista de ejemplo**: si la unidad no atiende a ningún paciente, permite elegir una afección y una gravedad, con datos ficticios generados en el navegador.
+
+Todos los datos médicos son simulados y ficticios.
 
 ## 8) Panorama (`/overview`)
 

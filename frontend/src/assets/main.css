@@ -298,6 +298,40 @@
 .mp-bar { height: 2px; margin: 3px 0 4px; background: #2a2f36; overflow: hidden; }
 .mp-bar > div { height: 100%; }
 
+/* ── Visor 3D del paciente (components/patient/PatientViewer3D.vue) ── */
+.pv-host { position: absolute; inset: 0; overflow: hidden; }
+.pv-host > canvas { display: block; width: 100%; height: 100%; cursor: grab; }
+.pv-host > canvas:active { cursor: grabbing; }
+.pv-labels { position: absolute; inset: 0; pointer-events: none; }
+.pv-label {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 3px 7px;
+  background: rgb(16 19 23 / 0.94);
+  border: 1px solid var(--pv-tone);
+  border-radius: 0;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+.pv-label.pv-left { transform: translateX(50%); }
+.pv-label.pv-right { transform: translateX(-50%); }
+.pv-crit { --pv-tone: #ff2a2a; }
+.pv-warn { --pv-tone: #ffb020; }
+.pv-zone { color: var(--pv-tone); font-weight: 600; letter-spacing: 0.04em; }
+.pv-detail { color: #e3e7ec; }
+.pv-credit {
+  position: absolute;
+  left: 10px;
+  top: 8px;
+  margin: 0;
+  font-size: 10px;
+  color: var(--text-4, #6b7280);
+}
+.pv-credit a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+
 /* ── Toasts (vue-sonner) ──────────────────────────────────────────────── */
 [data-sonner-toaster] [data-sonner-toast] {
   --normal-bg: var(--surface);

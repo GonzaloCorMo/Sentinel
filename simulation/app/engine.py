@@ -1417,6 +1417,10 @@ class SimulationEngine:
         amb["fsmState"] = AmbulanceState.ON_SCENE.value
         amb["phaseUntil"] = self.sim_time_s + ecat.on_scene_seconds(_rng, kind, severity)
         amb["_transportNeeded"] = ecat.needs_transport(_rng, kind, severity)
+        # Afección del paciente (para el monitor y las constantes simuladas).
+        amb["patientKindKey"] = kind.key
+        amb["patientEmergencyId"] = str(eid)
+        amb["patientSeverity"] = ecat.patient_severity(severity)
         amb["_emSeverity"] = severity
 
     async def _leave_scene(self, amb: dict[str, Any]) -> None:
@@ -1493,6 +1497,8 @@ class SimulationEngine:
         await self._try_assign_pending_emergency_to_ambulance(amb)
 
     def _set_idle(self, amb: dict[str, Any]) -> None:
+        amb.pop("patientKindKey", None)
+        amb.pop("patientEmergencyId", None)
         amb["missionPhase"] = "idle"
         amb["missionStatus"] = "INACTIVE"
         amb["fsmState"] = AmbulanceState.IDLE.value

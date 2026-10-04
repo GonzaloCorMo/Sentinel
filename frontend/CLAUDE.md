@@ -46,6 +46,13 @@
   - La agrupación es en píxeles y depende del zoom (`renderNodes`). No vuelvas a una rejilla fija.
 - Si `vite.config.ts` cambia, mantén `optimizeDeps.exclude: ["maplibre-gl"]` y `worker.format: "es"`: el worker de MapLibre 6 se registra con `setWorkerUrl` a partir de `?worker&url`.
 
+## Visor 3D del paciente
+
+`components/patient/PatientViewer3D.vue` (three.js directo; se carga de forma diferida) y `PatientMonitor.vue`.
+- **Modelo**: `public/models/male-base.glb`, CC BY. La atribución tiene que seguir visible en el visor y en `trazabilidad-tecnica.md`.
+- **Zonas**: coordenadas del modelo en `lib/patientZones.ts`. El resaltado lo hace un shader por distancia a la zona, así que no hacen falta mallas separadas. Si cambias de modelo, vuelve a medir las coordenadas.
+- **Afección**: `patientKindKey` de la unidad (catálogo del motor); las constantes, de `telemetry.medical`. El modo de ejemplo usa `lib/patientMock.ts` (ficticio, no se guarda nada).
+
 ## Gráficos
 
 `components/dashboard/TelemetryLineChart.vue` es un SVG propio: sin ECharts, que pesaba unos 600 kB. Una magnitud por gráfico (nunca doble eje) y umbrales en ámbar discontinuo.

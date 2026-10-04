@@ -68,7 +68,9 @@ class TelemetryComposite:
         mech = self.mechanical.tick(amb_id, tick_index, dt, amb)
         env = self.environmental.tick(amb_id, tick_index, dt, amb)
         net = self.network.tick(amb_id, tick_index, dt, amb)
-        med = self.medical.tick(amb_id, tick_index, dt, amb) if amb.get("hasPatient") else None
+        # El monitor funciona con el paciente a bordo y durante la asistencia en el lugar.
+        attending = amb.get("hasPatient") or amb.get("missionPhase") == "on_scene"
+        med = self.medical.tick(amb_id, tick_index, dt, amb) if attending else None
 
         derived = self._derive_scores(amb, pos, mech, med, env, net)
 

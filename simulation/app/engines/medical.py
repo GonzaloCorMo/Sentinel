@@ -28,6 +28,41 @@ _ECG_WEIGHTS_CRITICAL = (
 )
 
 
+# Ajustes de las constantes según la afección del paciente (``patientKindKey``,
+# tipos de emergency_catalog). Valores aproximados y ficticios, solo para que
+# la simulación sea coherente: no son criterios clínicos.
+#   d_*  → se suma al valor calculado; set_* → se fija.
+_CONDITION_PROFILES: dict[str, dict[str, Any]] = {
+    "cardiac_arrest": {"set_hr": 150, "set_sys": 60, "set_dia": 35, "set_spo2": 78, "set_gcs": 3, "set_ecg": "Fibrilacion", "d_rr": -8},
+    "chest_pain": {"d_hr": 15, "d_sys": 25, "d_dia": 10, "d_spo2": -2, "d_troponin": 90},
+    "breathing": {"d_spo2": -9, "d_rr": 10, "d_hr": 15},
+    "stroke": {"d_sys": 45, "d_dia": 20, "d_gcs": -4},
+    "syncope": {"d_sys": -22, "d_dia": -12, "d_hr": -12},
+    "elderly_fall": {"d_hr": 10, "d_pain": 4},
+    "seizure": {"d_hr": 25, "d_gcs": -5, "d_spo2": -4},
+    "diabetic": {"set_glucose": 45, "d_gcs": -3, "d_hr": 12},
+    "abdominal": {"d_hr": 15, "d_pain": 4},
+    "intoxication": {"d_gcs": -4, "d_rr": -4, "d_spo2": -4},
+    "allergy": {"d_sys": -30, "d_dia": -15, "d_hr": 25, "d_spo2": -6},
+    "anxiety": {"d_hr": 25, "d_rr": 8},
+    "child_fever": {"set_temp": 39.8, "d_hr": 20},
+    "bleeding": {"d_hr": 25, "d_sys": -25, "d_hb": -3},
+    "traffic_accident": {"d_hr": 20, "d_sys": -15, "d_pain": 4},
+    "pedestrian_hit": {"d_hr": 25, "d_sys": -20, "d_gcs": -2, "d_pain": 5},
+    "street_fall": {"d_hr": 8, "d_pain": 3},
+    "bike_accident": {"d_hr": 15, "d_pain": 4},
+    "work_accident": {"d_hr": 15, "d_pain": 4},
+    "fall_height": {"d_hr": 25, "d_sys": -25, "d_gcs": -3, "d_pain": 5},
+    "house_fire": {"d_spo2": -6, "d_spco": 12, "d_rr": 6},
+    "vehicle_fire": {"d_spo2": -3, "d_spco": 6, "d_pain": 4},
+    "gas_leak": {"d_spco": 15, "d_gcs": -2},
+    "flooding": {"set_temp": 35.2, "d_hr": 10},
+    "assault": {"d_hr": 20, "d_pain": 4},
+    "stabbing": {"d_hr": 30, "d_sys": -30, "d_dia": -15, "d_hb": -3},
+    "multi_vehicle": {"d_hr": 25, "d_sys": -25, "d_pain": 5},
+}
+
+
 class MedicalEngine:
     """Genera vitales, scores y ritmo ECG según la severidad del paciente."""
 
@@ -137,6 +172,29 @@ class MedicalEngine:
         adrenaline_ug_min = round(0.05 if severity == "critical" else 0.0, 3)
         noradrenaline_ug_min = round(0.15 if severity == "critical" else 0.0, 3)
 
+        # ── Afección concreta del paciente ────────────────────────────────
+        prof = _CONDITION_PROFILES.get(str(amb.get("patientKindKey") or ""), {})
+        ecg = self._pick_ecg(rng, severity)
+        if prof:
+            hr = float(prof.get("set_hr", hr + prof.get("d_hr", 0)))
+            sys_bp = int(prof.get("set_sys", sys_bp + prof.get("d_sys", 0)))
+            dia_bp = int(prof.get("set_dia", dia_bp + prof.get("d_dia", 0)))
+            spo2 = int(min(100, max(60, prof.get("set_spo2", spo2 + prof.get("d_spo2", 0)))))
+            gcs = int(min(15, max(3, prof.get("set_gcs", gcs + prof.get("d_gcs", 0)))))
+            resp_rate = int(max(4, resp_rate + prof.get("d_rr", 0)))
+            glucose = float(prof.get("set_glucose", glucose))
+            body_temp = float(prof.get("set_temp", body_temp))
+            pain_score = int(min(10, max(0, pain_score + prof.get("d_pain", 0))))
+            spco_pct = round(spco_pct + prof.get("d_spco", 0), 2)
+            hemoglobin_g_dl = round(max(5.0, hemoglobin_g_dl + prof.get("d_hb", 0)), 2)
+            troponin_ng_l = round(troponin_ng_l + prof.get("d_troponin", 0), 1)
+            ecg = str(prof.get("set_ecg", ecg))
+            map_mmhg = round((sys_bp + 2 * dia_bp) / 3, 1)
+            pulse_pressure = sys_bp - dia_bp
+            shock_index = round(hr / max(1, sys_bp), 2)
+            mshock_index = round(hr / max(1, map_mmhg), 2)
+            news2 = self._calc_news2(hr, resp_rate, spo2, sys_bp, body_temp, fsm)
+
         return {
             # ── Básicos (UI existente) ──
             "heartRateBpm": round(hr, 1),
@@ -147,7 +205,7 @@ class MedicalEngine:
             "bloodGlucoseMgDl": round(glucose, 1),
             "bodyTempC": round(body_temp, 2),
             "infusionRateMlH": round(infusion, 1),
-            "ecgRhythm": self._pick_ecg(rng, severity),
+            "ecgRhythm": ecg,
             "gcsScore": gcs,
             "respiratoryRatePerMin": resp_rate,
             # ── Derivados hemodinámicos ──

@@ -200,6 +200,10 @@ export interface Ambulance {
   odometerKm?: number;
   updatedAt?: string;
   telemetry?: AmbulanceTelemetry;
+  /** Afección del paciente (clave de emergency_catalog) desde la llegada al lugar. */
+  patientKindKey?: string | null;
+  /** Emergencia de la que procede el paciente. */
+  patientEmergencyId?: string | null;
   /** Último envío de datos recibido de la unidad (ISO). */
   lastContactAt?: string;
   routeCoords?: [number, number][] | null;

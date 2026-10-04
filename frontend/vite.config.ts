@@ -25,6 +25,7 @@ export default defineConfig({
           if (!id.includes("node_modules")) return;
           if (id.includes("maplibre")) return "vendor-maplibre";
           if (id.includes("@supabase")) return "vendor-supabase";
+          if (id.includes("/three/")) return "vendor-three";
         },
       },
     },
