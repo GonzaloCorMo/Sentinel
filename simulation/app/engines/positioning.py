@@ -1,11 +1,9 @@
 """Motor de posicionamiento: GPS / cinemática y entorno vial."""
 from __future__ import annotations
 
-import math
 import random
 from typing import Any
 
-from ..ambulance_fsm import AmbulanceState, infer_fsm_state
 
 
 class PositioningEngine:
@@ -15,7 +13,7 @@ class PositioningEngine:
         - On-route: usa los valores precalculados por el motor
           (posición, heading, aceleración longitudinal) y añade jitter
           en HDOP/accuracy.
-        - Off-route: simula una pose estacionaria con ruido mínimo.
+        - Sin ruta: unidad detenida, posición fija y velocidad cero.
     """
 
     def __init__(self) -> None:
@@ -61,91 +59,22 @@ class PositioningEngine:
                 "gpsAccuracyM": round(acc_m, 1),
             }
 
-        rc = amb.get("routeCoords")
-        fsm = infer_fsm_state(amb)
-        if fsm == AmbulanceState.IDLE and (not rc or len(rc) < 2):
-            lat = float(amb.get("latitude") or 0.0)
-            lon = float(amb.get("longitude") or 0.0)
-            road_limit = nav.get("road_speed_limit_kmh")
-            hdop = max(0.85, 1.0 + rng.gauss(0, 0.04))
-            acc_m = max(1.5, 2.5 * hdop)
-            return {
-                "latitude": lat,
-                "longitude": lon,
-                "speedKmh": 0.0,
-                "speedMs": 0.0,
-                "accelerationMs2": 0.0,
-                "headingDeg": 0.0,
-                "roadSpeedLimitKmh": road_limit,
-                "gpsHdop": round(hdop, 2),
-                "gpsAccuracyM": round(acc_m, 1),
-            }
-
-        # REFUELING sin polilínea: no usar el paseo aleatorio (rompía repostaje / telemetría).
-        if fsm == AmbulanceState.REFUELING and (not rc or len(rc) < 2):
-            lat = float(amb.get("latitude") or 0.0)
-            lon = float(amb.get("longitude") or 0.0)
-            road_limit = nav.get("road_speed_limit_kmh")
-            hdop = max(0.85, 1.0 + rng.gauss(0, 0.04))
-            acc_m = max(1.5, 2.5 * hdop)
-            return {
-                "latitude": lat,
-                "longitude": lon,
-                "speedKmh": 0.0,
-                "speedMs": 0.0,
-                "accelerationMs2": 0.0,
-                "headingDeg": 0.0,
-                "roadSpeedLimitKmh": road_limit,
-                "gpsHdop": round(hdop, 2),
-                "gpsAccuracyM": round(acc_m, 1),
-            }
-
-        phase = self._phase.get(amb_id, 0.0)
-        phase += dt * 0.8
-        self._phase[amb_id] = phase
-
+        # Sin ruta activa la unidad está detenida (libre, en el lugar, en
+        # transferencia, repostando…): posición fija y velocidad cero. Antes
+        # se añadía una oscilación de ~9 m que el motor reescribía en la
+        # posición en cada tick y hacía que las unidades «se mecieran».
         lat = float(amb.get("latitude") or 0.0)
         lon = float(amb.get("longitude") or 0.0)
-        dlat = 0.00008 * math.sin(phase)
-        dlon = 0.00008 * math.cos(phase * 1.1)
-        speed_ms = 12.0 + 3.0 * math.sin(phase * 0.5)
-        speed_kmh = speed_ms * 3.6
-        heading = (math.degrees(math.atan2(dlon, dlat)) + 360.0) % 360.0
-        accel = 0.15 * math.cos(phase * 2.0)
-        road_limit = nav.get("road_speed_limit_kmh")
-        hdop = max(0.9, 1.4 + 0.3 * math.sin(phase * 0.7) + rng.gauss(0, 0.08))
-        acc_m = max(2.0, 3.0 * hdop)
-
-        # Campos extendidos: satelites, constelación, altitud, jerk, drift
-        sat_count = int(max(4, 12 + 3 * math.sin(phase * 0.2) + rng.gauss(0, 1)))
-        altitude_m = 650.0 + 20.0 * math.sin(phase * 0.12) + rng.gauss(0, 1.0)
-        vertical_speed_ms = round(0.3 * math.cos(phase * 0.3) + rng.gauss(0, 0.05), 3)
-        jerk_ms3 = round(0.1 * math.sin(phase * 3.0), 3)
-        gps_fix = "3D_RTK" if hdop < 1.2 else ("3D" if hdop < 2.0 else "2D")
-        cep_68_m = round(max(1.2, 2.0 * hdop), 2)
-        cog_deg = round(heading, 1)
-        # Proximidad a objetos (simulado — LIDAR / radar)
-        forward_clearance_m = max(0.8, 35.0 - 0.3 * speed_kmh + rng.gauss(0, 1.0))
-        lane_offset_cm = round(rng.gauss(0, 12), 1)
-
+        hdop = max(0.85, 1.0 + rng.gauss(0, 0.04))
+        prev_heading = amb.get("_prevHeadingDeg")
         return {
-            "latitude": lat + dlat,
-            "longitude": lon + dlon,
-            "altitudeM": round(altitude_m, 2),
-            "speedKmh": round(speed_kmh, 2),
-            "speedMs": round(speed_ms, 2),
-            "verticalSpeedMs": vertical_speed_ms,
-            "accelerationMs2": round(accel, 3),
-            "jerkMs3": jerk_ms3,
-            "headingDeg": round(heading, 1),
-            "courseOverGroundDeg": cog_deg,
-            "roadSpeedLimitKmh": road_limit,
+            "latitude": lat,
+            "longitude": lon,
+            "speedKmh": 0.0,
+            "speedMs": 0.0,
+            "accelerationMs2": 0.0,
+            "headingDeg": round(float(prev_heading), 1) if isinstance(prev_heading, (int, float)) else 0.0,
+            "roadSpeedLimitKmh": nav.get("road_speed_limit_kmh"),
             "gpsHdop": round(hdop, 2),
-            "gpsAccuracyM": round(acc_m, 1),
-            "gpsFixType": gps_fix,
-            "satellitesUsed": sat_count,
-            "cepMeters68Pct": cep_68_m,
-            "forwardClearanceM": round(forward_clearance_m, 2),
-            "laneOffsetCm": lane_offset_cm,
-            "constellation": "GPS+GLONASS+Galileo",
+            "gpsAccuracyM": round(max(1.5, 2.5 * hdop), 1),
         }

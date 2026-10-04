@@ -64,6 +64,15 @@ export const useSimulationStore = defineStore("simulation", () => {
 
   /** Aplica un snapshot nuevo, emite toasts por cambios de linkState/OSRM, merge comms. */
   function applyState(next: SimulationStatePayload) {
+    // Una respuesta de /api/sim/state puede llegar después de una instantánea
+    // más reciente del stream: aplicarla haría retroceder las unidades.
+    const cur = state.value;
+    if (
+      cur && next.epoch != null && next.epoch === cur.epoch &&
+      (next.stats?.tickCount ?? 0) < (cur.stats?.tickCount ?? 0)
+    ) {
+      return;
+    }
     state.value = next;
     const link = String(next.linkState);
     if (previousLinkState && link !== previousLinkState) {

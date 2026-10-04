@@ -634,13 +634,27 @@ function syncLayers() {
 
 // ── Agrupación en pantalla ───────────────────────────────────────────────
 /** Agrupa nodos a menos de CLUSTER_RADIUS_PX en pantalla (voraz, por prioridad). */
+/** Semilla del grupo en el que estaba cada nodo en el último pintado (histéresis). */
+let prevSeedOf = new Map<string, string>();
+/** Un nodo ya agrupado solo se separa al superar este múltiplo del radio. */
+const CLUSTER_KEEP_FACTOR = 1.5;
+
+/**
+ * Agrupa nodos a menos de CLUSTER_RADIUS_PX en pantalla (voraz, por prioridad).
+ * Con histéresis: dos nodos que ya iban juntos siguen juntos hasta separarse
+ * 1,5 × el radio, para que unidades que circulan cerca no alternen entre
+ * agrupadas y sueltas en cada actualización.
+ */
 function clusterNodes(m: maplibregl.Map, list: NodeSpec[]): NodeSpec[][] {
   const pts = list.map((n) => m.project(toLngLat(n.pos)));
+  const keyOf = (n: NodeSpec) => `${n.group}:${n.id}`;
   const order = list
     .map((_, i) => i)
     .sort((a, b) => list[b].priority - list[a].priority || (list[a].id < list[b].id ? -1 : 1));
   const used = new Uint8Array(list.length);
   const r2 = CLUSTER_RADIUS_PX * CLUSTER_RADIUS_PX;
+  const keep2 = r2 * CLUSTER_KEEP_FACTOR * CLUSTER_KEEP_FACTOR;
+  const nextSeedOf = new Map<string, string>();
   const groups: NodeSpec[][] = [];
   for (const i of order) {
     if (used[i]) continue;
@@ -651,14 +665,17 @@ function clusterNodes(m: maplibregl.Map, list: NodeSpec[]): NodeSpec[][] {
         if (used[j] || !list[j].clusterable) continue;
         const dx = pts[i].x - pts[j].x;
         const dy = pts[i].y - pts[j].y;
-        if (dx * dx + dy * dy <= r2) {
+        const limit = prevSeedOf.get(keyOf(list[j])) === keyOf(list[i]) ? keep2 : r2;
+        if (dx * dx + dy * dy <= limit) {
           used[j] = 1;
           g.push(list[j]);
         }
       }
     }
+    if (g.length > 1) for (const n of g) nextSeedOf.set(keyOf(n), keyOf(list[i]));
     groups.push(g);
   }
+  prevSeedOf = nextSeedOf;
   return groups;
 }
 

@@ -306,6 +306,8 @@ export interface SimulationStatePayload {
   paused?: boolean;
   /** Segundos simulados desde el arranque del motor (referencia de `phaseUntil`). */
   simTimeS?: number;
+  /** Sube en cada reinicio del escenario (junto con `stats.tickCount` ordena las instantáneas). */
+  epoch?: number;
   networkStatus: { mqtt: boolean; p2p: boolean; http: boolean };
   linkState: LinkState | string;
   ambulances: Ambulance[];

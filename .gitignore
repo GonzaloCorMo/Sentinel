@@ -58,3 +58,6 @@ __v0_devtools.tsx
 __v0_jsx-dev-runtime.ts
 .v0-trash/
 .vercel/
+
+# Artefactos de pruebas de navegador
+.playwright-mcp/

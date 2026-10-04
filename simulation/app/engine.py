@@ -160,6 +160,9 @@ class SimulationEngine:
         self.external_jams: list[dict[str, Any]] = []
         self._training_spawning = 0
         self.weather_source_status: dict[str, Any] = {"source": "none"}
+        # Sube en cada reinicio: el frontend descarta instantáneas atrasadas
+        # comparando (epoch, tick).
+        self.state_epoch = 0
         self.tick = 0
         # Segundos simulados desde el arranque (tiempos en el lugar, entregas…).
         self.sim_time_s = 0.0
@@ -563,6 +566,7 @@ class SimulationEngine:
             "isSimulating": self._running,
             "paused": self.paused,
             "simTimeS": round(self.sim_time_s, 1),
+            "epoch": self.state_epoch,
             "motorState": "RUNNING" if not self.paused else "PAUSED",
             "networkStatus": self.network.copy(),
             "linkState": self.channels.active_link.value,
@@ -2303,6 +2307,7 @@ class SimulationEngine:
             self.external_jams.clear()
             self.pois = default_pois_copy()
             self.tick = 0
+            self.state_epoch += 1
             self._resolved_emergencies = 0
             self._comms_log.clear()
             self.unit_messages.clear()
@@ -2611,6 +2616,7 @@ class SimulationEngine:
                 self.external_jams.clear()
                 self.pois = default_pois_copy()
                 self.tick = 0
+                self.state_epoch += 1
                 self._resolved_emergencies = 0
                 self._comms_log.clear()
                 self.unit_messages.clear()
