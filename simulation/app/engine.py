@@ -159,6 +159,7 @@ class SimulationEngine:
         self.jams: list[dict[str, Any]] = []
         self.external_jams: list[dict[str, Any]] = []
         self._training_spawning = 0
+        self.weather_source_status: dict[str, Any] = {"source": "none"}
         self.tick = 0
         # Segundos simulados desde el arranque (tiempos en el lugar, entregas…).
         self.sim_time_s = 0.0
@@ -2517,6 +2518,19 @@ class SimulationEngine:
             asyncio.create_task(self._create_dispatch_proposal(eid))
         else:
             asyncio.create_task(self._dispatch_emergency_safe(eid))
+
+    async def ensure_weather_stations(self, stations: list[dict[str, Any]]) -> None:
+        """Coloca en el mapa las estaciones meteorológicas reales que falten (id fijo)."""
+        if not stations:
+            return
+        async with self._lock:
+            have = {str(p.get("id")) for p in self.pois}
+            for st in stations:
+                if st["id"] not in have:
+                    self.pois.append({
+                        "id": st["id"], "kind": "weather_station", "name": st["name"],
+                        "latitude": st["lat"], "longitude": st["lon"], "source": "meteogalicia",
+                    })
 
     async def ingest_weather_reading(self, reading: dict[str, Any]) -> None:
         """Upsert de una lectura meteorológica. Mantiene latest + ring de 20.

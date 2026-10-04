@@ -11,6 +11,8 @@ interface RegionSummary {
     maxPrecipMmh: number | null;
     maxWindKmh: number | null;
     minVisibilityKm: number | null;
+    source?: "meteogalicia" | "mock";
+    lastReadingAt?: string | null;
     alerts: Array<{
       stationId: string;
       stationName: string;
@@ -138,6 +140,9 @@ function formatDuration(sec: number | null | undefined): string {
       <!-- Weather panel -->
       <section class="rounded border border-slate-800 bg-slate-900 p-3">
         <h2 class="text-[11px] font-medium uppercase tracking-wider text-slate-400">{{ t("island.weather") }}</h2>
+        <p class="mt-0.5 text-[11px] text-slate-500">
+          {{ summary.weather.source === "meteogalicia" ? t("island.weather_source_mg") : t("island.weather_source_mock") }}<template v-if="summary.weather.source === 'meteogalicia' && summary.weather.lastReadingAt"> · {{ t("island.weather_reading_at", { time: new Date(summary.weather.lastReadingAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) }) }}</template>
+        </p>
         <div class="mt-2 grid grid-cols-2 gap-2 text-xs">
           <div>
             <div class="text-slate-400">{{ t("island.stations") }}</div>

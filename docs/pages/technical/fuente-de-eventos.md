@@ -28,7 +28,10 @@ El motor de simulación recibe dos tipos de datos externos: **eventos operativos
 Con `EVENT_SOURCE=mock` el backend emite periódicamente:
 
 - **Eventos externos sintéticos** situados dentro del área de la región activa (alrededor de su centro). Tipos: `storm`, `fire`, `flood`, `accident`, `lane_closure`, `power_outage`, `medical_emergency`, `hazmat_spill`, `construction`, `public_event`. Severidades: `low`, `medium`, `high`, `critical`. Cada evento se autorresuelve pasados unos minutos para no saturar el mapa.
-- **Lecturas meteorológicas** de N estaciones con deriva suave (paseo aleatorio acotado por variable) y chubascos ocasionales que suben la precipitación y bajan la visibilidad. Si el mapa tiene POIs `weather_station`, se usan sus ids; si no, se crean estaciones sintéticas (`mock-ws-1` … `mock-ws-N`).
+- **Lecturas meteorológicas**: por defecto son **reales, de MeteoGalicia** (`simulation/app/weather_source.py`, `WEATHER_SOURCE=meteogalicia`). Se usa la red de observación abierta (sin clave), con las estaciones a menos de 18 km del centro: Santiago-EOAS, Santiago-San Lázaro, Sergude, Costa y Pazo de Galegos. Se colocan en el mapa como lugares `weather_station` (`mg-<id>`) y se leen cada 10 minutos.
+  - Conversiones: viento de m/s a km/h; lluvia de suma de 10 minutos a intensidad en mm/h (×6).
+  - Visibilidad: estas estaciones no la miden, así que se estima a partir de la lluvia y la humedad (niebla con humedad ≥ 97 % sin lluvia).
+  - Si MeteoGalicia no responde nunca, se generan lecturas sintéticas hasta que vuelva. Con `WEATHER_SOURCE=mock`, el generador sintético de siempre: deriva suave y chubascos ocasionales sobre los POIs `weather_station` o sobre estaciones `mock-ws-N`.
 
 Todo lo que genera el mock se valida contra los mismos esquemas que la ingesta REST.
 
@@ -38,7 +41,10 @@ Todo lo que genera el mock se valida contra los mismos esquemas que la ingesta R
 |---|---|---|
 | `EVENT_SOURCE` | `mock` | `mock` activa el generador; `off` lo desactiva y deja solo la ingesta REST. |
 | `MOCK_EVENT_INTERVAL_SEC` | `25` | Segundos medios entre eventos sintéticos (con jitter). |
-| `MOCK_WEATHER_INTERVAL_SEC` | `10` | Segundos entre lecturas meteorológicas por estación. |
+| `WEATHER_SOURCE` | `meteogalicia` | `meteogalicia` (lecturas reales) o `mock` (sintéticas). |
+| `METEOGALICIA_INTERVAL_SEC` | `600` | Cada cuánto se consulta MeteoGalicia (publica cada 10 min). |
+| `WEATHER_RADIUS_KM` | `18` | Radio alrededor del centro de la región para elegir estaciones. |
+| `MOCK_WEATHER_INTERVAL_SEC` | `10` | Segundos entre lecturas sintéticas por estación (`WEATHER_SOURCE=mock`). |
 | `MOCK_WEATHER_STATIONS` | `4` | Estaciones sintéticas cuando no hay POIs `weather_station` en el mapa. |
 
 ## Impacto en la simulación

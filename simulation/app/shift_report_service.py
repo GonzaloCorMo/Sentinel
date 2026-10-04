@@ -1,9 +1,8 @@
 """Generador de informes post-turno con LLM estructurado.
 
 Cruza datos de:
-  - operation_events (audit trail del motor)
+  - entity_events (auditoría del motor: creaciones, asignaciones, resoluciones…)
   - ai_hitl_proposals (decisiones IA + resoluciones)
-  - emergency_cases / simulation snapshots si están
   - estado en memoria del engine (telemetría actual)
 
 Produce resumen + KPIs + highlights + recomendaciones en JSON.
@@ -27,7 +26,7 @@ def _iso(dt: datetime) -> str:
 async def _fetch_window_data(window_minutes: int) -> dict[str, Any]:
     """Extrae actividad reciente de Supabase para la ventana pedida.
 
-    Consulta ``operation_events``, ``ai_hitl_proposals``, conteo de
+    Consulta ``entity_events``, ``ai_hitl_proposals``, conteo de
     ``telemetry_logs`` y ``chat_messages`` desde ``now - window_minutes``.
 
     Args:
@@ -41,7 +40,7 @@ async def _fetch_window_data(window_minutes: int) -> dict[str, Any]:
     now = datetime.now(timezone.utc)
     since = now - timedelta(minutes=window_minutes)
     data: dict[str, Any] = {
-        "operation_events": [],
+        "entity_events": [],
         "ai_hitl_proposals": [],
         "telemetry_logs_count": 0,
         "chat_messages_count": 0,
@@ -49,10 +48,17 @@ async def _fetch_window_data(window_minutes: int) -> dict[str, Any]:
     if sb is None:
         return data
     try:
-        r = sb.table("operation_events").select("*").gte("created_at", _iso(since)).order("created_at", desc=True).limit(200).execute()
-        data["operation_events"] = r.data or []
+        r = (
+            sb.table("entity_events")
+            .select("ts,kind,event_type,actor,payload")
+            .gte("ts", _iso(since))
+            .order("ts", desc=True)
+            .limit(2000)
+            .execute()
+        )
+        data["entity_events"] = r.data or []
     except Exception:
-        _logger.exception("fetch operation_events failed")
+        _logger.exception("fetch entity_events failed")
     try:
         r = sb.table("ai_hitl_proposals").select("*").gte("created_at", _iso(since)).order("created_at", desc=True).limit(100).execute()
         data["ai_hitl_proposals"] = r.data or []
@@ -85,7 +91,16 @@ def _compute_kpis(engine_snapshot: dict[str, Any], window_data: dict[str, Any]) 
     ambs = engine_snapshot.get("ambulances") or []
     emgs = engine_snapshot.get("emergencies") or []
     props = window_data.get("ai_hitl_proposals") or []
-    events = window_data.get("operation_events") or []
+    events = window_data.get("entity_events") or []
+
+    def _count(kind: str, event_type: str) -> int:
+        return sum(1 for e in events if e.get("kind") == kind and e.get("event_type") == event_type)
+
+    transported = sum(
+        1 for e in events
+        if e.get("kind") == "emergency" and e.get("event_type") == "resolved"
+        and (e.get("payload") or {}).get("transported") is not False
+    )
 
     # Estado flota
     with_patient = sum(1 for a in ambs if a.get("hasPatient"))
@@ -94,7 +109,8 @@ def _compute_kpis(engine_snapshot: dict[str, Any], window_data: dict[str, Any]) 
     powered_off = sum(1 for a in ambs if a.get("poweredOff"))
 
     # Emergencias resueltas/abiertas
-    resolved = sum(1 for e in emgs if e.get("status") == "resolved")
+    # Resueltas dentro de la ventana según la auditoría; sin Supabase, el estado actual.
+    resolved = _count("emergency", "resolved") if events else sum(1 for e in emgs if e.get("status") == "resolved")
     active = sum(1 for e in emgs if e.get("status") in ("pending", "assigned", "on_scene"))
 
     # IA
@@ -116,6 +132,10 @@ def _compute_kpis(engine_snapshot: dict[str, Any], window_data: dict[str, Any]) 
         "aiProposalsAutonomous": autonomous,
         "aiProposalsRejected": rejected,
         "aiProposalsStale": stale,
+        "emergenciesCreatedInWindow": _count("emergency", "created"),
+        "emergenciesDispatchedInWindow": _count("emergency", "dispatched"),
+        "patientsTransportedInWindow": transported,
+        "dispatcherMessagesInWindow": _count("comms", "message_sent"),
         "operationEventsCount": len(events),
         "telemetryRecords": window_data.get("telemetry_logs_count", 0),
         "chatMessages": window_data.get("chat_messages_count", 0),
@@ -185,7 +205,9 @@ async def generate_shift_report(window_minutes: int, engine_snapshot: dict[str, 
         f"VENTANA: últimos {window_minutes} minutos\n"
         f"KPIs: {kpis}\n"
         f"Anomalías detectadas por IA (muestra): {anomalies[:10]}\n"
-        f"Eventos de operación: {len(window_data.get('operation_events') or [])}\n"
+        f"Eventos registrados en la ventana: {len(window_data.get('entity_events') or [])}\n"
+        f"Emergencias nuevas: {kpis['emergenciesCreatedInWindow']} · asignadas: {kpis['emergenciesDispatchedInWindow']} · "
+        f"pacientes trasladados: {kpis['patientsTransportedInWindow']}\n"
         f"Emergencias activas: {kpis['emergenciesActive']}\n"
         f"Emergencias resueltas en ventana: {kpis['emergenciesResolvedInWindow']}\n"
     )

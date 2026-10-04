@@ -12,6 +12,7 @@
 - `app/placement.py` — colocación sobre calles reales (OSRM `/nearest`) y cortes de tráfico como tramos de calle. **Todo punto generado pasa por aquí**: nunca uses posiciones aleatorias en grados.
 - `app/emergency_catalog.py` — tipos de llamada con frecuencia, gravedad, tiempo en el lugar, probabilidad de traslado y demanda por hora.
 - `app/region_data/<región>.json` — lugares reales de OpenStreetMap (gasolineras, bases, bomberos, policía), leídos con `regions.region_places()`.
+- `app/weather_source.py` — tiempo real de MeteoGalicia (estaciones de la región como POIs `mg-<id>`, lectura cada 10 min); `WEATHER_SOURCE=mock` para sintético.
 - `app/supabase_client.py` — si no hay Supabase, el motor sigue funcionando sin persistencia.
 
 ## Reglas

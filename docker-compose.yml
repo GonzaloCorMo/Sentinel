@@ -161,13 +161,13 @@ services:
         $$PSQL -c "CREATE TABLE IF NOT EXISTS public._migrations (name text PRIMARY KEY, applied_at timestamptz DEFAULT now());"
 
         # Reconcile (1 sola vez): sentinel row marca que el reconcile ya corrió.
-        # Si la DB ya tiene schema aplicado (marker = tabla ambulance_units) pero
+        # Si la DB ya tiene schema aplicado (marker = tabla ai_hitl_proposals) pero
         # el sentinel no existe, marcamos todas las migraciones actuales como ya
         # aplicadas. Futuras migraciones nuevas se ejecutan normalmente porque
         # el sentinel ya está.
         sentinel=$$($$PSQL -tAc "INSERT INTO public._migrations(name) VALUES ('__reconciled__') ON CONFLICT DO NOTHING RETURNING 1;")
         if [ "$$sentinel" = "1" ]; then
-          marker=$$($$PSQL -tAc "SELECT to_regclass('public.ambulance_units') IS NOT NULL")
+          marker=$$($$PSQL -tAc "SELECT to_regclass('public.ai_hitl_proposals') IS NOT NULL")
           if [ "$$marker" = "t" ]; then
             echo "[migrator] DB ya poblada — reconcile: marcando migraciones existentes como aplicadas"
             for f in /migrations/*.sql; do
@@ -469,6 +469,7 @@ services:
       DEFAULT_REGION: ${DEFAULT_REGION:-santiago}
       # Fuente de eventos externos: mock local o ingesta REST (/api/events/ingest)
       EVENT_SOURCE: ${EVENT_SOURCE:-mock}
+      WEATHER_SOURCE: ${WEATHER_SOURCE:-meteogalicia}
       MOCK_EVENT_INTERVAL_SEC: ${MOCK_EVENT_INTERVAL_SEC:-25}
       MOCK_WEATHER_INTERVAL_SEC: ${MOCK_WEATHER_INTERVAL_SEC:-10}
       MOCK_WEATHER_STATIONS: ${MOCK_WEATHER_STATIONS:-4}

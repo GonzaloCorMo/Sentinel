@@ -33,7 +33,10 @@
       "wind": "Strong wind",
       "fog": "Fog"
     },
-    "alert_detail": "rain {rain} mm · wind {wind} km/h · visibility {vis} km"
+    "alert_detail": "rain {rain} mm · wind {wind} km/h · visibility {vis} km",
+    "weather_source_mg": "Live data from MeteoGalicia",
+    "weather_source_mock": "Simulated data (MeteoGalicia is not responding)",
+    "weather_reading_at": "reading at {time}"
   },
   "common": {
     "loading": "Loading…",

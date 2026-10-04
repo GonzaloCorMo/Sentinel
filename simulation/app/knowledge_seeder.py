@@ -160,8 +160,8 @@ KNOWLEDGE_CHUNKS: list[dict[str, str]] = [
             "de telemetria en telemetry_logs (batch insert cada 5 ticks), almacenamiento de "
             "protocolos medicos con embeddings vectoriales (protocols_knowledge), base de "
             "conocimiento del proyecto (ai_knowledge_chunks con pgvector), propuestas HITL "
-            "(ai_hitl_proposals), escenarios guardados (saved_scenarios) y auditorias de "
-            "operaciones (operation_events). El backend usa supabase-py con service role key."
+            "(ai_hitl_proposals), auditoria del motor (entity_events), resultados de misiones "
+            "(mission_outcomes) y lecturas meteorologicas (weather_readings). El backend usa supabase-py con service role key."
         ),
     },
     {

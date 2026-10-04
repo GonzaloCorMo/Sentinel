@@ -186,7 +186,6 @@ docker compose up -d
 
 Cada PC tiene su propia DB local (el volumen `supabase-db-data` no se comparte). Para sincronizar:
 
-- **Migraciones SQL**: commiteadas en `supabase/migrations/`. Se aplican al crear la DB por primera vez.
+- **Migraciones SQL**: commiteadas en `supabase/migrations/`. `supabase-migrator` aplica las que falten en cada arranque (por nombre, en `public._migrations`).
 - **Datos de prueba (semilla)**: el simulador hace seed del RAG automáticamente si `protocols_knowledge` está vacía.
 - **Tipos de flota**: `fleet_entity_types` se siembra al arrancar (powertrain combustion/electric/unique con desc/caps generadas por LLM).
-- **Escenarios guardados**: tabla `saved_scenarios`. Para compartir, exporta con `pg_dump` y pásalo por git.

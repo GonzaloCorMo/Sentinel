@@ -33,7 +33,10 @@
       "wind": "Vento forte",
       "fog": "Néboa"
     },
-    "alert_detail": "choiva {rain} mm · vento {wind} km/h · visibilidade {vis} km"
+    "alert_detail": "choiva {rain} mm · vento {wind} km/h · visibilidade {vis} km",
+    "weather_source_mg": "Datos reais de MeteoGalicia",
+    "weather_source_mock": "Datos simulados (MeteoGalicia non responde)",
+    "weather_reading_at": "lectura das {time}"
   },
   "common": {
     "loading": "Cargando…",

@@ -30,6 +30,7 @@ from typing import Any
 from uuid import uuid4
 
 from .regions import get_active_region
+from .weather_source import weather_source_mode
 from .schemas.external_events import ExternalEvent, WeatherReading
 
 log = logging.getLogger(__name__)
@@ -217,8 +218,9 @@ async def run_event_source(engine: Any, *, seed: int | None = None) -> None:
     try:
         while True:
             try:
-                for sid in _station_ids(engine, cfg.weather_stations):
-                    await engine.ingest_weather_reading(drift.next(sid))
+                if weather_source_mode() == "mock":
+                    for sid in _station_ids(engine, cfg.weather_stations):
+                        await engine.ingest_weather_reading(drift.next(sid))
                 if loop.time() >= next_event_at:
                     event = await build_mock_event(rng, getattr(engine, "_http", None))
                     await engine.ingest_external_event(event)

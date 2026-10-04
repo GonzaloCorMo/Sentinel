@@ -40,6 +40,7 @@ from .chat_service import chat_stream, get_chat_history
 from .engine import SimulationEngine, default_spawn
 from .knowledge_seeder import seed_knowledge_force, seed_knowledge_if_empty
 from .event_source import run_event_source
+from .weather_source import run_weather_source
 from .schemas.external_events import ExternalEvent as ExternalEventIn
 from .schemas.external_events import WeatherReading as WeatherReadingIn
 from .weather_db import upsert_weather_reading
@@ -153,11 +154,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     loop_task = asyncio.create_task(engine.run_loop())
     osrm_task = asyncio.create_task(_osrm_probe_loop())
     event_source_task = asyncio.create_task(run_event_source(engine))
+    weather_task = asyncio.create_task(run_weather_source(engine))
     ai_task = asyncio.create_task(ai_engine.observe_loop())
     yield
     ai_engine.stop()
     ai_task.cancel()
     event_source_task.cancel()
+    weather_task.cancel()
     osrm_task.cancel()
     engine.stop()
     loop_task.cancel()
@@ -167,6 +170,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         pass
     try:
         await event_source_task
+    except asyncio.CancelledError:
+        pass
+    try:
+        await weather_task
     except asyncio.CancelledError:
         pass
     try:
@@ -705,6 +712,9 @@ async def region_summary() -> dict[str, Any]:
         "maxWindKmh": round(max(winds), 1) if winds else None,
         "minVisibilityKm": round(min(visibilities), 2) if visibilities else None,
         "alerts": alerts,
+        # De dónde salen las lecturas: "meteogalicia" (reales) o "mock" (sintéticas).
+        "source": "meteogalicia" if getattr(engine, "weather_source_status", {}).get("ok") else "mock",
+        "lastReadingAt": max((str(r.get("timestamp") or "") for r in weather.values()), default=None) or None,
     }
 
     events = engine.external_events

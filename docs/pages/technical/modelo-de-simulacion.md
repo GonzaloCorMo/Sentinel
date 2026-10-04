@@ -52,7 +52,7 @@ Todos los tiempos son simulados. A velocidad 1× una asistencia dura lo mismo qu
 - **Servicio urgente**: hacia la emergencia, y en el traslado de pacientes moderados o críticos, la unidad circula un 20–30 % por encima de esa velocidad. El tope es la velocidad máxima del tipo de unidad.
 - **Aceleración y frenada**: 2 m/s² y 3 m/s². Antes de un giro cerrado (más de 50°) la unidad baja a unos 22 km/h y frena para detenerse en el destino.
 - **Atascos**: dentro de un corte, 9 km/h (18 km/h con sirena). Las rutas intentan evitarlos con desvíos.
-- **Meteorología**: lluvia, viento y visibilidad de la estación más cercana reducen la velocidad hasta un 65 %.
+- **Meteorología**: lluvia, viento y visibilidad de la estación más cercana reducen la velocidad hasta un 65 %. Las lecturas son reales, de las estaciones de MeteoGalicia en el área de Santiago (ver [Fuente de eventos](./fuente-de-eventos)).
 - **Consumo**: unos 0,2 % de depósito por km en combustión (≈ 80 L y 16 L/100 km) y 0,5 % por km en eléctrico. En parado se consume algo, porque el motor sigue encendido por el equipamiento. Repostar o recargar lleva 5 minutos.
 
 ## Comunicaciones
